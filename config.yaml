@@ -1,108 +1,106 @@
+# Bind to all interfaces for cloud routing
 host: ""
 port: 8317
-debug: true
+
+# Disabled to eliminate I/O blocking
+debug: false
+
+auth-dir: "auths"
+enable-gemini-cli-endpoint: true
+
+remote-management:
+  allow-remote: true
+  disable-control-panel: false
+  panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+  secret-key: "$2a$10$03CPA9u6F/F/jjoyvbqur.izDw3knDGHZ7sh4yJCUQJVYYkIsNvNi"
+
 quota-exceeded:
   switch-project: true
   switch-preview-model: true
   antigravity-credits: true
-# Enable Management Center
-remote-management:
-  allow-remote: true
-  disable-control-panel: false
+
 routing:
   strategy: "round-robin"
+
+# 100% Mirrored Namespaces for Deterministic Agent Behavior
 oauth-model-alias:
   claude:
-# ---- OPUS 4.7 POOL (All Models) ----
+    # --- claude-opus-4-7 (Max 2) ---
     - name: "gemini-3.1-pro-high"
-      alias: "claude-opus-4-7"
-    - name: "gemini-3.1-pro-low"
-      alias: "claude-opus-4-7"
-    - name: "gemini-3-pro-high"
       alias: "claude-opus-4-7"
     - name: "gemini-3-flash"
       alias: "claude-opus-4-7"
-    - name: "gemini-3.1-flash-lite"
-      alias: "claude-opus-4-7"
-# ---- OPUS 4.6 POOL (All Models - Fixing the Retry Loop!) ----
-    - name: "gemini-3.1-pro-high"
-      alias: "claude-opus-4-6"
-    - name: "gemini-3.1-pro-low"
-      alias: "claude-opus-4-6"
-    - name: "gemini-3-pro-high"
+
+    # --- claude-opus-4-6 (Max 2) ---
+    - name: "gemini-3.1-pro-preview" # Primary: Pro Preview Model
       alias: "claude-opus-4-6"
     - name: "gemini-3-flash"
       alias: "claude-opus-4-6"
-    - name: "gemini-3.1-flash-lite"
-      alias: "claude-opus-4-6"
-# ---- SONNET 4.6 POOL (All Models) ----
-    - name: "gemini-3.1-pro-high"
-      alias: "claude-sonnet-4-6"
+
+    # --- claude-sonnet-4-6 (Max 2) ---
     - name: "gemini-3.1-pro-low"
-      alias: "claude-sonnet-4-6"
-    - name: "gemini-3-pro-high"
       alias: "claude-sonnet-4-6"
     - name: "gemini-3-flash"
       alias: "claude-sonnet-4-6"
-    - name: "gemini-3.1-flash-lite"
-      alias: "claude-sonnet-4-6"
-# ---- HAIKU 4.5 POOL (All Models) ----
-    - name: "gemini-3.1-pro-high"
-      alias: "claude-haiku-4-5"
-    - name: "gemini-3.1-pro-low"
-      alias: "claude-haiku-4-5"
-    - name: "gemini-3-pro-high"
-      alias: "claude-haiku-4-5"
-    - name: "gemini-3-flash"
+
+    # --- claude-haiku-4-5 (Max 2) ---
+    - name: "gemini-2.5-flash-lite"
       alias: "claude-haiku-4-5"
     - name: "gemini-3.1-flash-lite"
       alias: "claude-haiku-4-5"
+
   antigravity:
-# ---- OPUS 4.7 POOL (All Models) ----
+    # --- claude-opus-4-7 (Max 2) ---
     - name: "gemini-3.1-pro-high"
-      alias: "claude-opus-4-7"
-    - name: "gemini-3.1-pro-low"
-      alias: "claude-opus-4-7"
-    - name: "gemini-3-pro-high"
       alias: "claude-opus-4-7"
     - name: "gemini-3-flash"
       alias: "claude-opus-4-7"
+
+    # --- claude-opus-4-6 (Max 2) ---
+    - name: "gemini-3.1-pro-preview" # Primary: Pro Preview Model
+      alias: "claude-opus-4-6"
+    - name: "gemini-3-flash"
+      alias: "claude-opus-4-6"
+
+    # --- claude-sonnet-4-6 (Max 2) ---
+    - name: "gemini-3.1-pro-low"
+      alias: "claude-sonnet-4-6"
+    - name: "gemini-3-flash"
+      alias: "claude-sonnet-4-6"
+
+    # --- claude-haiku-4-5 (Max 2) ---
+    - name: "gemini-2.5-flash-lite"
+      alias: "claude-haiku-4-5"
     - name: "gemini-3.1-flash-lite"
+      alias: "claude-haiku-4-5"
+
+  gemini-cli:
+    # --- claude-opus-4-7 (Max 2) ---
+    - name: "gemini-3.1-pro-high"
       alias: "claude-opus-4-7"
-# ---- OPUS 4.6 POOL (All Models - Fixing the Retry Loop!) ----
-    - name: "gemini-3.1-pro-high"
-      alias: "claude-opus-4-6"
-    - name: "gemini-3.1-pro-low"
-      alias: "claude-opus-4-6"
-    - name: "gemini-3-pro-high"
+    - name: "gemini-3-flash"
+      alias: "claude-opus-4-7"
+
+    # --- claude-opus-4-6 (Max 2) ---
+    - name: "gemini-3.1-pro-preview" # Primary: Pro Preview Model
       alias: "claude-opus-4-6"
     - name: "gemini-3-flash"
       alias: "claude-opus-4-6"
-    - name: "gemini-3.1-flash-lite"
-      alias: "claude-opus-4-6"
-# ---- SONNET 4.6 POOL (All Models) ----
-    - name: "gemini-3.1-pro-high"
-      alias: "claude-sonnet-4-6"
+
+    # --- claude-sonnet-4-6 (Max 2) ---
     - name: "gemini-3.1-pro-low"
-      alias: "claude-sonnet-4-6"
-    - name: "gemini-3-pro-high"
       alias: "claude-sonnet-4-6"
     - name: "gemini-3-flash"
       alias: "claude-sonnet-4-6"
-    - name: "gemini-3.1-flash-lite"
-      alias: "claude-sonnet-4-6"
-# ---- HAIKU 4.5 POOL (All Models) ----
-    - name: "gemini-3.1-pro-high"
-      alias: "claude-haiku-4-5"
-    - name: "gemini-3.1-pro-low"
-      alias: "claude-haiku-4-5"
-    - name: "gemini-3-pro-high"
-      alias: "claude-haiku-4-5"
-    - name: "gemini-3-flash"
+
+    # --- claude-haiku-4-5 (Max 2) ---
+    - name: "gemini-2.5-flash-lite"
       alias: "claude-haiku-4-5"
     - name: "gemini-3.1-flash-lite"
       alias: "claude-haiku-4-5"
-api-keys:
-  - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
+
 logging-to-file: true
 usage-statistics-enabled: true
+
+api-keys:
+  - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
