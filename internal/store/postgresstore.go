@@ -20,18 +20,20 @@ import (
 )
 
 const (
-	defaultConfigTable = "config_store"
-	defaultAuthTable   = "auth_store"
-	defaultConfigKey   = "config"
+	defaultConfigTable  = "config_store"
+	defaultAuthTable    = "auth_store"
+	defaultBillingTable = "billing_sessions"
+	defaultConfigKey    = "config"
 )
 
 // PostgresStoreConfig captures configuration required to initialize a Postgres-backed store.
 type PostgresStoreConfig struct {
-	DSN         string
-	Schema      string
-	ConfigTable string
-	AuthTable   string
-	SpoolDir    string
+	DSN          string
+	Schema       string
+	ConfigTable  string
+	AuthTable    string
+	BillingTable string
+	SpoolDir     string
 }
 
 // PostgresStore persists configuration and authentication metadata using PostgreSQL as backend
@@ -57,6 +59,9 @@ func NewPostgresStore(ctx context.Context, cfg PostgresStoreConfig) (*PostgresSt
 	}
 	if cfg.AuthTable == "" {
 		cfg.AuthTable = defaultAuthTable
+	}
+	if cfg.BillingTable == "" {
+		cfg.BillingTable = defaultBillingTable
 	}
 
 	spoolRoot := strings.TrimSpace(cfg.SpoolDir)
@@ -140,7 +145,193 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 	`, authTable)); err != nil {
 		return fmt.Errorf("postgres store: create auth table: %w", err)
 	}
+	billingTable := s.fullTableName(s.cfg.BillingTable)
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+			session_id TEXT PRIMARY KEY,
+			principal TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			auth_id TEXT NOT NULL DEFAULT '',
+			auth_index TEXT NOT NULL DEFAULT '',
+			started_at TIMESTAMPTZ NOT NULL,
+			last_seen_at TIMESTAMPTZ NOT NULL,
+			finished_at TIMESTAMPTZ,
+			duration_seconds BIGINT NOT NULL DEFAULT 0,
+			credits INTEGER NOT NULL DEFAULT 0,
+			finalized BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`, billingTable)); err != nil {
+		return fmt.Errorf("postgres store: create billing table: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE INDEX IF NOT EXISTS %s ON %s (principal)
+	`, quoteIdentifier(s.cfg.BillingTable+"_principal_idx"), billingTable)); err != nil {
+		return fmt.Errorf("postgres store: create billing index: %w", err)
+	}
 	return nil
+}
+
+// BeginExecutionSession persists or refreshes the active state for a session.
+func (s *PostgresStore) BeginExecutionSession(ctx context.Context, record cliproxyauth.ExecutionSessionRecord) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("postgres store: not initialized")
+	}
+	sessionID := strings.TrimSpace(record.SessionID)
+	if sessionID == "" {
+		return fmt.Errorf("postgres store: execution session id is empty")
+	}
+	startedAt := record.StartedAt
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
+	}
+	updatedAt := record.UpdatedAt
+	if updatedAt.IsZero() {
+		updatedAt = startedAt
+	}
+	query := fmt.Sprintf(`
+		INSERT INTO %s AS target (
+			session_id, principal, provider, model, auth_id, auth_index,
+			started_at, last_seen_at, finalized, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, FALSE, NOW(), $8)
+		ON CONFLICT (session_id) DO UPDATE
+		SET principal = EXCLUDED.principal,
+			provider = EXCLUDED.provider,
+			model = EXCLUDED.model,
+			auth_id = EXCLUDED.auth_id,
+			auth_index = EXCLUDED.auth_index,
+			last_seen_at = EXCLUDED.last_seen_at,
+			updated_at = EXCLUDED.updated_at,
+			started_at = LEAST(target.started_at, EXCLUDED.started_at)
+		WHERE NOT target.finalized
+	`, s.fullTableName(s.cfg.BillingTable))
+	if _, err := s.db.ExecContext(ctx, query,
+		sessionID,
+		strings.TrimSpace(record.Principal),
+		strings.TrimSpace(record.Provider),
+		strings.TrimSpace(record.Model),
+		strings.TrimSpace(record.AuthID),
+		strings.TrimSpace(record.AuthIndex),
+		startedAt,
+		updatedAt,
+	); err != nil {
+		return fmt.Errorf("postgres store: begin execution session: %w", err)
+	}
+	return nil
+}
+
+// FinalizeExecutionSession marks a session as finished and records its credit bucket.
+func (s *PostgresStore) FinalizeExecutionSession(ctx context.Context, sessionID string, finishedAt time.Time) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("postgres store: not initialized")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return fmt.Errorf("postgres store: execution session id is empty")
+	}
+	if finishedAt.IsZero() {
+		finishedAt = time.Now().UTC()
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("postgres store: begin finalize transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var (
+		startedAt time.Time
+		finalized bool
+	)
+	selectQuery := fmt.Sprintf(`
+		SELECT started_at, finalized
+		FROM %s
+		WHERE session_id = $1
+		FOR UPDATE
+	`, s.fullTableName(s.cfg.BillingTable))
+	err = tx.QueryRowContext(ctx, selectQuery, sessionID).Scan(&startedAt, &finalized)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		startedAt = finishedAt
+	case err != nil:
+		return fmt.Errorf("postgres store: load execution session: %w", err)
+	case finalized:
+		if commitErr := tx.Commit(); commitErr != nil {
+			return fmt.Errorf("postgres store: commit finalized execution session: %w", commitErr)
+		}
+		return nil
+	}
+	if finishedAt.Before(startedAt) {
+		finishedAt = startedAt
+	}
+	duration := finishedAt.Sub(startedAt)
+	credits := cliproxyauth.CreditsForDuration(duration)
+	upsertQuery := fmt.Sprintf(`
+		INSERT INTO %s AS target (
+			session_id, principal, provider, model, auth_id, auth_index,
+			started_at, last_seen_at, finished_at, duration_seconds, credits,
+			finalized, created_at, updated_at
+		)
+		VALUES ($1, '', '', '', '', '', $2, $2, $2, $3, $4, TRUE, NOW(), NOW())
+		ON CONFLICT (session_id) DO UPDATE
+		SET started_at = LEAST(target.started_at, EXCLUDED.started_at),
+			last_seen_at = GREATEST(target.last_seen_at, EXCLUDED.last_seen_at),
+			finished_at = EXCLUDED.finished_at,
+			duration_seconds = EXCLUDED.duration_seconds,
+			credits = EXCLUDED.credits,
+			finalized = TRUE,
+			updated_at = NOW()
+		WHERE NOT target.finalized
+	`, s.fullTableName(s.cfg.BillingTable))
+	if _, err = tx.ExecContext(ctx, upsertQuery, sessionID, finishedAt, int64(duration/time.Second), credits); err != nil {
+		return fmt.Errorf("postgres store: finalize execution session: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("postgres store: commit execution session finalization: %w", err)
+	}
+	return nil
+}
+
+// GetExecutionQuotaSummary returns quota usage aggregated by caller principal.
+func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal string) (cliproxyauth.ExecutionQuotaSnapshot, error) {
+	if s == nil || s.db == nil {
+		return cliproxyauth.ExecutionQuotaSnapshot{}, fmt.Errorf("postgres store: not initialized")
+	}
+	principal = strings.TrimSpace(principal)
+	if principal == "" {
+		return cliproxyauth.ExecutionQuotaSnapshot{}, fmt.Errorf("postgres store: principal is empty")
+	}
+	query := fmt.Sprintf(`
+		SELECT
+			COUNT(*) AS sessions,
+			COUNT(*) FILTER (WHERE NOT finalized) AS active_sessions,
+			COALESCE(SUM(credits), 0) AS credits_used,
+			COALESCE(SUM(duration_seconds), 0) AS duration_seconds,
+			MAX(last_seen_at) AS last_session_at
+		FROM %s
+		WHERE principal = $1
+	`, s.fullTableName(s.cfg.BillingTable))
+	var summary cliproxyauth.ExecutionQuotaSnapshot
+	var lastSessionAt sql.NullTime
+	if err := s.db.QueryRowContext(ctx, query, principal).Scan(
+		&summary.Sessions,
+		&summary.ActiveSessions,
+		&summary.CreditsUsed,
+		&summary.DurationSeconds,
+		&lastSessionAt,
+	); err != nil {
+		return cliproxyauth.ExecutionQuotaSnapshot{}, fmt.Errorf("postgres store: load execution quota summary: %w", err)
+	}
+	if lastSessionAt.Valid {
+		summary.LastSessionAt = lastSessionAt.Time
+	}
+	return summary, nil
 }
 
 // Bootstrap synchronizes configuration and auth records between PostgreSQL and the local workspace.

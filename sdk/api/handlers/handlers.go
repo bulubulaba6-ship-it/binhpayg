@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/thinking"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 	coreexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
@@ -281,6 +283,9 @@ type BaseAPIHandler struct {
 
 	// Cfg holds the current application configuration.
 	Cfg *config.SDKConfig
+
+	// UsageStats stores the in-memory usage aggregates used by quota views.
+	UsageStats *usage.RequestStatistics
 }
 
 // NewBaseAPIHandlers creates a new API handlers instance.
@@ -296,6 +301,7 @@ func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *B
 	return &BaseAPIHandler{
 		Cfg:         cfg,
 		AuthManager: authManager,
+		UsageStats:  usage.GetRequestStatistics(),
 	}
 }
 
@@ -306,6 +312,115 @@ func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *B
 //   - clients: The new slice of AI service clients
 //   - cfg: The new application configuration
 func (h *BaseAPIHandler) UpdateClients(cfg *config.SDKConfig) { h.Cfg = cfg }
+
+func requestAPIKeyFromContext(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	if value, exists := c.Get("apiKey"); exists {
+		switch typed := value.(type) {
+		case string:
+			return strings.TrimSpace(typed)
+		case fmt.Stringer:
+			return strings.TrimSpace(typed.String())
+		default:
+			return strings.TrimSpace(fmt.Sprintf("%v", typed))
+		}
+	}
+	return ""
+}
+
+func normalizeModelAllowlist(models []string) map[string]struct{} {
+	if len(models) == 0 {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		key := strings.ToLower(strings.TrimSpace(model))
+		if key == "" {
+			continue
+		}
+		allowed[key] = struct{}{}
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+	return allowed
+}
+
+func modelListingCandidates(model map[string]any) []string {
+	if len(model) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, 3)
+	out := make([]string, 0, 3)
+	add := func(value string) {
+		key := strings.ToLower(strings.TrimSpace(value))
+		if key == "" {
+			return
+		}
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	if id, ok := model["id"].(string); ok {
+		add(id)
+	}
+	if name, ok := model["name"].(string); ok {
+		add(name)
+		trimmed := strings.TrimSpace(name)
+		if strings.HasPrefix(strings.ToLower(trimmed), "models/") {
+			add(strings.TrimPrefix(trimmed, "models/"))
+		}
+	}
+	if displayName, ok := model["display_name"].(string); ok {
+		add(displayName)
+	}
+	return out
+}
+
+func modelMatchesAllowlist(model map[string]any, allowed map[string]struct{}) bool {
+	if len(allowed) == 0 || len(model) == 0 {
+		return false
+	}
+	for _, candidate := range modelListingCandidates(model) {
+		if _, ok := allowed[candidate]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *BaseAPIHandler) FilterModelsForAPIKey(c *gin.Context, provider string, models []map[string]any) []map[string]any {
+	if h == nil || c == nil || len(models) == 0 || h.Cfg == nil || len(h.Cfg.APIKeyModels) == 0 {
+		return models
+	}
+	apiKey := requestAPIKeyFromContext(c)
+	if apiKey == "" {
+		return models
+	}
+	providerKey := strings.ToLower(strings.TrimSpace(provider))
+	if providerKey == "" {
+		return models
+	}
+	perKeyModels, ok := h.Cfg.APIKeyModels[apiKey]
+	if !ok || len(perKeyModels) == 0 {
+		return models
+	}
+	allowed := normalizeModelAllowlist(perKeyModels[providerKey])
+	if len(allowed) == 0 {
+		return models
+	}
+	filtered := make([]map[string]any, 0, len(models))
+	for _, model := range models {
+		if modelMatchesAllowlist(model, allowed) {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
 
 // GetAlt extracts the 'alt' parameter from the request query string.
 // It checks both 'alt' and '$alt' parameters and returns the appropriate value.
@@ -330,7 +445,8 @@ func (h *BaseAPIHandler) GetAlt(c *gin.Context) string {
 
 // GetContextWithCancel creates a new context with cancellation capabilities.
 // It embeds the Gin context and the API handler into the new context for later use.
-// The returned cancel function also handles logging the API response if request logging is enabled.
+// Requests without an explicit execution session get a short-lived session so quota
+// accounting can track one-off chat completions.
 //
 // Parameters:
 //   - handler: The API handler associated with the request.
@@ -344,6 +460,12 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	parentCtx := ctx
 	if parentCtx == nil {
 		parentCtx = context.Background()
+	}
+	sessionID := executionSessionIDFromContext(parentCtx)
+	autoSession := false
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+		autoSession = true
 	}
 
 	var requestCtx context.Context
@@ -360,11 +482,27 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	}
 	newCtx, cancel := context.WithCancel(parentCtx)
 	cancelCtx := newCtx
+	if sessionID != "" {
+		newCtx = WithExecutionSessionID(newCtx, sessionID)
+	}
+	var closeSessionOnce sync.Once
+	closeAutoSession := func() {
+		if !autoSession || sessionID == "" || h == nil || h.AuthManager == nil {
+			return
+		}
+		closeSessionOnce.Do(func() {
+			h.AuthManager.CloseExecutionSession(sessionID)
+		})
+	}
+	finish := func() {
+		cancel()
+		closeAutoSession()
+	}
 	if requestCtx != nil && requestCtx != parentCtx {
 		go func() {
 			select {
 			case <-requestCtx.Done():
-				cancel()
+				finish()
 			case <-cancelCtx.Done():
 			}
 		}()
@@ -377,7 +515,7 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 				if existingBytes, ok := existing.([]byte); ok && len(bytes.TrimSpace(existingBytes)) > 0 {
 					switch params[0].(type) {
 					case error, string:
-						cancel()
+						finish()
 						return
 					}
 				}
@@ -399,7 +537,7 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 					if existingBytes, ok := existing.([]byte); ok && len(existingBytes) > 0 {
 						trimmedPayload := bytes.TrimSpace(payload)
 						if len(trimmedPayload) > 0 && bytes.Contains(existingBytes, trimmedPayload) {
-							cancel()
+							finish()
 							return
 						}
 					}
@@ -408,7 +546,7 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 			}
 		}
 
-		cancel()
+		finish()
 	}
 }
 

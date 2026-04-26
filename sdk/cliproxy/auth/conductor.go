@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -141,13 +142,14 @@ func (NoopHook) OnResult(context.Context, Result) {}
 
 // Manager orchestrates auth lifecycle, selection, execution, and persistence.
 type Manager struct {
-	store     Store
-	executors map[string]ProviderExecutor
-	selector  Selector
-	hook      Hook
-	mu        sync.RWMutex
-	auths     map[string]*Auth
-	scheduler *authScheduler
+	store         Store
+	executors     map[string]ProviderExecutor
+	selector      Selector
+	hook          Hook
+	sessionLedger ExecutionSessionLedger
+	mu            sync.RWMutex
+	auths         map[string]*Auth
+	scheduler     *authScheduler
 	// providerOffsets tracks per-model provider rotation state for multi-provider routing.
 	providerOffsets map[string]int
 
@@ -191,6 +193,7 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
 		executors:        make(map[string]ProviderExecutor),
 		selector:         selector,
 		hook:             hook,
+		sessionLedger:    newMemoryExecutionSessionLedger(),
 		auths:            make(map[string]*Auth),
 		providerOffsets:  make(map[string]int),
 		modelPoolOffsets: make(map[string]int),
@@ -1057,6 +1060,76 @@ func (m *Manager) SetRetryConfig(retry int, maxRetryInterval time.Duration, maxR
 	m.maxRetryInterval.Store(maxRetryInterval.Nanoseconds())
 }
 
+// SetExecutionSessionLedger attaches durable execution-session tracking.
+func (m *Manager) SetExecutionSessionLedger(ledger ExecutionSessionLedger) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.sessionLedger = ledger
+	m.mu.Unlock()
+}
+
+func (m *Manager) executionSessionLedger() ExecutionSessionLedger {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	ledger := m.sessionLedger
+	m.mu.RUnlock()
+	return ledger
+}
+
+func (m *Manager) beginExecutionSession(ctx context.Context, provider, model string, auth *Auth, opts cliproxyexecutor.Options) {
+	ledger := m.executionSessionLedger()
+	if ledger == nil {
+		return
+	}
+	sessionID := sessionIDFromMetadata(opts.Metadata)
+	if sessionID == "" {
+		return
+	}
+	now := time.Now().UTC()
+	record := ExecutionSessionRecord{
+		SessionID: sessionID,
+		Principal: apiKeyFromContext(ctx),
+		Provider:  strings.TrimSpace(provider),
+		Model:     strings.TrimSpace(model),
+		StartedAt: now,
+		UpdatedAt: now,
+	}
+	if auth != nil {
+		record.AuthID = strings.TrimSpace(auth.ID)
+		record.AuthIndex = strings.TrimSpace(auth.EnsureIndex())
+	}
+	if err := ledger.BeginExecutionSession(ctx, record); err != nil {
+		log.WithError(err).Warnf("auth manager: begin execution session failed session=%s", sessionID)
+	}
+}
+
+func (m *Manager) finalizeExecutionSession(sessionID string) {
+	ledger := m.executionSessionLedger()
+	if ledger == nil {
+		return
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" || sessionID == CloseAllExecutionSessionsID {
+		return
+	}
+	if err := ledger.FinalizeExecutionSession(context.Background(), sessionID, time.Now().UTC()); err != nil {
+		log.WithError(err).Warnf("auth manager: finalize execution session failed session=%s", sessionID)
+	}
+}
+
+// GetExecutionQuotaSummary returns the current quota summary for a principal.
+func (m *Manager) GetExecutionQuotaSummary(ctx context.Context, principal string) (ExecutionQuotaSnapshot, error) {
+	ledger := m.executionSessionLedger()
+	if ledger == nil {
+		return ExecutionQuotaSnapshot{}, fmt.Errorf("quota ledger unavailable")
+	}
+	return ledger.GetExecutionQuotaSummary(ctx, principal)
+}
+
 // RegisterExecutor registers a provider executor with the manager.
 func (m *Manager) RegisterExecutor(executor ProviderExecutor) {
 	if executor == nil {
@@ -1321,6 +1394,7 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 		if len(models) == 0 {
 			continue
 		}
+		m.beginExecutionSession(execCtx, provider, routeModel, auth, opts)
 		attempted[auth.ID] = struct{}{}
 		var authErr error
 		for _, upstreamModel := range models {
@@ -1399,6 +1473,7 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 		if len(models) == 0 {
 			continue
 		}
+		m.beginExecutionSession(execCtx, provider, routeModel, auth, opts)
 		attempted[auth.ID] = struct{}{}
 		var authErr error
 		for _, upstreamModel := range models {
@@ -2621,6 +2696,9 @@ func (m *Manager) CloseExecutionSession(sessionID string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if m == nil || sessionID == "" {
 		return
+	}
+	if sessionID != CloseAllExecutionSessionsID {
+		m.finalizeExecutionSession(sessionID)
 	}
 
 	m.mu.RLock()

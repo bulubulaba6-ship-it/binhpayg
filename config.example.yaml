@@ -41,6 +41,14 @@ api-keys:
   - "your-api-key-2"
   - "your-api-key-3"
 
+# Optional per-key model allowlists for /models responses.
+api-key-models:
+  "your-api-key-1":
+    claude:
+      - claude-opus-4-7
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+
 # Enable debug logging
 debug: false
 

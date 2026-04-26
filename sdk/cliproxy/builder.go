@@ -238,6 +238,9 @@ func (b *Builder) Build() (*Service, error) {
 		}
 
 		coreManager = coreauth.NewManager(tokenStore, selector, nil)
+		if ledger, ok := tokenStore.(coreauth.ExecutionSessionLedger); ok {
+			coreManager.SetExecutionSessionLedger(ledger)
+		}
 	}
 	// Attach a default RoundTripper provider so providers can opt-in per-auth transports.
 	coreManager.SetRoundTripperProvider(newDefaultRoundTripperProvider())

@@ -342,6 +342,7 @@ func (s *Server) setupRoutes() {
 	s.engine.HEAD("/healthz", healthzHandler)
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
+	s.engine.GET("/quota-check", s.serveAPIKeyQuotaViewer)
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)
 	geminiHandlers := gemini.NewGeminiAPIHandler(s.handlers)
 	geminiCLIHandlers := gemini.NewGeminiCLIAPIHandler(s.handlers)
@@ -353,6 +354,7 @@ func (s *Server) setupRoutes() {
 	v1.Use(AuthMiddleware(s.accessManager))
 	{
 		v1.GET("/models", s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers))
+		v1.GET("/quota", s.handlers.GetQuota)
 		v1.POST("/chat/completions", openaiHandlers.ChatCompletions)
 		v1.POST("/completions", openaiHandlers.Completions)
 		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)
@@ -390,6 +392,7 @@ func (s *Server) setupRoutes() {
 				"POST /v1/chat/completions",
 				"POST /v1/completions",
 				"GET /v1/models",
+				"GET /v1/quota",
 			},
 		})
 	})
@@ -698,7 +701,34 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		}
 	}
 
-	c.File(filePath)
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("Surrogate-Control", "no-store")
+	c.Header("Clear-Site-Data", `"cache"`)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		log.WithError(err).Error("failed to read management control panel asset")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	contentStr := strings.NewReplacer(
+		"CLI Proxy API Management Center", "AiApiGiaRe Management Center",
+		"CLI Proxy API", "AiApiGiaRe",
+		"CLIProxyAPI", "AiApiGiaRe",
+		"CPAMC", "AiApiGiaRe",
+		`h.jsxs("div",{className:xn.brandContent,children:[h.jsx("span",{className:xn.brandWord,children:"CLI"}),h.jsx("span",{className:xn.brandWord,children:"PROXY"}),h.jsx("span",{className:xn.brandWord,children:"API"})]})`,
+		`h.jsxs("div",{className:xn.brandContent,children:[h.jsx("span",{className:xn.brandWord,children:"AiApiGiaRe"})]})`,
+	).Replace(string(content))
+	const legacyLogoPrefix = `const Ad="data:image/jpeg;base64,`
+	if start := strings.Index(contentStr, legacyLogoPrefix); start != -1 {
+		valueStart := start + len(`const Ad="`)
+		if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
+			contentStr = contentStr[:valueStart] + `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%231c1b16'/%3E%3Cstop offset='1' stop-color='%234a3f2f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='21' cy='24' r='5' fill='%23f5c36b'/%3E%3Ccircle cx='43' cy='24' r='5' fill='%23f5c36b'/%3E%3Cpath d='M18 40c5-7 23-7 28 0' fill='none' stroke='%23f5c36b' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E` + contentStr[valueStart+end:]
+		}
+	}
+	content = []byte(contentStr)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 }
 
 func (s *Server) enableKeepAlive(timeout time.Duration, onTimeout func()) {
