@@ -60,7 +60,7 @@ func (o *AntigravityAuth) BuildAuthURL(state, redirectURI string) string {
 	params.Set("response_type", "code")
 	params.Set("scope", strings.Join(Scopes, " "))
 	params.Set("state", state)
-	return AuthEndpoint + "?" + params.Encode()
+	return AuthEndpoint + "?" + strings.ReplaceAll(params.Encode(), "+", "%20")
 }
 
 // ExchangeCodeForTokens exchanges authorization code for access and refresh tokens
