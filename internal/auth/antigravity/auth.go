@@ -55,7 +55,7 @@ func (o *AntigravityAuth) BuildAuthURL(state, redirectURI string) string {
 	params := url.Values{}
 	params.Set("access_type", "offline")
 	params.Set("client_id", ClientID)
-	params.Set("prompt", "consent")
+	params.Set("prompt", "consent select_account")
 	params.Set("redirect_uri", redirectURI)
 	params.Set("response_type", "code")
 	params.Set("scope", strings.Join(Scopes, " "))

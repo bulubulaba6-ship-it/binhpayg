@@ -1553,7 +1553,7 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 
 	// Build authorization URL and return it immediately
 	state := fmt.Sprintf("gem-%d", time.Now().UnixNano())
-	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
+	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent select_account"))
 
 	RegisterOAuthSession(state, "gemini")
 
