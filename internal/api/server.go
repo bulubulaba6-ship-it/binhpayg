@@ -722,7 +722,7 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"AIAPIGiaRe"})]})`,
 	).Replace(string(content))
 	iconDataURI := ""
-	if iconBytes, err := os.ReadFile(`C:\Users\VH\Downloads\CLIProxyAPI\icon.png`); err == nil {
+	if iconBytes, err := os.ReadFile(`icon.png`); err == nil {
 		iconDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(iconBytes)
 	}
 	if iconDataURI != "" {
