@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -387,7 +388,7 @@ func (s *Server) setupRoutes() {
 	// Root endpoint
 	s.engine.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "CLI Proxy API Server",
+			"message": "AIAPIGiaRe",
 			"endpoints": []string{
 				"POST /v1/chat/completions",
 				"POST /v1/completions",
@@ -713,18 +714,29 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		return
 	}
 	contentStr := strings.NewReplacer(
-		"CLI Proxy API Management Center", "AiApiGiaRe Management Center",
-		"CLI Proxy API", "AiApiGiaRe",
-		"CLIProxyAPI", "AiApiGiaRe",
-		"CPAMC", "AiApiGiaRe",
-		`h.jsxs("div",{className:xn.brandContent,children:[h.jsx("span",{className:xn.brandWord,children:"CLI"}),h.jsx("span",{className:xn.brandWord,children:"PROXY"}),h.jsx("span",{className:xn.brandWord,children:"API"})]})`,
-		`h.jsxs("div",{className:xn.brandContent,children:[h.jsx("span",{className:xn.brandWord,children:"AiApiGiaRe"})]})`,
+		"CLI Proxy API Management Center", "AIAPIGiaRe Management Center",
+		"CLI Proxy API", "AIAPIGiaRe",
+		"CLIProxyAPI", "AIAPIGiaRe",
+		"CPAMC", "AIAPIGiaRe",
+		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"CLI"}),h.jsx("span",{className:yi.brandWord,children:"PROXY"}),h.jsx("span",{className:yi.brandWord,children:"API"})]})`,
+		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"AIAPIGiaRe"})]})`,
 	).Replace(string(content))
-	const legacyLogoPrefix = `const Ad="data:image/jpeg;base64,`
-	if start := strings.Index(contentStr, legacyLogoPrefix); start != -1 {
-		valueStart := start + len(`const Ad="`)
-		if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
-			contentStr = contentStr[:valueStart] + `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%231c1b16'/%3E%3Cstop offset='1' stop-color='%234a3f2f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='21' cy='24' r='5' fill='%23f5c36b'/%3E%3Ccircle cx='43' cy='24' r='5' fill='%23f5c36b'/%3E%3Cpath d='M18 40c5-7 23-7 28 0' fill='none' stroke='%23f5c36b' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E` + contentStr[valueStart+end:]
+	iconDataURI := ""
+	if iconBytes, err := os.ReadFile(`C:\Users\VH\Downloads\CLIProxyAPI\icon.png`); err == nil {
+		iconDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(iconBytes)
+	}
+	if iconDataURI != "" {
+		if start := strings.Index(contentStr, `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,`); start != -1 {
+			valueStart := start + len(`<link rel="icon" type="image/svg+xml" href="`)
+			if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
+				contentStr = contentStr[:valueStart] + iconDataURI + contentStr[valueStart+end:]
+			}
+		}
+		if start := strings.Index(contentStr, `const Td="data:image/jpeg;base64,`); start != -1 {
+			valueStart := start + len(`const Td="`)
+			if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
+				contentStr = contentStr[:valueStart] + iconDataURI + contentStr[valueStart+end:]
+			}
 		}
 	}
 	content = []byte(contentStr)

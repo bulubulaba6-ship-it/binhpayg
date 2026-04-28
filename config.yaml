@@ -1,107 +1,96 @@
 # Bind to all interfaces for cloud routing
+
 host: ""
 port: 8317
-
 # Disabled to eliminate I/O blocking
 debug: false
 commercial-mode: true
-
 auth-dir: "auths"
 enable-gemini-cli-endpoint: true
-
 remote-management:
   allow-remote: true
   disable-control-panel: false
   panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-  secret-key: "$2a$10$03CPA9u6F/F/jjoyvbqur.izDw3knDGHZ7sh4yJCUQJVYYkIsNvNi"
-
+  secret-key: "$2a$10$SGe.ELMpMlX8APpvj9/ovue4shPqm9WB8gr4cu4qH2BF1pEaU8oWu"
 quota-exceeded:
   switch-project: true
   switch-preview-model: true
   antigravity-credits: true
-
 routing:
   strategy: "round-robin"
-
 # 100% Mirrored Namespaces for Deterministic Agent Behavior
 oauth-model-alias:
   claude:
-    # --- claude-opus-4-7 (Depth 2) ---
-    - name: "gemini-3.1-pro-low"            # Primary: Fast Pro Tier Execution
+# --- claude-opus-4-7 (Depth 2) ---
+    - name: "gemini-3.1-pro-low" # Primary: Fast Pro Tier Execution
       alias: "claude-opus-4-7"
-    - name: "gemini-3-flash"                # Backup: High-Speed Standard
+    - name: "gemini-3-flash" # Backup: High-Speed Standard
       alias: "claude-opus-4-7"
-
-    # --- claude-opus-4-6 (Depth 2) ---
-    - name: "gemini-3-flash-preview"        # Primary: Fast Preview Tier
+# --- claude-opus-4-6 (Depth 2) ---
+    - name: "gemini-3-flash-preview" # Primary: Fast Preview Tier
       alias: "claude-opus-4-6"
     - name: "gemini-3.1-flash-lite-preview" # Backup: Untapped Preview Edge Bucket
       alias: "claude-opus-4-6"
-
-    # --- claude-sonnet-4-6 (Depth 2) ---
-    - name: "gemini-3.1-flash-lite"         # Primary: Ultra-Fast Edge
+# --- claude-sonnet-4-6 (Depth 2) ---
+    - name: "gemini-3.1-flash-lite" # Primary: Ultra-Fast Edge
       alias: "claude-sonnet-4-6"
-    - name: "gemini-2.5-flash-lite"         # Backup: 1000 RPD Edge Tank
+    - name: "gemini-2.5-flash-lite" # Backup: 1000 RPD Edge Tank
       alias: "claude-sonnet-4-6"
-
-    # --- claude-haiku-4-5 (Depth 2) ---
-    - name: "gemini-2.5-flash-lite"         # Primary: 1000 RPD Edge Tank
+# --- claude-haiku-4-5 (Depth 2) ---
+    - name: "gemini-2.5-flash-lite" # Primary: 1000 RPD Edge Tank
       alias: "claude-haiku-4-5"
-    - name: "gemini-2.5-flash"              # Backup: High-Availability Standard
+    - name: "gemini-2.5-flash" # Backup: High-Availability Standard
       alias: "claude-haiku-4-5"
-
   antigravity:
-    # --- claude-opus-4-7 (Depth 2) ---
+# --- claude-opus-4-7 (Depth 2) ---
     - name: "gemini-3.1-pro-low"
       alias: "claude-opus-4-7"
     - name: "gemini-3-flash"
       alias: "claude-opus-4-7"
-
-    # --- claude-opus-4-6 (Depth 2) ---
+# --- claude-opus-4-6 (Depth 2) ---
     - name: "gemini-3-flash-preview"
       alias: "claude-opus-4-6"
     - name: "gemini-3.1-flash-lite-preview"
       alias: "claude-opus-4-6"
-
-    # --- claude-sonnet-4-6 (Depth 2) ---
+# --- claude-sonnet-4-6 (Depth 2) ---
     - name: "gemini-3.1-flash-lite"
       alias: "claude-sonnet-4-6"
     - name: "gemini-2.5-flash-lite"
       alias: "claude-sonnet-4-6"
-
-    # --- claude-haiku-4-5 (Depth 2) ---
+# --- claude-haiku-4-5 (Depth 2) ---
     - name: "gemini-2.5-flash-lite"
       alias: "claude-haiku-4-5"
     - name: "gemini-2.5-flash"
       alias: "claude-haiku-4-5"
-
   gemini-cli:
-    # --- claude-opus-4-7 (Depth 2) ---
+# --- claude-opus-4-7 (Depth 2) ---
     - name: "gemini-3.1-pro-low"
       alias: "claude-opus-4-7"
     - name: "gemini-3-flash"
       alias: "claude-opus-4-7"
-
-    # --- claude-opus-4-6 (Depth 2) ---
+# --- claude-opus-4-6 (Depth 2) ---
     - name: "gemini-3-flash-preview"
       alias: "claude-opus-4-6"
     - name: "gemini-3.1-flash-lite-preview"
       alias: "claude-opus-4-6"
-
-    # --- claude-sonnet-4-6 (Depth 2) ---
+# --- claude-sonnet-4-6 (Depth 2) ---
     - name: "gemini-3.1-flash-lite"
       alias: "claude-sonnet-4-6"
     - name: "gemini-2.5-flash-lite"
       alias: "claude-sonnet-4-6"
-
-    # --- claude-haiku-4-5 (Depth 2) ---
+# --- claude-haiku-4-5 (Depth 2) ---
     - name: "gemini-2.5-flash-lite"
       alias: "claude-haiku-4-5"
     - name: "gemini-2.5-flash"
       alias: "claude-haiku-4-5"
-
 logging-to-file: true
 usage-statistics-enabled: true
-
 api-keys:
   - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
+api-key-models:
+  fink_pro_8c9e9ffb23fccdac9d65b57695145f13:
+    claude:
+      - claude-opus-4-7
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - claude-opus-4-6

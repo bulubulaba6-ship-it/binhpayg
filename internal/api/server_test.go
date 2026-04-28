@@ -329,6 +329,35 @@ func TestQuotaRoute(t *testing.T) {
 	}
 }
 
+func TestRootRouteUsesAIAPIGiaReBranding(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	server.engine.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+
+	var resp struct {
+		Message   string   `json:"message"`
+		Endpoints []string `json:"endpoints"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse root response: %v; body=%s", err, rr.Body.String())
+	}
+	if resp.Message != "AIAPIGiaRe" {
+		t.Fatalf("unexpected root brand message: got %q want %q", resp.Message, "AIAPIGiaRe")
+	}
+	if len(resp.Endpoints) != 4 {
+		t.Fatalf("unexpected root endpoints: %+v", resp.Endpoints)
+	}
+	if resp.Endpoints[0] != "POST /v1/chat/completions" || resp.Endpoints[3] != "GET /v1/quota" {
+		t.Fatalf("unexpected root endpoint list: %+v", resp.Endpoints)
+	}
+}
+
 func TestQuotaViewerRoute(t *testing.T) {
 	server := newTestServer(t)
 
@@ -442,7 +471,7 @@ func TestManagementControlPanelRouteRewritesBranding(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o700); err != nil {
 		t.Fatalf("failed to create management asset directory: %v", err)
 	}
-	fixture := `<!doctype html><html><head><title>CLI Proxy API Management Center</title></head><body>CLI Proxy API Management Center CLI Proxy API CPAMC CLIProxyAPI</body></html>`
+	fixture := `<!doctype html><html><head><title>CLI Proxy API Management Center</title><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,abc"></head><body>CLI Proxy API Management Center CLI Proxy API CPAMC CLIProxyAPI const Td="data:image/jpeg;base64,abc" h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"CLI"}),h.jsx("span",{className:yi.brandWord,children:"PROXY"}),h.jsx("span",{className:yi.brandWord,children:"API"})]})</body></html>`
 	if err := os.WriteFile(filePath, []byte(fixture), 0o600); err != nil {
 		t.Fatalf("failed to write management asset fixture: %v", err)
 	}
@@ -466,13 +495,16 @@ func TestManagementControlPanelRouteRewritesBranding(t *testing.T) {
 	if got := rr.Header().Get("Clear-Site-Data"); got != `"cache"` {
 		t.Fatalf("management page missing clear-site-data header: %q", got)
 	}
-	if !strings.Contains(rr.Body.String(), "AiApiGiaRe Management Center") {
+	if !strings.Contains(rr.Body.String(), "AIAPIGiaRe Management Center") {
 		t.Fatalf("management page missing rewritten brand title: %s", rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "AiApiGiaRe") {
+	if !strings.Contains(rr.Body.String(), "AIAPIGiaRe") {
 		t.Fatalf("management page missing rewritten brand text: %s", rr.Body.String())
 	}
-	if strings.Contains(rr.Body.String(), "CLI Proxy API") || strings.Contains(rr.Body.String(), "CLIProxyAPI") || strings.Contains(rr.Body.String(), "CLIPROXYAPI") || strings.Contains(rr.Body.String(), "CPAMC") {
+	if !strings.Contains(rr.Body.String(), "data:image/png;base64,") || strings.Count(rr.Body.String(), "data:image/png;base64,") < 2 {
+		t.Fatalf("management page missing PNG icon rewrite: %s", rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "CLI Proxy API") || strings.Contains(rr.Body.String(), "CLIProxyAPI") || strings.Contains(rr.Body.String(), "CLIPROXYAPI") || strings.Contains(rr.Body.String(), "CPAMC") || strings.Contains(rr.Body.String(), "data:image/svg+xml,abc") || strings.Contains(rr.Body.String(), "data:image/jpeg;base64,abc") || strings.Contains(rr.Body.String(), `className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"CLI"}),h.jsx("span",{className:yi.brandWord,children:"PROXY"}),h.jsx("span",{className:yi.brandWord,children:"API"})]}`) {
 		t.Fatalf("management page still exposes legacy branding: %s", rr.Body.String())
 	}
 }
