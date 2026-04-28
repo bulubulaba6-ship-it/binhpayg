@@ -13,7 +13,9 @@ import (
 
 const (
 	oauthSessionTTL     = 10 * time.Minute
+	oauthSessionDoneTTL = 3 * time.Minute // grace window so the frontend can read the "done" status
 	maxOAuthStateLength = 128
+	oauthSessionDone    = "__done__" // sentinel: auth succeeded, token saved
 )
 
 var (
@@ -108,7 +110,16 @@ func (s *oauthSessionStore) Complete(state string) {
 	defer s.mu.Unlock()
 
 	s.purgeExpiredLocked(now)
-	delete(s.sessions, state)
+	session, ok := s.sessions[state]
+	if !ok {
+		return
+	}
+	// Mark as done with a short TTL so the frontend can read the explicit success status.
+	// Do NOT delete immediately — deletion makes GetAuthStatus return !ok which the
+	// frontend was (incorrectly) interpreting as success for ANY missing session.
+	session.Status = oauthSessionDone
+	session.ExpiresAt = now.Add(oauthSessionDoneTTL)
+	s.sessions[state] = session
 }
 
 func (s *oauthSessionStore) CompleteProvider(provider string) int {
@@ -157,6 +168,7 @@ func (s *oauthSessionStore) IsPending(state, provider string) bool {
 	if !ok {
 		return false
 	}
+	// A non-empty status means either an error or the done sentinel — not pending.
 	if session.Status != "" {
 		return false
 	}
@@ -182,6 +194,11 @@ func GetOAuthSession(state string) (provider string, status string, ok bool) {
 	session, ok := oauthSessions.Get(state)
 	if !ok {
 		return "", "", false
+	}
+	// Translate the internal done sentinel to an empty status so existing callers
+	// that check status=="" for success continue to work.
+	if session.Status == oauthSessionDone {
+		return session.Provider, "", true
 	}
 	return session.Provider, session.Status, true
 }

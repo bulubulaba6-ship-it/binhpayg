@@ -2623,16 +2623,25 @@ func (h *Handler) GetAuthStatus(c *gin.Context) {
 		return
 	}
 
-	_, status, ok := GetOAuthSession(state)
-	if !ok {
+	session, sessionOK := oauthSessions.Get(state)
+	if !sessionOK {
+		// Session not in store: it either never existed or expired without completing.
+		// Return "expired" so the frontend knows to prompt the user to retry rather
+		// than falsely showing "authentication successful".
+		c.JSON(http.StatusOK, gin.H{"status": "expired", "error": "session expired or not found"})
+		return
+	}
+	switch session.Status {
+	case oauthSessionDone:
+		// Explicit success: token was saved by the auth goroutine.
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
+	case "":
+		// Still pending — goroutine is waiting for the OAuth callback.
+		c.JSON(http.StatusOK, gin.H{"status": "wait"})
+	default:
+		// An error message was set by the auth goroutine.
+		c.JSON(http.StatusOK, gin.H{"status": "error", "error": session.Status})
 	}
-	if status != "" {
-		c.JSON(http.StatusOK, gin.H{"status": "error", "error": status})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "wait"})
 }
 
 // PopulateAuthContext extracts request info and adds it to the context
