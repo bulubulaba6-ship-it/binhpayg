@@ -1593,44 +1593,36 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 	// Build authorization URL and return it immediately
 	state := fmt.Sprintf("gem-%d", time.Now().UnixNano())
 
-	isWebUI := isWebUIRequest(c)
-
-	// When running in web UI mode (e.g. Railway deployment), the redirect_url must point
-	// to the publicly reachable URL. Google redirects the *browser*, so localhost is
-	// unreachable. Use the public URL derived from the incoming request headers.
-	// In non-webui (local CLI) mode we keep using localhost for backward compat.
-	if isWebUI {
-		conf.RedirectURL = publicCallbackURL(c, "/google/callback")
-		log.Infof("gemini oauth: using public redirect URL %s", conf.RedirectURL)
-	} else {
-		conf.RedirectURL = fmt.Sprintf("http://localhost:%d/oauth2callback", geminiAuth.DefaultCallbackPort)
-	}
+	// Always use localhost redirect URI — Google's OAuth server permits unregistered
+	// http://localhost URIs for installed-app (Desktop) OAuth clients without requiring
+	// explicit registration in Google Console. Using a public domain would require
+	// registering it as an authorized redirect URI, causing redirect_uri_mismatch errors.
+	conf.RedirectURL = fmt.Sprintf("http://localhost:%d/oauth2callback", geminiAuth.DefaultCallbackPort)
 
 	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent select_account"))
 	authURL = strings.ReplaceAll(authURL, "+", "%20")
 
 	RegisterOAuthSession(state, "gemini")
 
+	// Always start the callback forwarder so that when Google redirects the browser
+	// to http://localhost:PORT/oauth2callback, the local port (bound inside the container)
+	// bridges the request to the main server's /google/callback route.
+	targetURL, errTarget := h.managementCallbackURL("/google/callback")
+	if errTarget != nil {
+		log.WithError(errTarget).Error("failed to compute gemini callback target")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "callback server unavailable"})
+		return
+	}
 	var forwarder *callbackForwarder
-	if !isWebUI {
-		// In local (non-webui) mode, spin up the port-forwarder so the CLI callback
-		// on localhost:8085 is redirected to our main server's /google/callback route.
-		targetURL, errTarget := h.managementCallbackURL("/google/callback")
-		if errTarget != nil {
-			log.WithError(errTarget).Error("failed to compute gemini callback target")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "callback server unavailable"})
-			return
-		}
-		var errStart error
-		if forwarder, errStart = startCallbackForwarder(geminiCallbackPort, "gemini", targetURL); errStart != nil {
-			log.WithError(errStart).Error("failed to start gemini callback forwarder")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
-			return
-		}
+	var errStart error
+	if forwarder, errStart = startCallbackForwarder(geminiCallbackPort, "gemini", targetURL); errStart != nil {
+		log.WithError(errStart).Error("failed to start gemini callback forwarder")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
+		return
 	}
 
 	go func() {
-		if !isWebUI && forwarder != nil {
+		if forwarder != nil {
 			defer stopCallbackForwarderInstance(geminiCallbackPort, forwarder)
 		}
 
@@ -2006,38 +1998,29 @@ func (h *Handler) RequestAntigravityToken(c *gin.Context) {
 		return
 	}
 
-	isWebUI := isWebUIRequest(c)
-
-	// Use the public-facing URL for web UI mode so the browser's OAuth redirect works on Railway.
+	// Always use localhost — allowed by Google for installed-app OAuth clients without registration.
 	redirectURI := fmt.Sprintf("http://localhost:%d/oauth-callback", antigravity.CallbackPort)
-	if isWebUI {
-		redirectURI = publicCallbackURL(c, "/antigravity/callback")
-		log.Infof("antigravity oauth: using public redirect URL %s", redirectURI)
-	}
 	authURL := authSvc.BuildAuthURL(state, redirectURI)
 
 	RegisterOAuthSession(state, "antigravity")
 
+	// Always start the forwarder so the in-container localhost:PORT bridges to /antigravity/callback.
+	targetURL, errTarget := h.managementCallbackURL("/antigravity/callback")
+	if errTarget != nil {
+		log.WithError(errTarget).Error("failed to compute antigravity callback target")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "callback server unavailable"})
+		return
+	}
 	var forwarder *callbackForwarder
-	if !isWebUI {
-		// In local (non-webui) mode, spin up the port-forwarder so the CLI callback
-		// on localhost:CallbackPort is bridged to our main server's /antigravity/callback route.
-		targetURL, errTarget := h.managementCallbackURL("/antigravity/callback")
-		if errTarget != nil {
-			log.WithError(errTarget).Error("failed to compute antigravity callback target")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "callback server unavailable"})
-			return
-		}
-		var errStart error
-		if forwarder, errStart = startCallbackForwarder(antigravity.CallbackPort, "antigravity", targetURL); errStart != nil {
-			log.WithError(errStart).Error("failed to start antigravity callback forwarder")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
-			return
-		}
+	var errStart error
+	if forwarder, errStart = startCallbackForwarder(antigravity.CallbackPort, "antigravity", targetURL); errStart != nil {
+		log.WithError(errStart).Error("failed to start antigravity callback forwarder")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
+		return
 	}
 
 	go func() {
-		if !isWebUI && forwarder != nil {
+		if forwarder != nil {
 			defer stopCallbackForwarderInstance(antigravity.CallbackPort, forwarder)
 		}
 
