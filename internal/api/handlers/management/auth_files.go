@@ -235,6 +235,45 @@ func (h *Handler) managementCallbackURL(path string) (string, error) {
 	return fmt.Sprintf("%s://127.0.0.1:%d%s", scheme, h.cfg.Port, path), nil
 }
 
+// publicCallbackURL builds the callback URL that the user's browser can actually reach.
+// On Railway (or any reverse-proxy deployment), the server's own "localhost" is not
+// reachable from the user's browser, so we derive the public base URL from the
+// incoming request's Host header and the X-Forwarded-Proto / X-Forwarded-Host headers
+// that Railway's edge proxy sets automatically.
+func publicCallbackURL(c *gin.Context, path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	req := c.Request
+
+	// X-Forwarded-Proto is set by Railway/nginx/etc. to "https" or "http"
+	scheme := req.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		scheme = req.Header.Get("X-Forwarded-Scheme")
+	}
+	if scheme == "" {
+		if req.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
+	// X-Forwarded-Host is the public domain on Railway, e.g. myapp.up.railway.app
+	host := req.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = req.Host
+	}
+	// Fall back to the known public domain if the host cannot be determined
+	// (e.g. internal health-check requests without proper Host headers).
+	if host == "" || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.") {
+		host = "api.aiapigiare.io.vn"
+		scheme = "https"
+	}
+
+	return fmt.Sprintf("%s://%s%s", scheme, host, path)
+}
+
 func (h *Handler) ListAuthFiles(c *gin.Context) {
 	if h == nil {
 		c.JSON(500, gin.H{"error": "handler not initialized"})
@@ -1448,6 +1487,8 @@ func (h *Handler) RequestAnthropicToken(c *gin.Context) {
 		waitForFile := func(path string, timeout time.Duration) (map[string]string, error) {
 			deadline := time.Now().Add(timeout)
 			for {
+				// Session is no longer pending — either it has a status set (error) or was
+				// evicted. In either case, stop the goroutine without overwriting the status.
 				if !IsOAuthSessionPending(state, "anthropic") {
 					return nil, errOAuthSessionNotPending
 				}
@@ -1525,7 +1566,6 @@ func (h *Handler) RequestAnthropicToken(c *gin.Context) {
 		}
 		fmt.Println("You can now use Claude services through this CLI")
 		CompleteOAuthSession(state)
-		CompleteOAuthSessionsByProvider("anthropic")
 	}()
 
 	c.JSON(200, gin.H{"status": "ok", "url": authURL, "state": state})
@@ -1546,21 +1586,35 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 	conf := &oauth2.Config{
 		ClientID:     geminiAuth.ClientID,
 		ClientSecret: geminiAuth.ClientSecret,
-		RedirectURL:  fmt.Sprintf("http://localhost:%d/oauth2callback", geminiAuth.DefaultCallbackPort),
 		Scopes:       geminiAuth.Scopes,
 		Endpoint:     google.Endpoint,
 	}
 
 	// Build authorization URL and return it immediately
 	state := fmt.Sprintf("gem-%d", time.Now().UnixNano())
+
+	isWebUI := isWebUIRequest(c)
+
+	// When running in web UI mode (e.g. Railway deployment), the redirect_url must point
+	// to the publicly reachable URL. Google redirects the *browser*, so localhost is
+	// unreachable. Use the public URL derived from the incoming request headers.
+	// In non-webui (local CLI) mode we keep using localhost for backward compat.
+	if isWebUI {
+		conf.RedirectURL = publicCallbackURL(c, "/google/callback")
+		log.Infof("gemini oauth: using public redirect URL %s", conf.RedirectURL)
+	} else {
+		conf.RedirectURL = fmt.Sprintf("http://localhost:%d/oauth2callback", geminiAuth.DefaultCallbackPort)
+	}
+
 	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent select_account"))
 	authURL = strings.ReplaceAll(authURL, "+", "%20")
 
 	RegisterOAuthSession(state, "gemini")
 
-	isWebUI := isWebUIRequest(c)
 	var forwarder *callbackForwarder
-	if isWebUI {
+	if !isWebUI {
+		// In local (non-webui) mode, spin up the port-forwarder so the CLI callback
+		// on localhost:8085 is redirected to our main server's /google/callback route.
 		targetURL, errTarget := h.managementCallbackURL("/google/callback")
 		if errTarget != nil {
 			log.WithError(errTarget).Error("failed to compute gemini callback target")
@@ -1576,7 +1630,7 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 	}
 
 	go func() {
-		if isWebUI {
+		if !isWebUI && forwarder != nil {
 			defer stopCallbackForwarderInstance(geminiCallbackPort, forwarder)
 		}
 
@@ -1586,6 +1640,8 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 		deadline := time.Now().Add(5 * time.Minute)
 		var authCode string
 		for {
+			// Session is no longer pending — either it has a status set (error) or was
+			// evicted. In either case stop without overwriting the status.
 			if !IsOAuthSessionPending(state, "gemini") {
 				return
 			}
@@ -1784,7 +1840,6 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 		}
 
 		CompleteOAuthSession(state)
-		CompleteOAuthSessionsByProvider("gemini")
 		fmt.Printf("You can now use Gemini CLI services through this CLI; token saved to %s\n", savedPath)
 	}()
 
@@ -1931,7 +1986,6 @@ func (h *Handler) RequestCodexToken(c *gin.Context) {
 		}
 		fmt.Println("You can now use Codex services through this CLI")
 		CompleteOAuthSession(state)
-		CompleteOAuthSessionsByProvider("codex")
 	}()
 
 	c.JSON(200, gin.H{"status": "ok", "url": authURL, "state": state})
@@ -1952,14 +2006,22 @@ func (h *Handler) RequestAntigravityToken(c *gin.Context) {
 		return
 	}
 
+	isWebUI := isWebUIRequest(c)
+
+	// Use the public-facing URL for web UI mode so the browser's OAuth redirect works on Railway.
 	redirectURI := fmt.Sprintf("http://localhost:%d/oauth-callback", antigravity.CallbackPort)
+	if isWebUI {
+		redirectURI = publicCallbackURL(c, "/antigravity/callback")
+		log.Infof("antigravity oauth: using public redirect URL %s", redirectURI)
+	}
 	authURL := authSvc.BuildAuthURL(state, redirectURI)
 
 	RegisterOAuthSession(state, "antigravity")
 
-	isWebUI := isWebUIRequest(c)
 	var forwarder *callbackForwarder
-	if isWebUI {
+	if !isWebUI {
+		// In local (non-webui) mode, spin up the port-forwarder so the CLI callback
+		// on localhost:CallbackPort is bridged to our main server's /antigravity/callback route.
 		targetURL, errTarget := h.managementCallbackURL("/antigravity/callback")
 		if errTarget != nil {
 			log.WithError(errTarget).Error("failed to compute antigravity callback target")
@@ -1975,7 +2037,7 @@ func (h *Handler) RequestAntigravityToken(c *gin.Context) {
 	}
 
 	go func() {
-		if isWebUI {
+		if !isWebUI && forwarder != nil {
 			defer stopCallbackForwarderInstance(antigravity.CallbackPort, forwarder)
 		}
 
@@ -2091,7 +2153,6 @@ func (h *Handler) RequestAntigravityToken(c *gin.Context) {
 		}
 
 		CompleteOAuthSession(state)
-		CompleteOAuthSessionsByProvider("antigravity")
 		fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
 		if projectID != "" {
 			fmt.Printf("Using GCP project: %s\n", projectID)
@@ -2173,7 +2234,6 @@ func (h *Handler) RequestKimiToken(c *gin.Context) {
 		fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
 		fmt.Println("You can now use Kimi services through this CLI")
 		CompleteOAuthSession(state)
-		CompleteOAuthSessionsByProvider("kimi")
 	}()
 
 	c.JSON(200, gin.H{"status": "ok", "url": authURL, "state": state})

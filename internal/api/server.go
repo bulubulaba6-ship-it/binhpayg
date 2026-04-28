@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
+	_ "embed"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -45,6 +46,9 @@ import (
 	"golang.org/x/net/http2"
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed icon.png
+var embeddedIconPNG []byte
 
 const oauthCallbackSuccessHTML = `<html><head><meta charset="utf-8"><title>Authentication successful</title><script>setTimeout(function(){window.close();},5000);</script></head><body><h1>Authentication successful!</h1><p>You can close this window.</p><p>This window will close automatically in 5 seconds.</p></body></html>`
 
@@ -722,7 +726,14 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"AIAPIGiaRe"})]})`,
 	).Replace(string(content))
 	iconDataURI := ""
-	if iconBytes, err := os.ReadFile(`icon.png`); err == nil {
+	// Use the embedded icon (compiled into the binary) so it works both in production
+	// and in test environments where no icon.png file is present on disk.
+	iconBytes := embeddedIconPNG
+	// If somehow the embed is empty, fall back to reading from disk next to the binary.
+	if len(iconBytes) == 0 {
+		iconBytes, _ = os.ReadFile("icon.png")
+	}
+	if len(iconBytes) > 0 {
 		iconDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(iconBytes)
 	}
 	if iconDataURI != "" {
