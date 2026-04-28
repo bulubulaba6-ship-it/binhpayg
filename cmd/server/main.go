@@ -260,6 +260,9 @@ func main() {
 			return
 		}
 		cancel()
+		
+		go pgStoreInst.StartPeriodicUsageSync(context.Background(), 1*time.Minute)
+		
 		configFilePath = pgStoreInst.ConfigPath()
 		cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
 		if err == nil {

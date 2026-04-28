@@ -15,6 +15,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
 )
@@ -23,7 +24,9 @@ const (
 	defaultConfigTable  = "config_store"
 	defaultAuthTable    = "auth_store"
 	defaultBillingTable = "billing_sessions"
+	defaultUsageTable   = "usage_store"
 	defaultConfigKey    = "config"
+	defaultUsageKey     = "usage"
 )
 
 // PostgresStoreConfig captures configuration required to initialize a Postgres-backed store.
@@ -33,6 +36,7 @@ type PostgresStoreConfig struct {
 	ConfigTable  string
 	AuthTable    string
 	BillingTable string
+	UsageTable   string
 	SpoolDir     string
 }
 
@@ -62,6 +66,9 @@ func NewPostgresStore(ctx context.Context, cfg PostgresStoreConfig) (*PostgresSt
 	}
 	if cfg.BillingTable == "" {
 		cfg.BillingTable = defaultBillingTable
+	}
+	if cfg.UsageTable == "" {
+		cfg.UsageTable = defaultUsageTable
 	}
 
 	spoolRoot := strings.TrimSpace(cfg.SpoolDir)
@@ -144,6 +151,17 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 		)
 	`, authTable)); err != nil {
 		return fmt.Errorf("postgres store: create auth table: %w", err)
+	}
+	usageTable := s.fullTableName(s.cfg.UsageTable)
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+			id TEXT PRIMARY KEY,
+			content JSONB NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`, usageTable)); err != nil {
+		return fmt.Errorf("postgres store: create usage table: %w", err)
 	}
 	billingTable := s.fullTableName(s.cfg.BillingTable)
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
@@ -343,6 +361,9 @@ func (s *PostgresStore) Bootstrap(ctx context.Context, exampleConfigPath string)
 		return err
 	}
 	if err := s.syncAuthFromDatabase(ctx); err != nil {
+		return err
+	}
+	if err := s.syncUsageFromDatabase(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -814,6 +835,75 @@ func (s *PostgresStore) fullTableName(name string) string {
 func quoteIdentifier(identifier string) string {
 	replaced := strings.ReplaceAll(identifier, "\"", "\"\"")
 	return "\"" + replaced + "\""
+}
+
+// syncUsageFromDatabase loads the usage statistics snapshot from the database and merges it.
+func (s *PostgresStore) syncUsageFromDatabase(ctx context.Context) error {
+	query := fmt.Sprintf("SELECT content FROM %s WHERE id = $1", s.fullTableName(s.cfg.UsageTable))
+	var payload []byte
+	err := s.db.QueryRowContext(ctx, query, defaultUsageKey).Scan(&payload)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return nil
+	case err != nil:
+		return fmt.Errorf("postgres store: load usage from database: %w", err)
+	}
+	var snapshot usage.StatisticsSnapshot
+	if err = json.Unmarshal(payload, &snapshot); err != nil {
+		log.WithError(err).Warn("postgres store: failed to unmarshal usage snapshot from database")
+		return nil
+	}
+	stats := usage.GetRequestStatistics()
+	if stats != nil {
+		stats.MergeSnapshot(snapshot)
+	}
+	return nil
+}
+
+// PersistUsage saves the current memory usage snapshot into PostgreSQL.
+func (s *PostgresStore) PersistUsage(ctx context.Context) error {
+	stats := usage.GetRequestStatistics()
+	if stats == nil {
+		return nil
+	}
+	snapshot := stats.Snapshot()
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("postgres store: marshal usage snapshot: %w", err)
+	}
+	query := fmt.Sprintf(`
+		INSERT INTO %s (id, content, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		ON CONFLICT (id)
+		DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()
+	`, s.fullTableName(s.cfg.UsageTable))
+	if _, err := s.db.ExecContext(ctx, query, defaultUsageKey, json.RawMessage(payload)); err != nil {
+		return fmt.Errorf("postgres store: upsert usage snapshot: %w", err)
+	}
+	return nil
+}
+
+// StartPeriodicUsageSync starts a background goroutine that periodically flushes
+// usage statistics to the PostgresStore. It runs until the context is canceled.
+func (s *PostgresStore) StartPeriodicUsageSync(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// One final flush before exit
+			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = s.PersistUsage(flushCtx)
+			cancel()
+			return
+		case <-ticker.C:
+			flushCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			if err := s.PersistUsage(flushCtx); err != nil {
+				log.WithError(err).Warn("postgres store: periodic usage sync failed")
+			}
+			cancel()
+		}
+	}
 }
 
 func valueAsString(v any) string {
