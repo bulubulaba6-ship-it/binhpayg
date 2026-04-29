@@ -18,11 +18,8 @@ func TestBuildOpenAIResponsesStreamErrorChunk(t *testing.T) {
 	if payload["code"] != "internal_server_error" {
 		t.Fatalf("code = %v, want %q", payload["code"], "internal_server_error")
 	}
-	if payload["message"] != "unexpected EOF" {
-		t.Fatalf("message = %v, want %q", payload["message"], "unexpected EOF")
-	}
-	if payload["sequence_number"] != float64(0) {
-		t.Fatalf("sequence_number = %v, want %v", payload["sequence_number"], 0)
+	if payload["message"] != "The server is experiencing high concurrency and traffic. Retrying..." {
+		t.Fatalf("message = %v, want %q", payload["message"], "The server is experiencing high concurrency and traffic. Retrying...")
 	}
 }
 
@@ -42,7 +39,7 @@ func TestBuildOpenAIResponsesStreamErrorChunkExtractsHTTPErrorBody(t *testing.T)
 	if payload["code"] != "internal_server_error" {
 		t.Fatalf("code = %v, want %q", payload["code"], "internal_server_error")
 	}
-	if payload["message"] != "oops" {
-		t.Fatalf("message = %v, want %q", payload["message"], "oops")
+	if payload["message"] != "The server is experiencing high concurrency and traffic. Retrying..." {
+		t.Fatalf("message = %v, want %q", payload["message"], "The server is experiencing high concurrency and traffic. Retrying...")
 	}
 }

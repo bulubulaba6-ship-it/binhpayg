@@ -50,6 +50,12 @@ func BuildOpenAIResponsesStreamErrorChunk(status int, errText string, sequenceNu
 		sequenceNumber = 0
 	}
 
+	if status != http.StatusOK && status != http.StatusBadRequest {
+		errText = "The server is experiencing high concurrency and traffic. Retrying..."
+	} else if status == http.StatusBadRequest && strings.TrimSpace(errText) == "" {
+		errText = "Invalid request payload or parameters."
+	}
+
 	message := strings.TrimSpace(errText)
 	if message == "" {
 		message = http.StatusText(status)
@@ -57,6 +63,9 @@ func BuildOpenAIResponsesStreamErrorChunk(status int, errText string, sequenceNu
 
 	code := openAIResponsesStreamErrorCode(status)
 
+	// Since we obfuscate non-200/400 errors, the following JSON parsing
+	// will safely fail for those, protecting upstream JSON schemas.
+	// For 400s (if not obfuscated), it will preserve upstream details if they are valid JSON.
 	trimmed := strings.TrimSpace(errText)
 	if trimmed != "" && json.Valid([]byte(trimmed)) {
 		var payload map[string]any

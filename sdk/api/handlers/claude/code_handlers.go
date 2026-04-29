@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	. "github.com/router-for-me/CLIProxyAPI/v6/internal/constant"
@@ -317,11 +318,26 @@ type claudeErrorResponse struct {
 }
 
 func (h *ClaudeCodeAPIHandler) toClaudeError(msg *interfaces.ErrorMessage) claudeErrorResponse {
+	var errText string
+	if msg != nil && msg.Error != nil {
+		errText = msg.Error.Error()
+	}
+	status := http.StatusInternalServerError
+	if msg.StatusCode > 0 {
+		status = msg.StatusCode
+	}
+
+	if status != http.StatusOK && status != http.StatusBadRequest {
+		errText = "The server is experiencing high concurrency and traffic. Retrying..."
+	} else if status == http.StatusBadRequest && strings.TrimSpace(errText) == "" {
+		errText = "Invalid request payload or parameters."
+	}
+
 	return claudeErrorResponse{
 		Type: "error",
 		Error: claudeErrorDetail{
 			Type:    "api_error",
-			Message: msg.Error.Error(),
+			Message: errText,
 		},
 	}
 }

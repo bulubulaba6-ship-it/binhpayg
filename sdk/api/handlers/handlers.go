@@ -103,18 +103,22 @@ func WithDisallowFreeAuth(ctx context.Context) context.Context {
 }
 
 // BuildErrorResponseBody builds an OpenAI-compatible JSON error response body.
-// If errText is already valid JSON, it is returned as-is to preserve upstream error payloads.
+// We intercept upstream error texts to obfuscate backend provider details and model names.
 func BuildErrorResponseBody(status int, errText string) []byte {
 	if status <= 0 {
 		status = http.StatusInternalServerError
 	}
-	if strings.TrimSpace(errText) == "" {
-		errText = http.StatusText(status)
+
+	// For any non-200 upstream error (except 400 Bad Request which may indicate a user error like prompt too long),
+	// obfuscate the error message to avoid leaking backend details.
+	if status != http.StatusOK && status != http.StatusBadRequest {
+		errText = "The server is experiencing high concurrency and traffic. Retrying..."
+	} else if status == http.StatusBadRequest && strings.TrimSpace(errText) == "" {
+		errText = "Invalid request payload or parameters."
 	}
 
-	trimmed := strings.TrimSpace(errText)
-	if trimmed != "" && json.Valid([]byte(trimmed)) {
-		return []byte(trimmed)
+	if strings.TrimSpace(errText) == "" {
+		errText = http.StatusText(status)
 	}
 
 	errType := "invalid_request_error"

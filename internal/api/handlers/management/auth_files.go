@@ -2237,15 +2237,15 @@ func ensureGeminiProjectAndOnboard(ctx context.Context, httpClient *http.Client,
 	if trimmedRequest == "" {
 		projects, errProjects := fetchGCPProjects(ctx, httpClient)
 		if errProjects != nil {
-			return fmt.Errorf("fetch project list: %w", errProjects)
+			log.Warnf("fetchGCPProjects: %v — attempting headless onboarding", errProjects)
+		} else if len(projects) > 0 {
+			// Account already has at least one GCP project — use the first one.
+			trimmedRequest = strings.TrimSpace(projects[0].ProjectID)
 		}
-		if len(projects) == 0 {
-			return fmt.Errorf("no Google Cloud projects available for this account")
-		}
-		trimmedRequest = strings.TrimSpace(projects[0].ProjectID)
-		if trimmedRequest == "" {
-			return fmt.Errorf("resolved project id is empty")
-		}
+		// If len(projects)==0 or fetchGCPProjects failed, leave trimmedRequest empty.
+		// performGeminiCLISetup will call loadCodeAssist without a project and then
+		// fall into the onboardUser auto-provisioning path, matching what the real
+		// Gemini CLI does for first-time / no-project accounts.
 		storage.Auto = true
 	} else {
 		storage.Auto = false
@@ -2265,12 +2265,25 @@ func ensureGeminiProjectAndOnboard(ctx context.Context, httpClient *http.Client,
 func onboardAllGeminiProjects(ctx context.Context, httpClient *http.Client, storage *geminiAuth.GeminiTokenStorage) ([]string, error) {
 	projects, errProjects := fetchGCPProjects(ctx, httpClient)
 	if errProjects != nil {
-		return nil, fmt.Errorf("fetch project list: %w", errProjects)
+		log.Warnf("onboardAllGeminiProjects: fetchGCPProjects failed: %v — trying headless onboarding", errProjects)
 	}
+	activated := make([]string, 0)
 	if len(projects) == 0 {
-		return nil, fmt.Errorf("no Google Cloud projects available for this account")
+		// No GCP projects found (fresh account or API error).
+		// Attempt headless onboarding with an empty project ID so Google
+		// auto-provisions one via the loadCodeAssist → onboardUser flow.
+		log.Info("onboardAllGeminiProjects: no projects found, attempting headless onboarding")
+		if err := performGeminiCLISetup(ctx, httpClient, storage, ""); err != nil {
+			return nil, fmt.Errorf("headless onboarding: %w", err)
+		}
+		if finalID := strings.TrimSpace(storage.ProjectID); finalID != "" {
+			activated = append(activated, finalID)
+		}
+		if len(activated) == 0 {
+			return nil, fmt.Errorf("no Google Cloud projects available for this account")
+		}
+		return activated, nil
 	}
-	activated := make([]string, 0, len(projects))
 	seen := make(map[string]struct{}, len(projects))
 	for _, project := range projects {
 		candidate := strings.TrimSpace(project.ProjectID)
@@ -2524,10 +2537,17 @@ func callGeminiCLI(ctx context.Context, httpClient *http.Client, endpoint string
 }
 
 func fetchGCPProjects(ctx context.Context, httpClient *http.Client) ([]interfaces.GCPProjectProjects, error) {
-	req, errRequest := http.NewRequestWithContext(ctx, http.MethodGet, "https://cloudresourcemanager.googleapis.com/v1/projects", nil)
+	return fetchGCPProjectsFromURL(ctx, httpClient, "https://cloudresourcemanager.googleapis.com/v1/projects")
+}
+
+// fetchGCPProjectsFromURL calls the given Cloud Resource Manager endpoint and returns ACTIVE projects.
+func fetchGCPProjectsFromURL(ctx context.Context, httpClient *http.Client, apiURL string) ([]interfaces.GCPProjectProjects, error) {
+	req, errRequest := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if errRequest != nil {
 		return nil, fmt.Errorf("could not create project list request: %w", errRequest)
 	}
+	req.Header.Set("User-Agent", misc.GeminiCLIUserAgent(""))
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, errDo := httpClient.Do(req)
 	if errDo != nil {
@@ -2539,17 +2559,28 @@ func fetchGCPProjects(ctx context.Context, httpClient *http.Client) ([]interface
 		}
 	}()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("project list request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
 	}
 
 	var projects interfaces.GCPProject
-	if errDecode := json.NewDecoder(resp.Body).Decode(&projects); errDecode != nil {
+	if errDecode := json.Unmarshal(bodyBytes, &projects); errDecode != nil {
 		return nil, fmt.Errorf("failed to unmarshal project list: %w", errDecode)
 	}
 
-	return projects.Projects, nil
+	// Filter to ACTIVE projects only; DELETE_REQUESTED ones cannot be used.
+	active := make([]interfaces.GCPProjectProjects, 0, len(projects.Projects))
+	for _, p := range projects.Projects {
+		if strings.EqualFold(p.LifecycleState, "ACTIVE") || p.LifecycleState == "" {
+			active = append(active, p)
+		}
+	}
+	log.Infof("fetchGCPProjects(%s): total=%d active=%d", apiURL, len(projects.Projects), len(active))
+	for i, p := range active {
+		log.Debugf("fetchGCPProjects[%d]: projectId=%s state=%s", i, p.ProjectID, p.LifecycleState)
+	}
+	return active, nil
 }
 
 func checkCloudAPIIsEnabled(ctx context.Context, httpClient *http.Client, projectID string) (bool, error) {
