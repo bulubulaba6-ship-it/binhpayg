@@ -13,8 +13,8 @@ type modelAliasEntry interface {
 }
 
 type oauthModelAliasTable struct {
-	// reverse maps channel -> alias (lower) -> original upstream model name.
-	reverse map[string]map[string]string
+	// reverse maps channel -> alias (lower) -> original upstream model names.
+	reverse map[string]map[string][]string
 }
 
 func compileOAuthModelAliasTable(aliases map[string][]internalconfig.OAuthModelAlias) *oauthModelAliasTable {
@@ -22,14 +22,14 @@ func compileOAuthModelAliasTable(aliases map[string][]internalconfig.OAuthModelA
 		return &oauthModelAliasTable{}
 	}
 	out := &oauthModelAliasTable{
-		reverse: make(map[string]map[string]string, len(aliases)),
+		reverse: make(map[string]map[string][]string, len(aliases)),
 	}
 	for rawChannel, entries := range aliases {
 		channel := strings.ToLower(strings.TrimSpace(rawChannel))
 		if channel == "" || len(entries) == 0 {
 			continue
 		}
-		rev := make(map[string]string, len(entries))
+		rev := make(map[string][]string, len(entries))
 		for _, entry := range entries {
 			name := strings.TrimSpace(entry.Name)
 			alias := strings.TrimSpace(entry.Alias)
@@ -40,10 +40,7 @@ func compileOAuthModelAliasTable(aliases map[string][]internalconfig.OAuthModelA
 				continue
 			}
 			aliasKey := strings.ToLower(alias)
-			if _, exists := rev[aliasKey]; exists {
-				continue
-			}
-			rev[aliasKey] = name
+			rev[aliasKey] = append(rev[aliasKey], name)
 		}
 		if len(rev) > 0 {
 			out.reverse[channel] = rev
@@ -186,12 +183,16 @@ func (m *Manager) resolveOAuthUpstreamModel(auth *Auth, requestedModel string) s
 	return resolveUpstreamModelFromAliasTable(m, auth, requestedModel, modelAliasChannel(auth))
 }
 
-func resolveUpstreamModelFromAliasTable(m *Manager, auth *Auth, requestedModel, channel string) string {
+func (m *Manager) resolveOAuthUpstreamModelPool(auth *Auth, requestedModel string) []string {
+	return resolveUpstreamModelPoolFromAliasTable(m, auth, requestedModel, modelAliasChannel(auth))
+}
+
+func resolveUpstreamModelPoolFromAliasTable(m *Manager, auth *Auth, requestedModel, channel string) []string {
 	if m == nil || auth == nil {
-		return ""
+		return nil
 	}
 	if channel == "" {
-		return ""
+		return nil
 	}
 
 	// Extract thinking suffix from requested model using ParseSuffix
@@ -207,37 +208,68 @@ func resolveUpstreamModelFromAliasTable(m *Manager, auth *Auth, requestedModel, 
 	raw := m.oauthModelAlias.Load()
 	table, _ := raw.(*oauthModelAliasTable)
 	if table == nil || table.reverse == nil {
-		return ""
+		return nil
 	}
 	rev := table.reverse[channel]
 	if rev == nil {
-		return ""
+		return nil
 	}
+
+	var out []string
+	seen := make(map[string]struct{})
 
 	for _, candidate := range candidates {
 		key := strings.ToLower(strings.TrimSpace(candidate))
 		if key == "" {
 			continue
 		}
-		original := strings.TrimSpace(rev[key])
-		if original == "" {
+		originals := rev[key]
+		if len(originals) == 0 {
 			continue
 		}
-		if strings.EqualFold(original, baseModel) {
-			return ""
-		}
 
-		// If config already has suffix, it takes priority.
-		if thinking.ParseSuffix(original).HasSuffix {
-			return original
+		for _, originalRaw := range originals {
+			original := strings.TrimSpace(originalRaw)
+			if original == "" {
+				continue
+			}
+			if strings.EqualFold(original, baseModel) {
+				continue
+			}
+
+			// If config already has suffix, it takes priority.
+			if thinking.ParseSuffix(original).HasSuffix {
+				if _, exists := seen[original]; !exists {
+					seen[original] = struct{}{}
+					out = append(out, original)
+				}
+				continue
+			}
+			// Preserve user's thinking suffix on the resolved model.
+			resolved := original
+			if requestResult.HasSuffix && requestResult.RawSuffix != "" {
+				resolved = original + "(" + requestResult.RawSuffix + ")"
+			}
+			rkey := strings.ToLower(resolved)
+			if _, exists := seen[rkey]; !exists {
+				seen[rkey] = struct{}{}
+				out = append(out, resolved)
+			}
 		}
-		// Preserve user's thinking suffix on the resolved model.
-		if requestResult.HasSuffix && requestResult.RawSuffix != "" {
-			return original + "(" + requestResult.RawSuffix + ")"
+		
+		if len(out) > 0 {
+			return out
 		}
-		return original
 	}
 
+	return nil
+}
+
+func resolveUpstreamModelFromAliasTable(m *Manager, auth *Auth, requestedModel, channel string) string {
+	pool := resolveUpstreamModelPoolFromAliasTable(m, auth, requestedModel, channel)
+	if len(pool) > 0 {
+		return pool[0]
+	}
 	return ""
 }
 
