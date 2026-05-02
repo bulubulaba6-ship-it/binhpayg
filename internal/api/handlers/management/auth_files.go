@@ -2386,7 +2386,10 @@ func performGeminiCLISetup(ctx context.Context, httpClient *http.Client, storage
 			"metadata": metadata,
 		}
 
-		autoCtx, autoCancel := context.WithTimeout(ctx, 30*time.Second)
+		// Decouple from the HTTP request deadline: user closing the browser tab
+		// must not abort the provisioning loop mid-flight.
+		detachedCtx := context.WithoutCancel(ctx)
+		autoCtx, autoCancel := context.WithTimeout(detachedCtx, 90*time.Second)
 		defer autoCancel()
 		for attempt := 1; ; attempt++ {
 			var onboardResp map[string]any
@@ -2416,6 +2419,23 @@ func performGeminiCLISetup(ctx context.Context, httpClient *http.Client, storage
 			}
 		}
 
+		if projectID == "" {
+			// done=true was received but the project field was empty.
+			// Google sometimes needs a second loadCodeAssist call to return
+			// the auto-provisioned project (Enterprise / Workspace accounts).
+			log.Info("Auto-discovery: onboardUser done but empty project — retrying loadCodeAssist")
+			var retryResp map[string]any
+			if retryErr := callGeminiCLI(ctx, httpClient, "loadCodeAssist", loadReqBody, &retryResp); retryErr == nil {
+				switch v := retryResp["cloudaicompanionProject"].(type) {
+				case string:
+					projectID = strings.TrimSpace(v)
+				case map[string]any:
+					if id, okID := v["id"].(string); okID {
+						projectID = strings.TrimSpace(id)
+					}
+				}
+			}
+		}
 		if projectID == "" {
 			return &projectSelectionRequiredError{}
 		}

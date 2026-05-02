@@ -737,14 +737,27 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		iconDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(iconBytes)
 	}
 	if iconDataURI != "" {
-		if start := strings.Index(contentStr, `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,`); start != -1 {
-			valueStart := start + len(`<link rel="icon" type="image/svg+xml" href="`)
-			if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
-				contentStr = contentStr[:valueStart] + iconDataURI + contentStr[valueStart+end:]
+		// Replace the entire SVG favicon link tag with a PNG one so the type attribute is correct.
+		// Browsers reject favicons whose MIME type does not match the actual image format.
+		const svgLinkPrefix = `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,`
+		if start := strings.Index(contentStr, svgLinkPrefix); start != -1 {
+			// Find the closing " />" or ">"
+			end := strings.Index(contentStr[start:], "/>")
+			if end == -1 {
+				end = strings.Index(contentStr[start:], ">")
+			}
+			if end != -1 {
+				// Replace the whole tag with a correct PNG link
+				newLink := `<link rel="icon" type="image/png" href="` + iconDataURI + `" />`
+				contentStr = contentStr[:start] + newLink + contentStr[start+end+2:]
 			}
 		}
-		if start := strings.Index(contentStr, `const Td="data:image/jpeg;base64,`); start != -1 {
+		// Replace the embedded logo image variable (minified JS). The variable name is
+		// always followed by ="data:image/jpeg;base64, in the current build.
+		const logoPrefix = `const Td="data:image/jpeg;base64,`
+		if start := strings.Index(contentStr, logoPrefix); start != -1 {
 			valueStart := start + len(`const Td="`)
+			// The value ends at the next unescaped double-quote
 			if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
 				contentStr = contentStr[:valueStart] + iconDataURI + contentStr[valueStart+end:]
 			}
