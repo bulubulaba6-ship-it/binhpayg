@@ -134,10 +134,25 @@ type Config struct {
 	// gemini-api-key, codex-api-key, claude-api-key, openai-compatibility, vertex-api-key, and ampcode.
 	OAuthModelAlias map[string][]OAuthModelAlias `yaml:"oauth-model-alias,omitempty" json:"oauth-model-alias,omitempty"`
 
+	// ModelPricing defines virtual credit rates per model alias.
+	// These are NOT real monetary rates — they are quota consumption units.
+	// Default: 1,000 Credits = $1 USD equivalent (informational).
+	// With a 100-credit window limit, a typical exchange consumes ~1-5 credits.
+	// Rates are credits per 1,000,000 tokens (input/output/cache separately).
+	ModelPricing map[string]ModelPricingEntry `yaml:"model-pricing,omitempty" json:"model-pricing,omitempty"`
+
 	// Payload defines default and override rules for provider payload parameters.
 	Payload PayloadConfig `yaml:"payload" json:"payload"`
 
 	legacyMigrationPending bool `yaml:"-" json:"-"`
+}
+
+// ModelPricingEntry defines the virtual credit cost per 1M tokens for a specific model alias.
+// Input is charged on input tokens, Output on output+reasoning tokens, Cache on cached tokens.
+type ModelPricingEntry struct {
+	Input  float64 `yaml:"input"  json:"input"`
+	Output float64 `yaml:"output" json:"output"`
+	Cache  float64 `yaml:"cache"  json:"cache"`
 }
 
 // ClaudeHeaderDefaults configures default header values injected into Claude API requests.

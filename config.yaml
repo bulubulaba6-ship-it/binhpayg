@@ -85,6 +85,29 @@ oauth-model-alias:
       alias: "claude-haiku-4-5"
 logging-to-file: true
 usage-statistics-enabled: true
+# Virtual credit rates per model alias (credits per 1M tokens consumed).
+# NOT real USD — these are quota tracking units only.
+# With default-api-key-limit: 100:
+#   claude-opus-4-7  → ~33K input tokens / 5h window
+#   claude-sonnet-4-6→ ~333K input tokens / 5h window
+#   claude-haiku-4-5 → ~667K input tokens / 5h window
+model-pricing:
+  claude-opus-4-7:
+    input: 1.0
+    output: 3.0
+    cache: 0.10
+  claude-opus-4-6:
+    input: 0.7
+    output: 2.0
+    cache: 0.07
+  claude-sonnet-4-6:
+    input: 0.3
+    output: 1.0
+    cache: 0.03
+  claude-haiku-4-5:
+    input: 0.15
+    output: 0.5
+    cache: 0.015
 api-keys:
   - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
 default-api-key-limit: 30
@@ -94,6 +117,6 @@ api-key-models:
   fink_pro_8c9e9ffb23fccdac9d65b57695145f13:
     claude:
       - claude-opus-4-7
+      - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-opus-4-6

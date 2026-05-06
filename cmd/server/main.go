@@ -423,6 +423,16 @@ func main() {
 	usage.SetStatisticsEnabled(cfg.UsageStatisticsEnabled)
 	coreauth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 
+	// Register configurable model pricing (virtual credit rates from config.yaml).
+	if len(cfg.ModelPricing) > 0 {
+		pricing := make(map[string][3]float64, len(cfg.ModelPricing))
+		for model, entry := range cfg.ModelPricing {
+			pricing[model] = [3]float64{entry.Input, entry.Output, entry.Cache}
+		}
+		coreauth.SetModelPricing(pricing)
+		log.Infof("model pricing configured for %d aliases", len(pricing))
+	}
+
 	if err = logging.ConfigureLogOutput(cfg); err != nil {
 		log.Errorf("failed to configure log output: %v", err)
 		return

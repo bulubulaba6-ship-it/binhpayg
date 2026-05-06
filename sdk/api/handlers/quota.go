@@ -52,6 +52,7 @@ type quotaResponse struct {
 }
 
 type apiKeyUsageSummary struct {
+	// APIKey is redacted: only last 4 characters shown (e.g. "****...a1b2").
 	APIKey          string                                 `json:"api_key"`
 	TotalRequests   int64                                  `json:"total_requests"`
 	SuccessRequests int64                                  `json:"success_requests"`
@@ -61,25 +62,82 @@ type apiKeyUsageSummary struct {
 	ReasoningTokens int64                                  `json:"reasoning_tokens"`
 	RPM             float64                                `json:"rpm"`
 	TPM             float64                                `json:"tpm"`
-	Models          map[string]internalusage.ModelSnapshot `json:"models,omitempty"`
+	// Models keys are aliased — no real provider model IDs exposed.
+	Models map[string]internalusage.ModelSnapshot `json:"models,omitempty"`
+}
+
+// redactKey masks all but the last 4 characters of an API key.
+func redactKey(key string) string {
+	if len(key) <= 4 {
+		return "****"
+	}
+	return "****..." + key[len(key)-4:]
+}
+
+// resolveModelAlias maps internal provider model IDs to user-facing aliases.
+// This prevents leaking real Gemini model names and provider architecture.
+// Update this map whenever oauth-model-alias in config.yaml changes.
+func resolveModelAlias(model string) string {
+	m := strings.ToLower(strings.TrimSpace(model))
+	switch {
+	case m == "gemini-3.1-flash-lite-preview", m == "gemini-3-flash":
+		return "claude-opus-4-7"
+	case m == "gemini-3-flash-preview":
+		return "claude-opus-4-6"
+	case m == "gemini-3.1-flash-lite":
+		return "claude-sonnet-4-6"
+	case m == "gemini-2.5-flash-lite", m == "gemini-2.5-flash":
+		return "claude-haiku-4-5"
+	case strings.Contains(m, "gemini"):
+		return "claude-sonnet-4-6"
+	default:
+		return model // already an alias or non-Gemini model
+	}
+}
+
+// sanitiseDetails strips sensitive fields from per-request detail records.
+// Source (Gmail address / credential file path) and AuthIndex (credential hash)
+// must never be exposed to API key holders.
+func sanitiseDetails(details []internalusage.RequestDetail) []internalusage.RequestDetail {
+	out := make([]internalusage.RequestDetail, len(details))
+	for i, d := range details {
+		out[i] = internalusage.RequestDetail{
+			Timestamp: d.Timestamp,
+			LatencyMs: d.LatencyMs,
+			// Source and AuthIndex intentionally omitted.
+			Tokens: d.Tokens,
+			Failed: d.Failed,
+		}
+	}
+	return out
 }
 
 func buildAPIKeyUsageSummary(stats *internalusage.RequestStatistics, apiKey string) apiKeyUsageSummary {
-	summary := apiKeyUsageSummary{APIKey: strings.TrimSpace(apiKey)}
-	if stats == nil || summary.APIKey == "" {
+	summary := apiKeyUsageSummary{APIKey: redactKey(strings.TrimSpace(apiKey))}
+	if stats == nil || apiKey == "" {
 		return summary
 	}
 
 	snapshot := stats.Snapshot()
-	apiSnapshot, ok := snapshot.APIs[summary.APIKey]
+	apiSnapshot, ok := snapshot.APIs[strings.TrimSpace(apiKey)]
 	if !ok {
 		return summary
 	}
 
-	summary.Models = apiSnapshot.Models
+	// Rebuild models map with aliased keys and sanitised details.
+	aliasedModels := make(map[string]internalusage.ModelSnapshot, len(apiSnapshot.Models))
+	for rawModel, modelSnapshot := range apiSnapshot.Models {
+		alias := resolveModelAlias(rawModel)
+		existing := aliasedModels[alias]
+		existing.TotalRequests += modelSnapshot.TotalRequests
+		existing.TotalTokens += modelSnapshot.TotalTokens
+		existing.Details = append(existing.Details, sanitiseDetails(modelSnapshot.Details)...)
+		aliasedModels[alias] = existing
+	}
+	summary.Models = aliasedModels
+
 	cutoff := time.Now().UTC().Add(-30 * time.Minute)
-	var recentRequests int64
-	var recentTokens int64
+	var recentRequests, recentTokens int64
 
 	for _, modelSnapshot := range apiSnapshot.Models {
 		for _, detail := range modelSnapshot.Details {
@@ -89,20 +147,14 @@ func buildAPIKeyUsageSummary(stats *internalusage.RequestStatistics, apiKey stri
 			} else {
 				summary.SuccessRequests++
 			}
-
-			cachedTokens := detail.Tokens.CachedTokens
-			if cachedTokens < 0 {
-				cachedTokens = 0
+			if detail.Tokens.CachedTokens > 0 {
+				summary.CachedTokens += detail.Tokens.CachedTokens
 			}
-			reasoningTokens := detail.Tokens.ReasoningTokens
-			if reasoningTokens < 0 {
-				reasoningTokens = 0
+			if detail.Tokens.ReasoningTokens > 0 {
+				summary.ReasoningTokens += detail.Tokens.ReasoningTokens
 			}
-			summary.CachedTokens += cachedTokens
-			summary.ReasoningTokens += reasoningTokens
 			totalTokens := detailTotalTokens(detail.Tokens)
 			summary.TotalTokens += totalTokens
-
 			if !detail.Timestamp.IsZero() && !detail.Timestamp.Before(cutoff) {
 				recentRequests++
 				recentTokens += totalTokens

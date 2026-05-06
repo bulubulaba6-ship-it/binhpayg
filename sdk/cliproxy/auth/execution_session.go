@@ -344,34 +344,99 @@ func CreditsForDuration(d time.Duration) int {
 //   gemini-1.5-pro      →  $3.50 in / $10.50 out / $0.88 cache
 //   gemini-1.5-flash    →  $0.35 in /  $1.05 out / $0.08 cache
 //   default (unknown)   →  $0.50 in /  $1.50 out / $0.20 cache
+// pricingEntry holds virtual credit rates for a model (credits per 1M tokens).
+type pricingEntry struct {
+	input  float64
+	output float64
+	cache  float64
+}
+
+// globalPricing stores configurable per-model pricing, set at startup via SetModelPricing.
+var (
+	globalPricingMu      sync.RWMutex
+	globalPricingMap     map[string]pricingEntry
+	globalPricingLoaded  bool
+)
+
+// SetModelPricing registers per-model virtual credit rates from the application config.
+// It should be called once at server startup after config is loaded.
+// Each entry is [input, output, cache] credits per 1,000,000 tokens.
+// Model names are matched case-insensitively (exact alias first, then keyword fallback).
+func SetModelPricing(pricing map[string][3]float64) {
+	globalPricingMu.Lock()
+	defer globalPricingMu.Unlock()
+	m := make(map[string]pricingEntry, len(pricing))
+	for k, v := range pricing {
+		m[strings.ToLower(strings.TrimSpace(k))] = pricingEntry{
+			input:  v[0],
+			output: v[1],
+			cache:  v[2],
+		}
+	}
+	globalPricingMap = m
+	globalPricingLoaded = len(m) > 0
+}
+
+// defaultPricingFor returns built-in low-cost virtual credit rates as a fallback.
+// Used only when model-pricing is not set in config.yaml.
+// 1 credit ≈ 1,000 tokens (haiku rate), appropriate for a free Gemini CLI service.
+func defaultPricingFor(modelLower string) pricingEntry {
+	switch {
+	case strings.Contains(modelLower, "opus"):
+		return pricingEntry{input: 1.0, output: 3.0, cache: 0.10}
+	case strings.Contains(modelLower, "sonnet"):
+		return pricingEntry{input: 0.3, output: 1.0, cache: 0.03}
+	case strings.Contains(modelLower, "haiku"):
+		return pricingEntry{input: 0.15, output: 0.5, cache: 0.015}
+	case strings.Contains(modelLower, "gpt-4o"), strings.Contains(modelLower, "gpt-4-turbo"):
+		return pricingEntry{input: 0.5, output: 1.5, cache: 0.15}
+	case strings.Contains(modelLower, "gpt-4"):
+		return pricingEntry{input: 2.0, output: 4.0, cache: 1.0}
+	case strings.Contains(modelLower, "o1"):
+		return pricingEntry{input: 1.0, output: 4.0, cache: 0.5}
+	case strings.Contains(modelLower, "gemini-1.5-pro"):
+		return pricingEntry{input: 0.35, output: 1.05, cache: 0.09}
+	case strings.Contains(modelLower, "gemini-1.5-flash"):
+		return pricingEntry{input: 0.035, output: 0.1, cache: 0.008}
+	default:
+		return pricingEntry{input: 0.3, output: 1.0, cache: 0.03}
+	}
+}
+
+// CalculateTokenCost returns the virtual credit cost for a request.
+// It checks configurable model-pricing from config.yaml (exact match, then keyword fallback).
+// Credits are quota units, NOT real USD — 1,000 credits ≈ $1 USD informational equivalent.
 func CalculateTokenCost(model string, input, output, reasoning, cache int64) float64 {
 	modelLower := strings.ToLower(strings.TrimSpace(model))
 
-	// Cost per 1M tokens in USD
-	var inCost, outCost, cacheCost float64 = 0.5, 1.5, 0.2
+	var entry pricingEntry
+	globalPricingMu.RLock()
+	loaded := globalPricingLoaded
+	if loaded {
+		// Exact match first (e.g. "claude-opus-4-7")
+		if e, ok := globalPricingMap[modelLower]; ok {
+			entry = e
+		} else {
+			// Keyword fallback within configured keys (e.g. model contains "opus")
+			for k, v := range globalPricingMap {
+				if strings.Contains(modelLower, k) || strings.Contains(k, modelLower) {
+					entry = v
+					break
+				}
+			}
+			if entry == (pricingEntry{}) {
+				entry = defaultPricingFor(modelLower)
+			}
+		}
+	}
+	globalPricingMu.RUnlock()
 
-	switch {
-	case strings.Contains(modelLower, "opus"):
-		inCost, outCost, cacheCost = 15.0, 75.0, 3.75
-	case strings.Contains(modelLower, "sonnet"):
-		inCost, outCost, cacheCost = 3.0, 15.0, 0.3
-	case strings.Contains(modelLower, "haiku"):
-		inCost, outCost, cacheCost = 0.25, 1.25, 0.03
-	case strings.Contains(modelLower, "gpt-4o"), strings.Contains(modelLower, "gpt-4-turbo"):
-		inCost, outCost, cacheCost = 5.0, 15.0, 2.5
-	case strings.Contains(modelLower, "gpt-4"):
-		inCost, outCost, cacheCost = 30.0, 60.0, 15.0
-	case strings.Contains(modelLower, "o1"):
-		inCost, outCost, cacheCost = 15.0, 60.0, 7.5
-	case strings.Contains(modelLower, "gemini-1.5-pro"):
-		inCost, outCost, cacheCost = 3.5, 10.5, 0.88
-	case strings.Contains(modelLower, "gemini-1.5-flash"):
-		inCost, outCost, cacheCost = 0.35, 1.05, 0.08
+	if !loaded {
+		entry = defaultPricingFor(modelLower)
 	}
 
-	// USD cost, then convert: 1,000 Credits = $1 USD
-	usd := (float64(input)*inCost + float64(output+reasoning)*outCost + float64(cache)*cacheCost) / 1_000_000.0
-	return usd * 1000.0
+	credits := (float64(input)*entry.input + float64(output+reasoning)*entry.output + float64(cache)*entry.cache) / 1_000_000.0
+	return credits
 }
 
 func sessionIDFromMetadata(metadata map[string]any) string {
