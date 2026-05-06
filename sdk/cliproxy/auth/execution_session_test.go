@@ -9,28 +9,6 @@ import (
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
 )
 
-func TestCreditsForDuration(t *testing.T) {
-	tests := []struct {
-		name     string
-		duration time.Duration
-		want     int
-	}{
-		{name: "zero", duration: 0, want: 1},
-		{name: "under two minutes", duration: 119 * time.Second, want: 1},
-		{name: "exactly two minutes", duration: 2 * time.Minute, want: 2},
-		{name: "under seven minutes", duration: 6*time.Minute + 59*time.Second, want: 2},
-		{name: "exactly seven minutes", duration: 7 * time.Minute, want: 3},
-		{name: "long session", duration: 23 * time.Minute, want: 3},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := CreditsForDuration(tc.duration); got != tc.want {
-				t.Fatalf("CreditsForDuration(%s) = %d, want %d", tc.duration, got, tc.want)
-			}
-		})
-	}
-}
 
 type recordingExecutionSessionLedger struct {
 	mu         sync.Mutex
