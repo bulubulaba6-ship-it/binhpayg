@@ -45,7 +45,8 @@ type ExecutionSessionContextKey struct{}
 type ExecutionQuotaSnapshot struct {
 	Sessions        int64     `json:"sessions"`
 	ActiveSessions  int64     `json:"active_sessions"`
-	CreditsUsed     float64   `json:"credits_used"`
+	CreditsUsed      float64   `json:"credits_used"`
+	TotalCreditsUsed float64   `json:"total_credits_used"`
 	CreditLimit     int64     `json:"credit_limit"` // 1,000 Credits = $1 USD
 	TotalTokens     int64     `json:"total_tokens"`
 	DurationSeconds int64                     `json:"duration_seconds"`

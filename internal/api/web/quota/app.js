@@ -313,20 +313,11 @@ const app = {
       app.setText('valSuccessReq', app.formatNumber(data.usage.success_requests));
       const totalTokens = data.quota.total_tokens || data.usage.total_tokens || 0;
       app.setText('valTokens',  app.formatNumber(totalTokens));
-      app.setText('valCredits', (data.quota.credits_used || 0).toFixed(5));
       app.setText('valRPM',     (data.usage.rpm || 0).toFixed(1));
-
-      // Progress bar
-      const limit = data.quota.credit_limit;
-      if (!limit || limit === -1 || limit === 0) {
-        app.setText('valLimit', 'Unlimited');
-        app.setStyle('creditProgress', 'width', '0%');
-      } else {
-        app.setText('valLimit', app.formatNumber(limit));
-        let pct = Math.min(100, ((data.quota.credits_used || 0) / limit) * 100);
-        app.setStyle('creditProgress', 'width', pct + '%');
-        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
-      }
+      
+      // Store for toggle
+      app.lastQuotaData = data.quota;
+      app.updateCreditDisplay();
 
       // Reset timer
       const exp = data.quota.window_expires_at;
@@ -365,8 +356,10 @@ const app = {
       else console.warn('[quota-dash] silent refresh failed:', err.message);
     }
   },
-
-  // ── Public entrypoints ───────────────────────────────────────────────────
+  pollTimer: null,
+  lastQuotaData: null,
+  
+  // ── Pricing definitions ───────────────────────────────────────────────────
   fetchQuota: () => {
     const input = document.getElementById('apiKeyInput');
     const key = (input && input.value.trim()) || new URLSearchParams(window.location.search).get('key');
@@ -386,12 +379,43 @@ const app = {
     app.saveKey(key);
     app.fetchData(key, true);
     app.startAutoRefresh(key);
+  },
+
+  updateCreditDisplay: () => {
+    if (!app.lastQuotaData) return;
+    const quota = app.lastQuotaData;
+    const mode = document.getElementById('creditToggle') ? document.getElementById('creditToggle').value : '5h';
+    const val = mode === '5h' ? (quota.credits_used || 0) : (quota.total_credits_used || 0);
+    
+    app.setText('valCredits', val.toFixed(5));
+    const limit = quota.credit_limit;
+    if (!limit || limit === -1 || limit === 0) {
+      app.setText('valLimit', 'Unlimited');
+      app.setStyle('creditProgress', 'width', '0%');
+    } else {
+      app.setText('valLimit', app.formatNumber(limit));
+      let pct = Math.min(100, (val / limit) * 100);
+      app.setStyle('creditProgress', 'width', pct + '%');
+      app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
+    }
   }
 };
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   app.initCharts();
+  const authBtn = document.getElementById('btnAuth');
+  if (authBtn) {
+    authBtn.addEventListener('click', app.handleAuth);
+  }
+  const pwd = document.getElementById('inpPwd');
+  if (pwd) {
+    pwd.addEventListener('keydown', e => { if (e.key === 'Enter') app.handleAuth(); });
+  }
+  const toggle = document.getElementById('creditToggle');
+  if (toggle) {
+    toggle.addEventListener('change', app.updateCreditDisplay);
+  }
 
   // Enter key on navbar input
   const navInput = document.getElementById('apiKeyInput');

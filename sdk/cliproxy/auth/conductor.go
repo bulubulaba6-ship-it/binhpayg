@@ -1154,7 +1154,24 @@ func (m *Manager) GetExecutionQuotaSummary(ctx context.Context, principal string
 	if ledger == nil {
 		return ExecutionQuotaSnapshot{}, fmt.Errorf("quota ledger unavailable")
 	}
-	return ledger.GetExecutionQuotaSummary(ctx, principal)
+	summary, err := ledger.GetExecutionQuotaSummary(ctx, principal)
+	if err != nil {
+		return summary, err
+	}
+	
+	// Inject credit limit from config
+	if cfg, ok := m.runtimeConfig.Load().(*internalconfig.Config); ok && cfg != nil {
+		limit := cfg.DefaultAPIKeyLimit
+		if limit == 0 {
+			limit = 30 // Default limit if unspecified
+		}
+		if specificLimit, ok := cfg.APIKeyLimits[principal]; ok {
+			limit = specificLimit
+		}
+		summary.CreditLimit = int64(limit)
+	}
+	
+	return summary, nil
 }
 
 // RegisterExecutor registers a provider executor with the manager.

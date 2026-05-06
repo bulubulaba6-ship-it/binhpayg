@@ -373,7 +373,7 @@ func (s *PostgresStore) FinalizeExecutionSession(ctx context.Context, sessionID 
 			updated_at = NOW()
 		WHERE NOT target.finalized
 	`, s.fullTableName(s.cfg.BillingTable))
-	if _, err = tx.ExecContext(ctx, upsertQuery, sessionID, finishedAt, int64(duration/time.Second), int64(credits), inTok, outTok, reasonTok, cacheTok); err != nil {
+	if _, err = tx.ExecContext(ctx, upsertQuery, sessionID, finishedAt, int64(duration/time.Second), credits, inTok, outTok, reasonTok, cacheTok); err != nil {
 		return fmt.Errorf("postgres store: finalize execution session: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
@@ -395,7 +395,8 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 		SELECT
 			COUNT(session_id) AS sessions,
 			SUM(CASE WHEN finalized = FALSE THEN 1 ELSE 0 END) AS active_sessions,
-			COALESCE(SUM(credits), 0) AS credits_used,
+			COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '5 hours' THEN credits ELSE 0 END), 0) AS credits_used,
+			COALESCE(SUM(credits), 0) AS total_credits_used,
 			COALESCE(SUM(duration_seconds), 0) AS duration_seconds,
 			MAX(last_seen_at) AS last_session_at,
 			COALESCE(SUM(input_tokens + output_tokens + reasoning_tokens + cached_tokens), 0) AS total_tokens
@@ -408,6 +409,7 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 		&summary.Sessions,
 		&summary.ActiveSessions,
 		&summary.CreditsUsed,
+		&summary.TotalCreditsUsed,
 		&summary.DurationSeconds,
 		&lastSessionAt,
 		&summary.TotalTokens,
@@ -435,7 +437,8 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 			var (
 				recSessionID, recProvider, recModel string
 				recStartedAt, recUpdatedAt          time.Time
-				recDuration, recCredits             int64
+				recDuration             int64
+				recCredits              float64
 				recInput, recOutput, recReasoning, recCached int64
 			)
 			if err := recentRows.Scan(

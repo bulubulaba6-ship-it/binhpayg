@@ -44,9 +44,14 @@
 
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-title">Credits (5h Window)</div>
-        <div class="stat-value"><span id="valCredits">0</span> <span class="stat-limit">/ <span
-              id="valLimit">100</span></span></div>
+        <div class="stat-title">
+          Credits 
+          <select id="creditToggle" style="background:transparent; border:none; color:inherit; font:inherit; font-size: 0.9em; cursor:pointer; text-decoration:underline; outline:none; font-weight: 500; margin-left: 5px;">
+            <option value="5h">5H Window</option>
+            <option value="total">All-Time</option>
+          </select>
+        </div>
+        <div class="stat-value"><span id="valCredits">0.00000</span> <span class="stat-limit">/ <span id="valLimit">100</span></span></div>
         <div class="stat-sub" id="valReset">Resets in ...</div>
         <div class="progress-track">
           <div class="progress-fill" id="creditProgress"></div>
