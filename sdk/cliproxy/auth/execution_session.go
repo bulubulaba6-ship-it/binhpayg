@@ -47,6 +47,7 @@ type ExecutionQuotaSnapshot struct {
 	ActiveSessions  int64     `json:"active_sessions"`
 	CreditsUsed     float64   `json:"credits_used"`
 	CreditLimit     int64     `json:"credit_limit"` // 1,000 Credits = $1 USD
+	TotalTokens     int64     `json:"total_tokens"`
 	DurationSeconds int64                     `json:"duration_seconds"`
 	LastSessionAt   time.Time                 `json:"last_session_at,omitempty"`
 	WindowExpiresAt time.Time                 `json:"window_expires_at,omitempty"`
@@ -265,6 +266,8 @@ func (l *memoryExecutionSessionLedger) GetExecutionQuotaSummary(_ context.Contex
 		if !entry.finalized {
 			summary.ActiveSessions++
 		}
+		
+		summary.TotalTokens += entry.record.InputTokens + entry.record.OutputTokens + entry.record.ReasoningTokens + entry.record.CachedTokens
 		
 		// Only aggregate credits if the session occurred within the determined window
 		if !candidate.Before(windowStart) && candidate.Before(windowExpiresAt) {

@@ -171,7 +171,53 @@ body {
 .welcome-state h2 {
   color: var(--text-main);
   font-family: Georgia, serif;
-  margin-bottom: 8px;
+  margin-bottom: 24px;
+}
+
+.welcome-box {
+  display: flex;
+  align-items: center;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px;
+  padding-left: 16px;
+  margin: 0 auto;
+  max-width: 480px;
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.welcome-box:focus-within {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1), var(--shadow-md);
+}
+
+.welcome-box input {
+  border: none;
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 1rem;
+  flex: 1;
+  outline: none;
+  color: var(--text-main);
+  font-family: monospace;
+}
+
+.welcome-box button {
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.welcome-box button:hover {
+  background: var(--accent-hover);
 }
 
 /* Stats Grid */

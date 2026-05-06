@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI API Giá Rẻ — Gateway Dashboard</title>
   <link rel="icon" type="image/png" href="/static/quota/icon.png">
-  <link rel="stylesheet" href="/static/quota/style.css">
+  <link rel="stylesheet" href="/static/quota/style.css?v=2">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -27,7 +27,7 @@
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
-        <input type="text" id="apiKeyInput" placeholder="Enter Workspace Key..." autocomplete="off">
+        <input type="password" id="apiKeyInput" placeholder="Enter Workspace Key..." autocomplete="off">
         <button onclick="app.fetchQuota()" id="searchBtn">Authenticate</button>
       </div>
     </div>
@@ -49,8 +49,7 @@
       <div class="stat-card">
         <div class="stat-title">Total Requests</div>
         <div class="stat-value" id="valTotalReq">0</div>
-        <div class="stat-sub"><span id="valSuccessReq" class="text-success">0</span> successful, <span id="valFailedReq"
-            class="text-danger">0</span> failed</div>
+        <div class="stat-sub"><span id="valSuccessReq" class="text-success">0</span> successful</div>
       </div>
 
       <div class="stat-card">
@@ -117,10 +116,18 @@
   <div id="welcomeState" class="welcome-state">
     <div class="welcome-icon">🔐</div>
     <h2>Access Quota Dashboard</h2>
-    <p>Enter your workspace API key in the top navigation bar to view your session credits and ledger.</p>
+    <div class="welcome-box">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+      <input type="password" id="welcomeApiKeyInput" placeholder="Enter Workspace Key..." autocomplete="off" onkeypress="if(event.key === 'Enter') { document.getElementById('apiKeyInput').value = this.value; app.fetchQuota(); }">
+      <button onclick="document.getElementById('apiKeyInput').value = document.getElementById('welcomeApiKeyInput').value; app.fetchQuota();">Authenticate</button>
+    </div>
   </div>
 
-  <script src="/static/quota/app.js"></script>
+  <script src="/static/quota/app.js?v=2"></script>
 </body>
 
 </html>

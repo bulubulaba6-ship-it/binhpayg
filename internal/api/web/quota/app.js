@@ -82,8 +82,22 @@ const app = {
     if (app.modelChartInstance) app.modelChartInstance.destroy();
 
     const models = usageData.models || {};
-    const labels = Object.keys(models);
-    const data = labels.map(k => models[k].total_requests || 0);
+    
+    // Group models by alias
+    const aliasData = {};
+    Object.keys(models).forEach(k => {
+      let alias = k;
+      if (k === 'gemini-3.1-flash-lite-preview' || k === 'gemini-3-flash') alias = 'claude-opus-4-7';
+      else if (k === 'gemini-3-flash-preview') alias = 'claude-opus-4-6';
+      else if (k === 'gemini-3.1-flash-lite') alias = 'claude-sonnet-4-6';
+      else if (k === 'gemini-2.5-flash-lite' || k === 'gemini-2.5-flash') alias = 'claude-haiku/sonnet';
+      else if (k.includes('gemini')) alias = 'claude';
+      
+      aliasData[alias] = (aliasData[alias] || 0) + (models[k].total_requests || 0);
+    });
+
+    const labels = Object.keys(aliasData);
+    const data = labels.map(k => aliasData[k]);
     
     if (labels.length === 0) {
       labels.push("No Usage");
@@ -144,7 +158,7 @@ const app = {
     if (!key) return alert("Please enter a Workspace API Key");
     
     try {
-      const res = await fetch('/v1/quota', { headers: { 'Authorization': 'Bearer ' + key } });
+      const res = await fetch('/v1/quota?key=' + encodeURIComponent(key), { headers: { 'Authorization': 'Bearer ' + key } });
       if (!res.ok) throw new Error("Authentication failed or key invalid");
       const data = await res.json();
       
@@ -157,7 +171,7 @@ const app = {
       document.getElementById('valSuccessReq').textContent = app.formatNumber(data.usage.success_requests);
       document.getElementById('valFailedReq').textContent = app.formatNumber(data.usage.failed_requests);
       document.getElementById('valCredits').textContent = (data.quota.credits_used || 0).toFixed(4);
-      document.getElementById('valTokens').textContent = app.formatNumber(data.usage.total_tokens);
+      document.getElementById('valTokens').textContent = app.formatNumber(data.quota.total_tokens || 0);
       document.getElementById('valRPM').textContent = (data.usage.rpm || 0).toFixed(1);
       
       // Progress Bar
@@ -191,10 +205,10 @@ const app = {
       app.renderCharts(data.usage);
       app.renderLedger(data.quota.recent_sessions);
 
-      // Update URL without reload
+      // Update URL without reload (hide key)
       const url = new URL(window.location);
-      url.searchParams.set('key', key);
-      window.history.pushState({}, '', url);
+      url.searchParams.delete('key');
+      window.history.replaceState({}, '', url);
       input.value = key;
 
     } catch (err) {

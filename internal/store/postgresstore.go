@@ -393,11 +393,12 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 	}
 	query := fmt.Sprintf(`
 		SELECT
-			COUNT(*) AS sessions,
-			COUNT(*) FILTER (WHERE NOT finalized) AS active_sessions,
+			COUNT(session_id) AS sessions,
+			SUM(CASE WHEN finalized = FALSE THEN 1 ELSE 0 END) AS active_sessions,
 			COALESCE(SUM(credits), 0) AS credits_used,
 			COALESCE(SUM(duration_seconds), 0) AS duration_seconds,
-			MAX(last_seen_at) AS last_session_at
+			MAX(last_seen_at) AS last_session_at,
+			COALESCE(SUM(input_tokens + output_tokens + reasoning_tokens + cached_tokens), 0) AS total_tokens
 		FROM %s
 		WHERE principal = $1
 	`, s.fullTableName(s.cfg.BillingTable))
@@ -409,6 +410,7 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 		&summary.CreditsUsed,
 		&summary.DurationSeconds,
 		&lastSessionAt,
+		&summary.TotalTokens,
 	); err != nil {
 		return cliproxyauth.ExecutionQuotaSnapshot{}, fmt.Errorf("postgres store: load execution quota summary: %w", err)
 	}
