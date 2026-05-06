@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
+	"github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 )
 
 // ExecutionSessionRecord captures the mutable metadata tracked for a long-lived
@@ -19,18 +20,37 @@ type ExecutionSessionRecord struct {
 	Provider  string
 	Model     string
 	AuthID    string
-	AuthIndex string
-	StartedAt time.Time
-	UpdatedAt time.Time
+	AuthIndex       string
+	StartedAt       time.Time
+	UpdatedAt       time.Time
+	InputTokens     int64
+	OutputTokens    int64
+	ReasoningTokens int64
+	CachedTokens    int64
 }
+
+// ExecutionSessionSummary captures a finalized session and its cost for the quota dashboard.
+// Token fields are read directly from the embedded ExecutionSessionRecord.
+type ExecutionSessionSummary struct {
+	ExecutionSessionRecord
+	Credits         float64 `json:"credits"`
+	DurationSeconds int64   `json:"duration_seconds"`
+}
+
+// ExecutionSessionContextKey is used to propagate an execution session ID via context
+// for one-shot API requests.
+type ExecutionSessionContextKey struct{}
 
 // ExecutionQuotaSnapshot summarizes the current session usage for one principal.
 type ExecutionQuotaSnapshot struct {
 	Sessions        int64     `json:"sessions"`
 	ActiveSessions  int64     `json:"active_sessions"`
-	CreditsUsed     int64     `json:"credits_used"`
-	DurationSeconds int64     `json:"duration_seconds"`
-	LastSessionAt   time.Time `json:"last_session_at,omitempty"`
+	CreditsUsed     float64   `json:"credits_used"`
+	CreditLimit     int64     `json:"credit_limit"` // 1,000 Credits = $1 USD
+	DurationSeconds int64                     `json:"duration_seconds"`
+	LastSessionAt   time.Time                 `json:"last_session_at,omitempty"`
+	WindowExpiresAt time.Time                 `json:"window_expires_at,omitempty"`
+	RecentSessions  []ExecutionSessionSummary `json:"recent_sessions,omitempty"`
 }
 
 // ExecutionSessionLedger stores session lifecycle events durably.
@@ -50,12 +70,14 @@ type memoryExecutionSession struct {
 	record       ExecutionSessionRecord
 	finishedAt   time.Time
 	finalized    bool
-	credits      int64
+	credits      float64
 	durationSecs int64
 }
 
 func newMemoryExecutionSessionLedger() *memoryExecutionSessionLedger {
-	return &memoryExecutionSessionLedger{sessions: make(map[string]*memoryExecutionSession)}
+	ledger := &memoryExecutionSessionLedger{sessions: make(map[string]*memoryExecutionSession)}
+	usage.RegisterPlugin(ledger)
+	return ledger
 }
 
 func (l *memoryExecutionSessionLedger) BeginExecutionSession(_ context.Context, record ExecutionSessionRecord) error {
@@ -116,12 +138,38 @@ func (l *memoryExecutionSessionLedger) BeginExecutionSession(_ context.Context, 
 		if entry.record.AuthIndex != "" {
 			existing.record.AuthIndex = entry.record.AuthIndex
 		}
+		// Preserve tokens
+		existing.record.InputTokens += entry.record.InputTokens
+		existing.record.OutputTokens += entry.record.OutputTokens
+		existing.record.ReasoningTokens += entry.record.ReasoningTokens
+		existing.record.CachedTokens += entry.record.CachedTokens
 		l.mu.Unlock()
 		return nil
 	}
 	l.sessions[sessionID] = entry
 	l.mu.Unlock()
 	return nil
+}
+
+// HandleUsage intercepts usage records and accumulates token counts for the active session.
+func (l *memoryExecutionSessionLedger) HandleUsage(ctx context.Context, record usage.Record) {
+	if l == nil {
+		return
+	}
+	sessionID := strings.TrimSpace(record.SessionID)
+	if sessionID == "" {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	entry, ok := l.sessions[sessionID]
+	if !ok || entry == nil {
+		return
+	}
+	entry.record.InputTokens += record.Detail.InputTokens
+	entry.record.OutputTokens += record.Detail.OutputTokens
+	entry.record.ReasoningTokens += record.Detail.ReasoningTokens
+	entry.record.CachedTokens += record.Detail.CachedTokens
 }
 
 func (l *memoryExecutionSessionLedger) FinalizeExecutionSession(_ context.Context, sessionID string, finishedAt time.Time) error {
@@ -157,7 +205,7 @@ func (l *memoryExecutionSessionLedger) FinalizeExecutionSession(_ context.Contex
 	entry.finishedAt = finishedAt
 	entry.finalized = true
 	entry.durationSecs = int64(duration / time.Second)
-	entry.credits = int64(CreditsForDuration(duration))
+	entry.credits = CalculateTokenCost(entry.record.Model, entry.record.InputTokens, entry.record.OutputTokens, entry.record.ReasoningTokens, entry.record.CachedTokens)
 	entry.record.UpdatedAt = finishedAt
 	return nil
 }
@@ -167,33 +215,90 @@ func (l *memoryExecutionSessionLedger) GetExecutionQuotaSummary(_ context.Contex
 		return ExecutionQuotaSnapshot{}, nil
 	}
 	principal = strings.TrimSpace(principal)
+	
+	now := time.Now().UTC()
+	rollingCutoff := now.Add(-5 * time.Hour)
+	
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	
 	var summary ExecutionQuotaSnapshot
+	summary.CreditLimit = 100 // Fallback limit, typically overridden by the API handler
+	
+	// Step 1: Find the first session in the current 5-hour block
+	var windowStart time.Time
 	for _, entry := range l.sessions {
-		if entry == nil {
+		if entry == nil || strings.TrimSpace(entry.record.Principal) != principal {
 			continue
 		}
-		if strings.TrimSpace(entry.record.Principal) != principal {
+		
+		candidate := entry.finishedAt
+		if candidate.IsZero() { candidate = entry.record.UpdatedAt }
+		if candidate.IsZero() { candidate = entry.record.StartedAt }
+		
+		if !candidate.Before(rollingCutoff) {
+			if windowStart.IsZero() || candidate.Before(windowStart) {
+				windowStart = candidate
+			}
+		}
+	}
+	
+	// If there's no session in the last 5h, the window starts now
+	if windowStart.IsZero() {
+		windowStart = now
+	}
+	
+	windowExpiresAt := windowStart.Add(5 * time.Hour)
+	summary.WindowExpiresAt = windowExpiresAt
+	
+	// Step 2: Aggregate credits within this specific window
+	for _, entry := range l.sessions {
+		if entry == nil || strings.TrimSpace(entry.record.Principal) != principal {
 			continue
 		}
+		
+		candidate := entry.finishedAt
+		if candidate.IsZero() { candidate = entry.record.UpdatedAt }
+		if candidate.IsZero() { candidate = entry.record.StartedAt }
+		
 		summary.Sessions++
 		if !entry.finalized {
 			summary.ActiveSessions++
 		}
-		summary.CreditsUsed += entry.credits
-		summary.DurationSeconds += entry.durationSecs
-		candidate := entry.finishedAt
-		if candidate.IsZero() {
-			candidate = entry.record.UpdatedAt
+		
+		// Only aggregate credits if the session occurred within the determined window
+		if !candidate.Before(windowStart) && candidate.Before(windowExpiresAt) {
+			summary.CreditsUsed += entry.credits
+			summary.DurationSeconds += entry.durationSecs
 		}
-		if candidate.IsZero() {
-			candidate = entry.record.StartedAt
-		}
+		
 		if candidate.After(summary.LastSessionAt) {
 			summary.LastSessionAt = candidate
 		}
+
+		if !candidate.Before(windowStart) && candidate.Before(windowExpiresAt) {
+			summary.RecentSessions = append(summary.RecentSessions, ExecutionSessionSummary{
+				ExecutionSessionRecord: entry.record,
+				Credits:                entry.credits,
+				DurationSeconds:        entry.durationSecs,
+			})
+		}
 	}
+	
+	// Sort by StartedAt descending
+	if len(summary.RecentSessions) > 0 {
+		for i := 0; i < len(summary.RecentSessions)-1; i++ {
+			for j := i + 1; j < len(summary.RecentSessions); j++ {
+				if summary.RecentSessions[j].StartedAt.After(summary.RecentSessions[i].StartedAt) {
+					summary.RecentSessions[i], summary.RecentSessions[j] = summary.RecentSessions[j], summary.RecentSessions[i]
+				}
+			}
+		}
+		if len(summary.RecentSessions) > 20 {
+			summary.RecentSessions = summary.RecentSessions[:20]
+		}
+	}
+	
 	return summary, nil
 }
 
@@ -219,14 +324,51 @@ func apiKeyFromContext(ctx context.Context) string {
 }
 
 // CreditsForDuration returns the credit bucket for a completed session.
-func CreditsForDuration(duration time.Duration) int {
-	if duration < 2*time.Minute {
-		return 1
+func CreditsForDuration(d time.Duration) int {
+	return 0 // Deprecated: use CalculateTokenCost instead
+}
+
+// CalculateTokenCost evaluates the cost in credits based on model alias pricing.
+// Credit scale: 1,000 Credits = $1 USD  →  1 Credit = $0.001 USD
+//
+// Pricing table (USD per 1M tokens, mirrors real Anthropic/OpenAI rates):
+//   claude-opus-*       → $15.00 in / $75.00 out / $3.75 cache
+//   claude-sonnet-*     →  $3.00 in / $15.00 out / $0.30 cache
+//   claude-haiku-*      →  $0.25 in /  $1.25 out / $0.03 cache
+//   gpt-4o/gpt-4-turbo  →  $5.00 in / $15.00 out / $2.50 cache
+//   gpt-4               → $30.00 in / $60.00 out / $15.00 cache
+//   o1                  → $15.00 in / $60.00 out / $7.50 cache
+//   gemini-1.5-pro      →  $3.50 in / $10.50 out / $0.88 cache
+//   gemini-1.5-flash    →  $0.35 in /  $1.05 out / $0.08 cache
+//   default (unknown)   →  $0.50 in /  $1.50 out / $0.20 cache
+func CalculateTokenCost(model string, input, output, reasoning, cache int64) float64 {
+	modelLower := strings.ToLower(strings.TrimSpace(model))
+
+	// Cost per 1M tokens in USD
+	var inCost, outCost, cacheCost float64 = 0.5, 1.5, 0.2
+
+	switch {
+	case strings.Contains(modelLower, "opus"):
+		inCost, outCost, cacheCost = 15.0, 75.0, 3.75
+	case strings.Contains(modelLower, "sonnet"):
+		inCost, outCost, cacheCost = 3.0, 15.0, 0.3
+	case strings.Contains(modelLower, "haiku"):
+		inCost, outCost, cacheCost = 0.25, 1.25, 0.03
+	case strings.Contains(modelLower, "gpt-4o"), strings.Contains(modelLower, "gpt-4-turbo"):
+		inCost, outCost, cacheCost = 5.0, 15.0, 2.5
+	case strings.Contains(modelLower, "gpt-4"):
+		inCost, outCost, cacheCost = 30.0, 60.0, 15.0
+	case strings.Contains(modelLower, "o1"):
+		inCost, outCost, cacheCost = 15.0, 60.0, 7.5
+	case strings.Contains(modelLower, "gemini-1.5-pro"):
+		inCost, outCost, cacheCost = 3.5, 10.5, 0.88
+	case strings.Contains(modelLower, "gemini-1.5-flash"):
+		inCost, outCost, cacheCost = 0.35, 1.05, 0.08
 	}
-	if duration < 7*time.Minute {
-		return 2
-	}
-	return 3
+
+	// USD cost, then convert: 1,000 Credits = $1 USD
+	usd := (float64(input)*inCost + float64(output+reasoning)*outCost + float64(cache)*cacheCost) / 1_000_000.0
+	return usd * 1000.0
 }
 
 func sessionIDFromMetadata(metadata map[string]any) string {

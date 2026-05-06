@@ -56,7 +56,6 @@ const (
 
 type pinnedAuthContextKey struct{}
 type selectedAuthCallbackContextKey struct{}
-type executionSessionContextKey struct{}
 type disallowFreeAuthContextKey struct{}
 
 // WithPinnedAuthID returns a child context that requests execution on a specific auth ID.
@@ -91,7 +90,7 @@ func WithExecutionSessionID(ctx context.Context, sessionID string) context.Conte
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return context.WithValue(ctx, executionSessionContextKey{}, sessionID)
+	return context.WithValue(ctx, coreauth.ExecutionSessionContextKey{}, sessionID)
 }
 
 // WithDisallowFreeAuth returns a child context that requests skipping known free-tier credentials.
@@ -272,7 +271,7 @@ func executionSessionIDFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
-	raw := ctx.Value(executionSessionContextKey{})
+	raw := ctx.Value(coreauth.ExecutionSessionContextKey{})
 	switch v := raw.(type) {
 	case string:
 		return strings.TrimSpace(v)
@@ -433,6 +432,40 @@ func (h *BaseAPIHandler) FilterModelsForAPIKey(c *gin.Context, provider string, 
 	filtered := make([]map[string]any, 0, len(models))
 	for _, model := range models {
 		if modelMatchesAllowlist(model, allowed) {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
+
+// FilterModelsForAPIKeyAllProviders filters models using the union of all per-provider
+// allowlists configured for the authenticated API key. This is used by the unified
+// /v1/models endpoint which serves models from all providers at once.
+func (h *BaseAPIHandler) FilterModelsForAPIKeyAllProviders(c *gin.Context, models []map[string]any) []map[string]any {
+	if h == nil || c == nil || len(models) == 0 || h.Cfg == nil || len(h.Cfg.APIKeyModels) == 0 {
+		return models
+	}
+	apiKey := requestAPIKeyFromContext(c)
+	if apiKey == "" {
+		return models
+	}
+	perKeyModels, ok := h.Cfg.APIKeyModels[apiKey]
+	if !ok || len(perKeyModels) == 0 {
+		return models
+	}
+	// Merge allowed models from all configured providers for this key.
+	combined := make(map[string]struct{})
+	for _, providerModels := range perKeyModels {
+		for id, v := range normalizeModelAllowlist(providerModels) {
+			combined[id] = v
+		}
+	}
+	if len(combined) == 0 {
+		return models
+	}
+	filtered := make([]map[string]any, 0, len(models))
+	for _, model := range models {
+		if modelMatchesAllowlist(model, combined) {
 			filtered = append(filtered, model)
 		}
 	}

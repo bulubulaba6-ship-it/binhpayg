@@ -87,6 +87,9 @@ logging-to-file: true
 usage-statistics-enabled: true
 api-keys:
   - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
+default-api-key-limit: 30
+api-key-limits:
+  fink_pro_8c9e9ffb23fccdac9d65b57695145f13: 100
 api-key-models:
   fink_pro_8c9e9ffb23fccdac9d65b57695145f13:
     claude:

@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -347,7 +348,9 @@ func (s *Server) setupRoutes() {
 	s.engine.HEAD("/healthz", healthzHandler)
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
+	// Viewer endpoints
 	s.engine.GET("/quota-check", s.serveAPIKeyQuotaViewer)
+	s.engine.GET("/static/quota/*filepath", s.serveAPIKeyQuotaViewer)
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)
 	geminiHandlers := gemini.NewGeminiAPIHandler(s.handlers)
 	geminiCLIHandlers := gemini.NewGeminiCLIAPIHandler(s.handlers)
@@ -718,13 +721,17 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		return
 	}
 	contentStr := strings.NewReplacer(
-		"CLI Proxy API Management Center", "AIAPIGiaRe Management Center",
-		"CLI Proxy API", "AIAPIGiaRe",
-		"CLIProxyAPI", "AIAPIGiaRe",
-		"CPAMC", "AIAPIGiaRe",
+		"CLI Proxy API Management Center", "AI API Giá Rẻ — Trung Tâm Quản Lý",
+		"CLI Proxy API Management", "AI API Giá Rẻ Management",
+		"CLI Proxy API", "AI API Giá Rẻ",
+		"CLIProxyAPI", "AI API Giá Rẻ",
+		"CPAMC", "AI API Giá Rẻ",
 		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"CLI"}),h.jsx("span",{className:yi.brandWord,children:"PROXY"}),h.jsx("span",{className:yi.brandWord,children:"API"})]})`,
-		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"AIAPIGiaRe"})]})`,
+		`h.jsxs("div",{className:yi.brandContent,children:[h.jsx("span",{className:yi.brandWord,children:"AI API Giá Rẻ"})]})`,
 	).Replace(string(content))
+	// Generic regex replacement for CLI PROXY API spans (minified code structure varies)
+	reBrand := regexp.MustCompile("(?s)(className:\\w+\\.brandContent,children:\\[[^\\]]+children:[\\x60\"'].*?)CLI([\\x60\"'].*?[^\\]]+children:[\\x60\"'].*?)PROXY([\\x60\"'].*?[^\\]]+children:[\\x60\"'].*?)API([\\x60\"'])")
+	contentStr = reBrand.ReplaceAllString(contentStr, "${1}API${2}GIA${3}RE${4}")
 	iconDataURI := ""
 	// Use the embedded icon (compiled into the binary) so it works both in production
 	// and in test environments where no icon.png file is present on disk.
@@ -752,14 +759,23 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 				contentStr = contentStr[:start] + newLink + contentStr[start+end+2:]
 			}
 		}
-		// Replace the embedded logo image variable (minified JS). The variable name is
-		// always followed by ="data:image/jpeg;base64, in the current build.
-		const logoPrefix = `const Td="data:image/jpeg;base64,`
-		if start := strings.Index(contentStr, logoPrefix); start != -1 {
-			valueStart := start + len(`const Td="`)
-			// The value ends at the next unescaped double-quote
-			if end := strings.Index(contentStr[valueStart:], `"`); end != -1 {
-				contentStr = contentStr[:valueStart] + iconDataURI + contentStr[valueStart+end:]
+		// Replace any embedded logo image data URI in the minified JS.
+		// The build may use different variable names and either backticks or double quotes.
+		// Replace any embedded logo image data URI (JPEG) with our PNG icon.
+		// The minified JS may use backtick template literals or double-quoted strings.
+		logoSearches := []struct{ prefix, closeDelim string }{
+			{"`", "`"},   // backtick template literal
+			{`="`, `"`}, // double-quoted assignment
+		}
+		for _, ls := range logoSearches {
+			search := ls.prefix + "data:image/jpeg;base64,"
+			if start := strings.Index(contentStr, search); start != -1 {
+				// valueStart points to the start of "data:image/jpeg;base64,..." — skip only the opening delimiter
+				valueStart := start + len(ls.prefix)
+				if end := strings.Index(contentStr[valueStart:], ls.closeDelim); end != -1 {
+					// Replace old data URI with new PNG data URI; delimiters are preserved by contentStr[:valueStart] and contentStr[valueStart+end:]
+					contentStr = contentStr[:valueStart] + iconDataURI + contentStr[valueStart+end:]
+				}
 			}
 		}
 	}
@@ -846,19 +862,24 @@ func (s *Server) watchKeepAlive() {
 }
 
 // unifiedModelsHandler creates a unified handler for the /v1/models endpoint
-// that routes to different handlers based on the User-Agent header.
-// If User-Agent starts with "claude-cli", it routes to Claude handler,
-// otherwise it routes to OpenAI handler.
+// that routes to different handlers based on the request headers.
+//
+// Routing logic (Claude wins if ANY of these match):
+//  1. User-Agent contains "claude" (covers claude-cli, claude-code, claude-cowork, etc.)
+//  2. anthropic-version header is present (Claude Cowork and direct Anthropic API clients)
+//  3. anthropic-beta header is present
+//
+// All other requests fall through to the OpenAI handler.
 func (s *Server) unifiedModelsHandler(openaiHandler *openai.OpenAIAPIHandler, claudeHandler *claude.ClaudeCodeAPIHandler) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userAgent := c.GetHeader("User-Agent")
+		userAgent := strings.ToLower(c.GetHeader("User-Agent"))
+		isClaudeClient := strings.Contains(userAgent, "claude") ||
+			c.GetHeader("anthropic-version") != "" ||
+			c.GetHeader("anthropic-beta") != ""
 
-		// Route to Claude handler if User-Agent starts with "claude-cli"
-		if strings.HasPrefix(userAgent, "claude-cli") {
-			// log.Debugf("Routing /v1/models to Claude handler for User-Agent: %s", userAgent)
+		if isClaudeClient {
 			claudeHandler.ClaudeModels(c)
 		} else {
-			// log.Debugf("Routing /v1/models to OpenAI handler for User-Agent: %s", userAgent)
 			openaiHandler.OpenAIModels(c)
 		}
 	}

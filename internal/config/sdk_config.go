@@ -24,6 +24,14 @@ type SDKConfig struct {
 	// APIKeys is a list of keys for authenticating clients to this proxy server.
 	APIKeys []string `yaml:"api-keys" json:"api-keys"`
 
+	// DefaultAPIKeyLimit is the default credit limit per 5-hour rolling window for API keys.
+	// If 0, the default is 30. If -1, it's unlimited.
+	DefaultAPIKeyLimit int `yaml:"default-api-key-limit" json:"default-api-key-limit"`
+
+	// APIKeyLimits maps specific API keys to their individual 5-hour credit limits.
+	// Use -1 for unlimited.
+	APIKeyLimits map[string]int `yaml:"api-key-limits,omitempty" json:"api-key-limits,omitempty"`
+
 	// APIKeyModels optionally restricts which model IDs a specific API key can see.
 	// The first key is the API key string, and the second key is the provider name
 	// such as "claude", "openai", or "gemini".

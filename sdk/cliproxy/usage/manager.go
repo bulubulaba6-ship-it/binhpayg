@@ -10,6 +10,7 @@ import (
 
 // Record contains the usage statistics captured for a single provider request.
 type Record struct {
+	SessionID   string
 	Provider    string
 	Model       string
 	APIKey      string

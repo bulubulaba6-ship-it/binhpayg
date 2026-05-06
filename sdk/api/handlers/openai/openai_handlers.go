@@ -59,8 +59,8 @@ func (h *OpenAIAPIHandler) Models() []map[string]any {
 // It returns a list of available AI models with their capabilities
 // and specifications in OpenAI-compatible format.
 func (h *OpenAIAPIHandler) OpenAIModels(c *gin.Context) {
-	// Get all available models
-	allModels := h.FilterModelsForAPIKey(c, "openai", h.Models())
+	// Get all available models filtered by all configured provider aliases for this API key
+	allModels := h.FilterModelsForAPIKeyAllProviders(c, h.Models())
 
 	// Filter to only include the 4 required fields: id, object, created, owned_by
 	filteredModels := make([]map[string]any, len(allModels))

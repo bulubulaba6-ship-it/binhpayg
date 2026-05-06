@@ -1108,6 +1108,11 @@ func (m *Manager) beginExecutionSession(ctx context.Context, provider, model str
 		return
 	}
 	sessionID := sessionIDFromMetadata(opts.Metadata)
+	if sessionID == "" && ctx != nil {
+		if val, ok := ctx.Value(ExecutionSessionContextKey{}).(string); ok {
+			sessionID = val
+		}
+	}
 	if sessionID == "" {
 		return
 	}

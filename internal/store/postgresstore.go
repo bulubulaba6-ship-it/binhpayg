@@ -17,6 +17,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
+	cliproxyusage "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -49,6 +50,9 @@ type PostgresStore struct {
 	configPath string
 	authDir    string
 	mu         sync.Mutex
+
+	activeTokensMu sync.Mutex
+	activeTokens   map[string]*cliproxyusage.Detail
 }
 
 // NewPostgresStore establishes a connection to PostgreSQL and prepares the local workspace.
@@ -102,11 +106,12 @@ func NewPostgresStore(ctx context.Context, cfg PostgresStoreConfig) (*PostgresSt
 	}
 
 	store := &PostgresStore{
-		db:         db,
-		cfg:        cfg,
-		spoolRoot:  absSpool,
-		configPath: filepath.Join(configDir, "config.yaml"),
-		authDir:    authDir,
+		db:           db,
+		cfg:          cfg,
+		spoolRoot:    absSpool,
+		configPath:   filepath.Join(configDir, "config.yaml"),
+		authDir:      authDir,
+		activeTokens: make(map[string]*cliproxyusage.Detail),
 	}
 	return store, nil
 }
@@ -178,11 +183,26 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 			duration_seconds BIGINT NOT NULL DEFAULT 0,
 			credits INTEGER NOT NULL DEFAULT 0,
 			finalized BOOLEAN NOT NULL DEFAULT FALSE,
+			input_tokens BIGINT NOT NULL DEFAULT 0,
+			output_tokens BIGINT NOT NULL DEFAULT 0,
+			reasoning_tokens BIGINT NOT NULL DEFAULT 0,
+			cached_tokens BIGINT NOT NULL DEFAULT 0,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`, billingTable)); err != nil {
 		return fmt.Errorf("postgres store: create billing table: %w", err)
+	}
+	
+	// Add new columns to existing schema
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
+		ALTER TABLE %s 
+		ADD COLUMN IF NOT EXISTS input_tokens BIGINT NOT NULL DEFAULT 0,
+		ADD COLUMN IF NOT EXISTS output_tokens BIGINT NOT NULL DEFAULT 0,
+		ADD COLUMN IF NOT EXISTS reasoning_tokens BIGINT NOT NULL DEFAULT 0,
+		ADD COLUMN IF NOT EXISTS cached_tokens BIGINT NOT NULL DEFAULT 0;
+	`, billingTable)); err != nil {
+		// Ignore error if columns already exist or if dialect doesn't support IF NOT EXISTS
 	}
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s ON %s (principal)
@@ -241,6 +261,33 @@ func (s *PostgresStore) BeginExecutionSession(ctx context.Context, record clipro
 	return nil
 }
 
+// HandleUsage intercepts usage records and accumulates token counts for the active session.
+func (s *PostgresStore) HandleUsage(ctx context.Context, record cliproxyusage.Record) {
+	if s == nil {
+		return
+	}
+	sessionID := strings.TrimSpace(record.SessionID)
+	if sessionID == "" {
+		return
+	}
+	s.activeTokensMu.Lock()
+	defer s.activeTokensMu.Unlock()
+	
+	if s.activeTokens == nil {
+		s.activeTokens = make(map[string]*cliproxyusage.Detail)
+	}
+	
+	detail, ok := s.activeTokens[sessionID]
+	if !ok {
+		detail = &cliproxyusage.Detail{}
+		s.activeTokens[sessionID] = detail
+	}
+	detail.InputTokens += record.Detail.InputTokens
+	detail.OutputTokens += record.Detail.OutputTokens
+	detail.ReasoningTokens += record.Detail.ReasoningTokens
+	detail.CachedTokens += record.Detail.CachedTokens
+}
+
 // FinalizeExecutionSession marks a session as finished and records its credit bucket.
 func (s *PostgresStore) FinalizeExecutionSession(ctx context.Context, sessionID string, finishedAt time.Time) error {
 	if s == nil || s.db == nil {
@@ -266,14 +313,15 @@ func (s *PostgresStore) FinalizeExecutionSession(ctx context.Context, sessionID 
 	var (
 		startedAt time.Time
 		finalized bool
+		modelStr  string
 	)
 	selectQuery := fmt.Sprintf(`
-		SELECT started_at, finalized
+		SELECT started_at, finalized, model
 		FROM %s
 		WHERE session_id = $1
 		FOR UPDATE
 	`, s.fullTableName(s.cfg.BillingTable))
-	err = tx.QueryRowContext(ctx, selectQuery, sessionID).Scan(&startedAt, &finalized)
+	err = tx.QueryRowContext(ctx, selectQuery, sessionID).Scan(&startedAt, &finalized, &modelStr)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		startedAt = finishedAt
@@ -289,25 +337,43 @@ func (s *PostgresStore) FinalizeExecutionSession(ctx context.Context, sessionID 
 		finishedAt = startedAt
 	}
 	duration := finishedAt.Sub(startedAt)
-	credits := cliproxyauth.CreditsForDuration(duration)
+	
+	s.activeTokensMu.Lock()
+	tokens := s.activeTokens[sessionID]
+	delete(s.activeTokens, sessionID)
+	s.activeTokensMu.Unlock()
+	
+	var inTok, outTok, reasonTok, cacheTok int64
+	if tokens != nil {
+		inTok = tokens.InputTokens
+		outTok = tokens.OutputTokens
+		reasonTok = tokens.ReasoningTokens
+		cacheTok = tokens.CachedTokens
+	}
+	
+	credits := cliproxyauth.CalculateTokenCost(modelStr, inTok, outTok, reasonTok, cacheTok)
 	upsertQuery := fmt.Sprintf(`
 		INSERT INTO %s AS target (
 			session_id, principal, provider, model, auth_id, auth_index,
 			started_at, last_seen_at, finished_at, duration_seconds, credits,
-			finalized, created_at, updated_at
+			finalized, input_tokens, output_tokens, reasoning_tokens, cached_tokens, created_at, updated_at
 		)
-		VALUES ($1, '', '', '', '', '', $2, $2, $2, $3, $4, TRUE, NOW(), NOW())
+		VALUES ($1, '', '', '', '', '', $2, $2, $2, $3, $4, TRUE, $5, $6, $7, $8, NOW(), NOW())
 		ON CONFLICT (session_id) DO UPDATE
 		SET started_at = LEAST(target.started_at, EXCLUDED.started_at),
 			last_seen_at = GREATEST(target.last_seen_at, EXCLUDED.last_seen_at),
 			finished_at = EXCLUDED.finished_at,
 			duration_seconds = EXCLUDED.duration_seconds,
 			credits = EXCLUDED.credits,
+			input_tokens = EXCLUDED.input_tokens,
+			output_tokens = EXCLUDED.output_tokens,
+			reasoning_tokens = EXCLUDED.reasoning_tokens,
+			cached_tokens = EXCLUDED.cached_tokens,
 			finalized = TRUE,
 			updated_at = NOW()
 		WHERE NOT target.finalized
 	`, s.fullTableName(s.cfg.BillingTable))
-	if _, err = tx.ExecContext(ctx, upsertQuery, sessionID, finishedAt, int64(duration/time.Second), credits); err != nil {
+	if _, err = tx.ExecContext(ctx, upsertQuery, sessionID, finishedAt, int64(duration/time.Second), int64(credits), inTok, outTok, reasonTok, cacheTok); err != nil {
 		return fmt.Errorf("postgres store: finalize execution session: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
@@ -349,6 +415,52 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 	if lastSessionAt.Valid {
 		summary.LastSessionAt = lastSessionAt.Time
 	}
+
+	recentQuery := fmt.Sprintf(`
+		SELECT
+			session_id, provider, model, started_at, updated_at,
+			duration_seconds, credits, input_tokens, output_tokens, reasoning_tokens, cached_tokens
+		FROM %s
+		WHERE principal = $1
+		ORDER BY started_at DESC
+		LIMIT 20
+	`, s.fullTableName(s.cfg.BillingTable))
+	
+	recentRows, err := s.db.QueryContext(ctx, recentQuery, principal)
+	if err == nil {
+		defer recentRows.Close()
+		for recentRows.Next() {
+			var (
+				recSessionID, recProvider, recModel string
+				recStartedAt, recUpdatedAt          time.Time
+				recDuration, recCredits             int64
+				recInput, recOutput, recReasoning, recCached int64
+			)
+			if err := recentRows.Scan(
+				&recSessionID, &recProvider, &recModel,
+				&recStartedAt, &recUpdatedAt, &recDuration, &recCredits,
+				&recInput, &recOutput, &recReasoning, &recCached,
+			); err != nil {
+				return summary, fmt.Errorf("postgres store: scan recent session: %w", err)
+			}
+			summary.RecentSessions = append(summary.RecentSessions, cliproxyauth.ExecutionSessionSummary{
+				ExecutionSessionRecord: cliproxyauth.ExecutionSessionRecord{
+					SessionID:       recSessionID,
+					Provider:        recProvider,
+					Model:           recModel,
+					StartedAt:       recStartedAt,
+					UpdatedAt:       recUpdatedAt,
+					InputTokens:     recInput,
+					OutputTokens:    recOutput,
+					ReasoningTokens: recReasoning,
+					CachedTokens:    recCached,
+				},
+				DurationSeconds: recDuration,
+				Credits:         float64(recCredits),
+			})
+		}
+	}
+
 	return summary, nil
 }
 

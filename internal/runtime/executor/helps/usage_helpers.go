@@ -23,12 +23,19 @@ type UsageReporter struct {
 	authType    string
 	apiKey      string
 	source      string
+	sessionID   string
 	requestedAt time.Time
 	once        sync.Once
 }
 
 func NewUsageReporter(ctx context.Context, provider, model string, auth *cliproxyauth.Auth) *UsageReporter {
 	apiKey := APIKeyFromContext(ctx)
+	
+	var sessionID string
+	if val, ok := ctx.Value(cliproxyauth.ExecutionSessionContextKey{}).(string); ok {
+		sessionID = val
+	}
+	
 	reporter := &UsageReporter{
 		provider:    provider,
 		model:       model,
@@ -36,6 +43,7 @@ func NewUsageReporter(ctx context.Context, provider, model string, auth *cliprox
 		apiKey:      apiKey,
 		source:      resolveUsageSource(auth, apiKey),
 		authType:    resolveUsageAuthType(auth),
+		sessionID:   sessionID,
 	}
 	if auth != nil {
 		reporter.authID = auth.ID
@@ -137,6 +145,7 @@ func (r *UsageReporter) buildRecordForModel(model string, detail usage.Detail, f
 		return usage.Record{Model: model, Detail: detail, Failed: failed}
 	}
 	return usage.Record{
+		SessionID:   r.sessionID,
 		Provider:    r.provider,
 		Model:       model,
 		Source:      r.source,
