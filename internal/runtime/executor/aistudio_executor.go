@@ -176,8 +176,9 @@ func (e *AIStudioExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth,
 	if len(wsResp.Body) > 0 {
 		helps.AppendAPIResponseChunk(ctx, e.cfg, wsResp.Body)
 	}
-	if wsResp.Status < 200 || wsResp.Status >= 300 {
-		return resp, statusErr{code: wsResp.Status, msg: string(wsResp.Body)}
+	if err := helps.ValidateUpstreamResponse(ctx, wsResp.Status, wsResp.Headers, wsResp.Body); err != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, err)
+		return resp, err
 	}
 	reporter.Publish(ctx, helps.ParseGeminiUsage(wsResp.Body))
 	var param any
@@ -388,8 +389,9 @@ func (e *AIStudioExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.A
 	if len(resp.Body) > 0 {
 		helps.AppendAPIResponseChunk(ctx, e.cfg, resp.Body)
 	}
-	if resp.Status < 200 || resp.Status >= 300 {
-		return cliproxyexecutor.Response{}, statusErr{code: resp.Status, msg: string(resp.Body)}
+	if err := helps.ValidateUpstreamResponse(ctx, resp.Status, resp.Headers, resp.Body); err != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, err)
+		return cliproxyexecutor.Response{}, err
 	}
 	totalTokens := gjson.GetBytes(resp.Body, "totalTokens").Int()
 	if totalTokens <= 0 {

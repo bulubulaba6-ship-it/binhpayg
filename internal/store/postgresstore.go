@@ -392,33 +392,114 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 		return cliproxyauth.ExecutionQuotaSnapshot{}, fmt.Errorf("postgres store: principal is empty")
 	}
 	query := fmt.Sprintf(`
-		SELECT
-			COUNT(session_id) AS sessions,
-			SUM(CASE WHEN finalized = FALSE THEN 1 ELSE 0 END) AS active_sessions,
-			COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '5 hours' THEN credits ELSE 0 END), 0) AS credits_used,
-			COALESCE(SUM(credits), 0) AS total_credits_used,
-			COALESCE(SUM(duration_seconds), 0) AS duration_seconds,
-			MAX(last_seen_at) AS last_session_at,
-			COALESCE(SUM(input_tokens + output_tokens + reasoning_tokens + cached_tokens), 0) AS total_tokens
-		FROM %s
-		WHERE principal = $1
+		WITH principal_stats AS (
+			SELECT
+				COUNT(session_id) AS sessions,
+				SUM(CASE WHEN finalized = FALSE THEN 1 ELSE 0 END) AS active_sessions,
+				MAX(last_seen_at) AS last_session_at,
+				-- 5h Window
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '5 hours' THEN credits ELSE 0 END), 0) AS interval_credits,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '5 hours' THEN 1 ELSE 0 END), 0) AS interval_requests,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '5 hours' THEN (input_tokens + output_tokens + reasoning_tokens + cached_tokens) ELSE 0 END), 0) AS interval_tokens,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '5 hours' THEN duration_seconds ELSE 0 END), 0) AS interval_duration,
+				-- Daily Window
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '24 hours' THEN credits ELSE 0 END), 0) AS daily_credits,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '24 hours' THEN 1 ELSE 0 END), 0) AS daily_requests,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '24 hours' THEN (input_tokens + output_tokens + reasoning_tokens + cached_tokens) ELSE 0 END), 0) AS daily_tokens,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '24 hours' THEN duration_seconds ELSE 0 END), 0) AS daily_duration,
+				-- Monthly Window
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '30 days' THEN credits ELSE 0 END), 0) AS monthly_credits,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END), 0) AS monthly_requests,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '30 days' THEN (input_tokens + output_tokens + reasoning_tokens + cached_tokens) ELSE 0 END), 0) AS monthly_tokens,
+				COALESCE(SUM(CASE WHEN started_at >= NOW() - INTERVAL '30 days' THEN duration_seconds ELSE 0 END), 0) AS monthly_duration,
+				-- Lifetime Window
+				COALESCE(SUM(credits), 0) AS lifetime_credits,
+				COALESCE(SUM(input_tokens + output_tokens + reasoning_tokens + cached_tokens), 0) AS lifetime_tokens,
+				COALESCE(SUM(duration_seconds), 0) AS lifetime_duration
+			FROM %s
+			WHERE principal = $1
+		)
+		SELECT * FROM principal_stats
 	`, s.fullTableName(s.cfg.BillingTable))
 	var summary cliproxyauth.ExecutionQuotaSnapshot
 	var lastSessionAt sql.NullTime
 	if err := s.db.QueryRowContext(ctx, query, principal).Scan(
 		&summary.Sessions,
 		&summary.ActiveSessions,
-		&summary.CreditsUsed,
-		&summary.TotalCreditsUsed,
-		&summary.DurationSeconds,
 		&lastSessionAt,
-		&summary.TotalTokens,
+		&summary.Interval.Credits, &summary.Interval.Requests, &summary.Interval.Tokens, &summary.Interval.Duration,
+		&summary.Daily.Credits, &summary.Daily.Requests, &summary.Daily.Tokens, &summary.Daily.Duration,
+		&summary.Monthly.Credits, &summary.Monthly.Requests, &summary.Monthly.Tokens, &summary.Monthly.Duration,
+		&summary.Lifetime.Credits, &summary.Lifetime.Tokens, &summary.Lifetime.Duration,
 	); err != nil {
 		return cliproxyauth.ExecutionQuotaSnapshot{}, fmt.Errorf("postgres store: load execution quota summary: %w", err)
 	}
 	if lastSessionAt.Valid {
 		summary.LastSessionAt = lastSessionAt.Time
 	}
+
+	// Calculate Throughput (TPM)
+	summary.Interval.Throughput = float64(summary.Interval.Tokens) / 300.0
+	summary.Daily.Throughput = float64(summary.Daily.Tokens) / 1440.0
+	summary.Monthly.Throughput = float64(summary.Monthly.Tokens) / 43200.0
+	summary.Lifetime.Throughput = float64(summary.Lifetime.Tokens) / 43200.0
+
+	// Backward compatibility
+	summary.CreditsUsed = summary.Interval.Credits
+	summary.TotalCreditsUsed = summary.Lifetime.Credits
+	summary.CreditLimit = 100
+
+	// Incorporate active in-memory tokens into the summary
+	now := time.Now().UTC()
+	rolling5h := now.Add(-5 * time.Hour)
+	rolling1d := now.Add(-24 * time.Hour)
+	rolling30d := now.Add(-30 * 24 * time.Hour)
+
+	s.activeTokensMu.Lock()
+	if len(s.activeTokens) > 0 {
+		// Identify which active sessions belong to this principal
+		activeSessionsQuery := fmt.Sprintf(`
+			SELECT session_id, started_at, (input_tokens + output_tokens + reasoning_tokens + cached_tokens) as db_tokens
+			FROM %s
+			WHERE principal = $1 AND finalized = FALSE
+		`, s.fullTableName(s.cfg.BillingTable))
+		rows, err := s.db.QueryContext(ctx, activeSessionsQuery, principal)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var sid string
+				var startedAt time.Time
+				var dbToks int64
+				if err := rows.Scan(&sid, &startedAt, &dbToks); err == nil {
+					if memToks, ok := s.activeTokens[sid]; ok && memToks != nil {
+						// memToks are the TOTAL tokens seen so far in memory.
+						// The DB record for an active session might already have some tokens if it was partially flushed.
+						// But currently BeginExecutionSession doesn't flush tokens.
+						delta := (memToks.InputTokens + memToks.OutputTokens + memToks.ReasoningTokens + memToks.CachedTokens) - dbToks
+						if delta > 0 {
+							summary.Lifetime.Tokens += delta
+							if !startedAt.Before(rolling30d) {
+								summary.Monthly.Tokens += delta
+							}
+							if !startedAt.Before(rolling1d) {
+								summary.Daily.Tokens += delta
+							}
+							if !startedAt.Before(rolling5h) {
+								summary.Interval.Tokens += delta
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	s.activeTokensMu.Unlock()
+
+	// Re-calculate Throughput (TPM) after adding active tokens
+	summary.Interval.Throughput = float64(summary.Interval.Tokens) / 300.0
+	summary.Daily.Throughput = float64(summary.Daily.Tokens) / 1440.0
+	summary.Monthly.Throughput = float64(summary.Monthly.Tokens) / 43200.0
+	summary.Lifetime.Throughput = float64(summary.Lifetime.Tokens) / 43200.0
 
 	recentQuery := fmt.Sprintf(`
 		SELECT

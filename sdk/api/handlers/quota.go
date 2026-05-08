@@ -62,8 +62,21 @@ type apiKeyUsageSummary struct {
 	ReasoningTokens int64                                  `json:"reasoning_tokens"`
 	RPM             float64                                `json:"rpm"`
 	TPM             float64                                `json:"tpm"`
+
+	// Trends provides time-series data for the dashboard charts.
+	Trends struct {
+		Hourly []TrendPoint `json:"hourly"` // Last 24 hours
+		Daily  []TrendPoint `json:"daily"`  // Last 30 days
+	} `json:"trends"`
+
 	// Models keys are aliased — no real provider model IDs exposed.
 	Models map[string]internalusage.ModelSnapshot `json:"models,omitempty"`
+}
+
+type TrendPoint struct {
+	Timestamp string `json:"t"`
+	Requests  int64  `json:"r"`
+	Tokens    int64  `json:"tok"`
 }
 
 // redactKey masks all but the last 4 characters of an API key.
@@ -164,6 +177,30 @@ func buildAPIKeyUsageSummary(stats *internalusage.RequestStatistics, apiKey stri
 
 	summary.RPM = float64(recentRequests) / 30.0
 	summary.TPM = float64(recentTokens) / 30.0
+
+	// Build trends from snapshot data
+	now := time.Now().UTC()
+	// Hourly trend (last 24 hours)
+	for i := 23; i >= 0; i-- {
+		t := now.Add(time.Duration(-i) * time.Hour)
+		key := t.Format("2006-01-02 15")
+		summary.Trends.Hourly = append(summary.Trends.Hourly, TrendPoint{
+			Timestamp: key,
+			Requests:  snapshot.RequestsByHour[key],
+			Tokens:    snapshot.TokensByHour[key],
+		})
+	}
+	// Daily trend (last 30 days)
+	for i := 29; i >= 0; i-- {
+		t := now.AddDate(0, 0, -i)
+		key := t.Format("2006-01-02")
+		summary.Trends.Daily = append(summary.Trends.Daily, TrendPoint{
+			Timestamp: key,
+			Requests:  snapshot.RequestsByDay[key],
+			Tokens:    snapshot.TokensByDay[key],
+		})
+	}
+
 	return summary
 }
 

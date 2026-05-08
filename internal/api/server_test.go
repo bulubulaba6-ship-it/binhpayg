@@ -52,6 +52,9 @@ func (l *recordingQuotaLedger) GetExecutionQuotaSummary(ctx context.Context, pri
 	return l.summary, nil
 }
 
+// HandleUsage is required by the ExecutionSessionLedger interface.
+func (l *recordingQuotaLedger) HandleUsage(context.Context, coreusage.Record) {}
+
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
@@ -275,10 +278,9 @@ func TestQuotaRoute(t *testing.T) {
 
 	ledger := &recordingQuotaLedger{
 		summary: auth.ExecutionQuotaSnapshot{
-			Sessions:        4,
-			ActiveSessions:  1,
-			CreditsUsed:     9,
-			DurationSeconds: 420,
+			Sessions:       4,
+			ActiveSessions: 1,
+			CreditsUsed:    9,
 		},
 	}
 	server.handlers.AuthManager.SetExecutionSessionLedger(ledger)
@@ -315,7 +317,7 @@ func TestQuotaRoute(t *testing.T) {
 	if resp.Quota.CreditsUsed != 9 || resp.Quota.ActiveSessions != 1 || resp.Quota.Sessions != 4 {
 		t.Fatalf("unexpected quota payload: %+v", resp.Quota)
 	}
-	if resp.Usage.APIKey != "quota-key" {
+	if resp.Usage.APIKey != "****...-key" {
 		t.Fatalf("usage summary queried for %q, want %q", resp.Usage.APIKey, "quota-key")
 	}
 	if resp.Usage.TotalRequests != 2 || resp.Usage.SuccessRequests != 1 || resp.Usage.FailedRequests != 1 {

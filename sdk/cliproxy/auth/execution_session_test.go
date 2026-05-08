@@ -7,6 +7,7 @@ import (
 	"time"
 
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
+	coreusage "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 )
 
 
@@ -35,6 +36,9 @@ func (r *recordingExecutionSessionLedger) FinalizeExecutionSession(_ context.Con
 func (r *recordingExecutionSessionLedger) GetExecutionQuotaSummary(context.Context, string) (ExecutionQuotaSnapshot, error) {
 	return ExecutionQuotaSnapshot{}, nil
 }
+
+// HandleUsage is required by the ExecutionSessionLedger interface.
+func (r *recordingExecutionSessionLedger) HandleUsage(context.Context, coreusage.Record) {}
 
 func TestCloseExecutionSessionFinalizesLedger(t *testing.T) {
 	manager := NewManager(nil, nil, nil)

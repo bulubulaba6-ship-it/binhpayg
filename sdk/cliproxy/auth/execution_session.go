@@ -41,18 +41,36 @@ type ExecutionSessionSummary struct {
 // for one-shot API requests.
 type ExecutionSessionContextKey struct{}
 
+// WindowSnapshot summarizes usage metrics for a specific time horizon.
+type WindowSnapshot struct {
+	Credits    float64 `json:"credits"`
+	Requests   int64   `json:"requests"`
+	Tokens     int64   `json:"tokens"`
+	Duration   int64   `json:"duration_seconds"`
+	Throughput float64 `json:"throughput_tpm"` // Tokens Per Minute (TPM) in this window
+}
+
 // ExecutionQuotaSnapshot summarizes the current session usage for one principal.
 type ExecutionQuotaSnapshot struct {
-	Sessions        int64     `json:"sessions"`
-	ActiveSessions  int64     `json:"active_sessions"`
-	CreditsUsed      float64   `json:"credits_used"`
-	TotalCreditsUsed float64   `json:"total_credits_used"`
+	Sessions       int64 `json:"sessions"`
+	ActiveSessions int64 `json:"active_sessions"`
+
+	// CreditsUsed and TotalCreditsUsed are preserved for backward compatibility
+	// (mapped to Interval and Lifetime respectively).
+	CreditsUsed      float64 `json:"credits_used"`
+	TotalCreditsUsed float64 `json:"total_credits_used"`
+
 	CreditLimit     int64     `json:"credit_limit"` // 1,000 Credits = $1 USD
-	TotalTokens     int64     `json:"total_tokens"`
-	DurationSeconds int64                     `json:"duration_seconds"`
-	LastSessionAt   time.Time                 `json:"last_session_at,omitempty"`
-	WindowExpiresAt time.Time                 `json:"window_expires_at,omitempty"`
-	RecentSessions  []ExecutionSessionSummary `json:"recent_sessions,omitempty"`
+	LastSessionAt   time.Time `json:"last_session_at,omitempty"`
+	WindowExpiresAt time.Time `json:"window_expires_at,omitempty"`
+
+	// Window-based aggregates
+	Interval  WindowSnapshot `json:"interval"`  // 5-hour rolling window
+	Daily     WindowSnapshot `json:"daily"`     // 24-hour window
+	Monthly   WindowSnapshot `json:"monthly"`   // 30-day window
+	Lifetime  WindowSnapshot `json:"lifetime"`  // All-time window
+
+	RecentSessions []ExecutionSessionSummary `json:"recent_sessions,omitempty"`
 }
 
 // ExecutionSessionLedger stores session lifecycle events durably.
@@ -60,6 +78,7 @@ type ExecutionSessionLedger interface {
 	BeginExecutionSession(ctx context.Context, record ExecutionSessionRecord) error
 	FinalizeExecutionSession(ctx context.Context, sessionID string, finishedAt time.Time) error
 	GetExecutionQuotaSummary(ctx context.Context, principal string) (ExecutionQuotaSnapshot, error)
+	HandleUsage(ctx context.Context, record usage.Record)
 }
 
 // memoryExecutionSessionLedger provides a process-local fallback ledger.
@@ -74,6 +93,10 @@ type memoryExecutionSession struct {
 	finalized    bool
 	credits      float64
 	durationSecs int64
+}
+
+func NewMemoryExecutionSessionLedger() ExecutionSessionLedger {
+	return newMemoryExecutionSessionLedger()
 }
 
 func newMemoryExecutionSessionLedger() *memoryExecutionSessionLedger {
@@ -172,6 +195,9 @@ func (l *memoryExecutionSessionLedger) HandleUsage(ctx context.Context, record u
 	entry.record.OutputTokens += record.Detail.OutputTokens
 	entry.record.ReasoningTokens += record.Detail.ReasoningTokens
 	entry.record.CachedTokens += record.Detail.CachedTokens
+
+	// Recalculate credits even for in-progress sessions to ensure dashboard visibility.
+	entry.credits = CalculateTokenCost(entry.record.Model, entry.record.InputTokens, entry.record.OutputTokens, entry.record.ReasoningTokens, entry.record.CachedTokens)
 }
 
 func (l *memoryExecutionSessionLedger) FinalizeExecutionSession(_ context.Context, sessionID string, finishedAt time.Time) error {
@@ -217,79 +243,119 @@ func (l *memoryExecutionSessionLedger) GetExecutionQuotaSummary(_ context.Contex
 		return ExecutionQuotaSnapshot{}, nil
 	}
 	principal = strings.TrimSpace(principal)
-	
+
 	now := time.Now().UTC()
-	rollingCutoff := now.Add(-5 * time.Hour)
-	
+	rolling5h := now.Add(-5 * time.Hour)
+	rolling1d := now.Add(-24 * time.Hour)
+	rolling30d := now.Add(-30 * 24 * time.Hour)
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	var summary ExecutionQuotaSnapshot
-	summary.CreditLimit = 100 // Fallback limit, typically overridden by the API handler
-	
-	// Step 1: Find the first session in the current 5-hour block
-	var windowStart time.Time
+	summary.CreditLimit = 100 // Fallback limit
+
+	// Determine the rolling 5h window start (first session in the block)
+	var windowStart5h time.Time
 	for _, entry := range l.sessions {
 		if entry == nil || strings.TrimSpace(entry.record.Principal) != principal {
 			continue
 		}
-		
 		candidate := entry.finishedAt
-		if candidate.IsZero() { candidate = entry.record.UpdatedAt }
-		if candidate.IsZero() { candidate = entry.record.StartedAt }
-		
-		if !candidate.Before(rollingCutoff) {
-			if windowStart.IsZero() || candidate.Before(windowStart) {
-				windowStart = candidate
+		if candidate.IsZero() {
+			candidate = entry.record.UpdatedAt
+		}
+		if candidate.IsZero() {
+			candidate = entry.record.StartedAt
+		}
+
+		if !candidate.Before(rolling5h) {
+			if windowStart5h.IsZero() || candidate.Before(windowStart5h) {
+				windowStart5h = candidate
 			}
 		}
 	}
-	
-	// If there's no session in the last 5h, the window starts now
-	if windowStart.IsZero() {
-		windowStart = now
+	if windowStart5h.IsZero() {
+		windowStart5h = now
 	}
-	
-	windowExpiresAt := windowStart.Add(5 * time.Hour)
-	summary.WindowExpiresAt = windowExpiresAt
-	
-	// Step 2: Aggregate credits within this specific window
+	summary.WindowExpiresAt = windowStart5h.Add(5 * time.Hour)
+
 	for _, entry := range l.sessions {
 		if entry == nil || strings.TrimSpace(entry.record.Principal) != principal {
 			continue
 		}
-		
+
 		candidate := entry.finishedAt
-		if candidate.IsZero() { candidate = entry.record.UpdatedAt }
-		if candidate.IsZero() { candidate = entry.record.StartedAt }
-		
+		if candidate.IsZero() {
+			candidate = entry.record.UpdatedAt
+		}
+		if candidate.IsZero() {
+			candidate = entry.record.StartedAt
+		}
+
+		tokens := entry.record.InputTokens + entry.record.OutputTokens + entry.record.ReasoningTokens + entry.record.CachedTokens
+
 		summary.Sessions++
 		if !entry.finalized {
 			summary.ActiveSessions++
 		}
-		
-		summary.TotalTokens += entry.record.InputTokens + entry.record.OutputTokens + entry.record.ReasoningTokens + entry.record.CachedTokens
-		
-		// Only aggregate credits if the session occurred within the determined window
-		if !candidate.Before(windowStart) && candidate.Before(windowExpiresAt) {
-			summary.CreditsUsed += entry.credits
-			summary.DurationSeconds += entry.durationSecs
-		}
-		
-		if candidate.After(summary.LastSessionAt) {
-			summary.LastSessionAt = candidate
+
+		// Aggregate Lifetime stats
+		summary.Lifetime.Requests++
+		summary.Lifetime.Credits += entry.credits
+		summary.Lifetime.Tokens += tokens
+		summary.Lifetime.Duration += entry.durationSecs
+
+		// Aggregate Monthly stats
+		if !candidate.Before(rolling30d) {
+			summary.Monthly.Requests++
+			summary.Monthly.Credits += entry.credits
+			summary.Monthly.Tokens += tokens
+			summary.Monthly.Duration += entry.durationSecs
 		}
 
-		if !candidate.Before(windowStart) && candidate.Before(windowExpiresAt) {
+		// Aggregate Daily stats
+		if !candidate.Before(rolling1d) {
+			summary.Daily.Requests++
+			summary.Daily.Credits += entry.credits
+			summary.Daily.Tokens += tokens
+			summary.Daily.Duration += entry.durationSecs
+		}
+
+		// Aggregate 5h Interval stats
+		if !candidate.Before(windowStart5h) && candidate.Before(summary.WindowExpiresAt) {
+			summary.Interval.Requests++
+			summary.Interval.Credits += entry.credits
+			summary.Interval.Tokens += tokens
+			summary.Interval.Duration += entry.durationSecs
+
 			summary.RecentSessions = append(summary.RecentSessions, ExecutionSessionSummary{
 				ExecutionSessionRecord: entry.record,
 				Credits:                entry.credits,
 				DurationSeconds:        entry.durationSecs,
 			})
 		}
+
+		if candidate.After(summary.LastSessionAt) {
+			summary.LastSessionAt = candidate
+		}
 	}
-	
-	// Sort by StartedAt descending
+
+	// Calculate Throughput (TPM) for each window
+	// Interval: 5h (300 min)
+	summary.Interval.Throughput = float64(summary.Interval.Tokens) / 300.0
+	// Daily: 24h (1440 min)
+	summary.Daily.Throughput = float64(summary.Daily.Tokens) / 1440.0
+	// Monthly: 30d (43200 min)
+	summary.Monthly.Throughput = float64(summary.Monthly.Tokens) / 43200.0
+	// Lifetime: since start (estimated as 30 days if no data)
+	summary.Lifetime.Throughput = float64(summary.Lifetime.Tokens) / 43200.0
+
+	// Backward compatibility mappings
+	summary.CreditsUsed = summary.Interval.Credits
+	summary.TotalCreditsUsed = summary.Lifetime.Credits
+
+	// Sort recent sessions by StartedAt descending
 	if len(summary.RecentSessions) > 0 {
 		for i := 0; i < len(summary.RecentSessions)-1; i++ {
 			for j := i + 1; j < len(summary.RecentSessions); j++ {
@@ -302,7 +368,7 @@ func (l *memoryExecutionSessionLedger) GetExecutionQuotaSummary(_ context.Contex
 			summary.RecentSessions = summary.RecentSessions[:20]
 		}
 	}
-	
+
 	return summary, nil
 }
 

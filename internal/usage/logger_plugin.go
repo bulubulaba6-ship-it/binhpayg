@@ -68,9 +68,9 @@ type RequestStatistics struct {
 	apis map[string]*apiStats
 
 	requestsByDay  map[string]int64
-	requestsByHour map[int]int64
+	requestsByHour map[string]int64 // format: "2006-01-02 15"
 	tokensByDay    map[string]int64
-	tokensByHour   map[int]int64
+	tokensByHour   map[string]int64 // format: "2006-01-02 15"
 }
 
 // apiStats holds aggregated metrics for a single API key.
@@ -140,14 +140,19 @@ var defaultRequestStatistics = NewRequestStatistics()
 // GetRequestStatistics returns the shared statistics store.
 func GetRequestStatistics() *RequestStatistics { return defaultRequestStatistics }
 
+// EnableStatistics globally enables collection of request and token metrics.
+func EnableStatistics() {
+	statisticsEnabled.Store(true)
+}
+
 // NewRequestStatistics constructs an empty statistics store.
 func NewRequestStatistics() *RequestStatistics {
 	return &RequestStatistics{
 		apis:           make(map[string]*apiStats),
 		requestsByDay:  make(map[string]int64),
-		requestsByHour: make(map[int]int64),
+		requestsByHour: make(map[string]int64),
 		tokensByDay:    make(map[string]int64),
-		tokensByHour:   make(map[int]int64),
+		tokensByHour:   make(map[string]int64),
 	}
 }
 
@@ -179,7 +184,7 @@ func (s *RequestStatistics) Record(ctx context.Context, record coreusage.Record)
 		modelName = "unknown"
 	}
 	dayKey := timestamp.Format("2006-01-02")
-	hourKey := timestamp.Hour()
+	hourKey := timestamp.Format("2006-01-02 15")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -265,9 +270,8 @@ func (s *RequestStatistics) Snapshot() StatisticsSnapshot {
 	}
 
 	result.RequestsByHour = make(map[string]int64, len(s.requestsByHour))
-	for hour, v := range s.requestsByHour {
-		key := formatHour(hour)
-		result.RequestsByHour[key] = v
+	for k, v := range s.requestsByHour {
+		result.RequestsByHour[k] = v
 	}
 
 	result.TokensByDay = make(map[string]int64, len(s.tokensByDay))
@@ -276,9 +280,8 @@ func (s *RequestStatistics) Snapshot() StatisticsSnapshot {
 	}
 
 	result.TokensByHour = make(map[string]int64, len(s.tokensByHour))
-	for hour, v := range s.tokensByHour {
-		key := formatHour(hour)
-		result.TokensByHour[key] = v
+	for k, v := range s.tokensByHour {
+		result.TokensByHour[k] = v
 	}
 
 	return result
@@ -372,7 +375,7 @@ func (s *RequestStatistics) recordImported(apiName, modelName string, stats *api
 	s.updateAPIStats(stats, modelName, detail)
 
 	dayKey := detail.Timestamp.Format("2006-01-02")
-	hourKey := detail.Timestamp.Hour()
+	hourKey := detail.Timestamp.Format("2006-01-02 15")
 
 	s.requestsByDay[dayKey]++
 	s.requestsByHour[hourKey]++
