@@ -1605,6 +1605,7 @@ func (m *Manager) executeStreamMixedOnce(ctx context.Context, providers []string
 		if len(models) == 0 {
 			continue
 		}
+		m.beginExecutionSession(execCtx, provider, routeModel, auth, opts)
 		attempted[auth.ID] = struct{}{}
 		streamResult, errStream := m.executeStreamWithModelPool(execCtx, executor, auth, provider, req, opts, routeModel, models, pooled)
 		if errStream != nil {
@@ -3224,6 +3225,7 @@ func (m *Manager) tryAntigravityCreditsExecute(ctx context.Context, req cliproxy
 		if len(models) == 0 {
 			continue
 		}
+		m.beginExecutionSession(creditsCtx, c.provider, routeModel, c.auth, creditsOpts)
 		for _, upstreamModel := range models {
 			resultModel := m.stateModelForExecution(c.auth, routeModel, upstreamModel, len(models) > 1)
 			execReq := req
@@ -3266,6 +3268,7 @@ func (m *Manager) tryAntigravityCreditsExecuteStream(ctx context.Context, req cl
 		if len(models) == 0 {
 			continue
 		}
+		m.beginExecutionSession(creditsCtx, c.provider, routeModel, c.auth, creditsOpts)
 		result, errStream := m.executeStreamWithModelPool(creditsCtx, c.executor, c.auth, c.provider, req, creditsOpts, routeModel, models, len(models) > 1)
 		if errStream != nil {
 			continue
