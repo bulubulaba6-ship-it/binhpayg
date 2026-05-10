@@ -181,7 +181,7 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 			last_seen_at TIMESTAMPTZ NOT NULL,
 			finished_at TIMESTAMPTZ,
 			duration_seconds BIGINT NOT NULL DEFAULT 0,
-			credits INTEGER NOT NULL DEFAULT 0,
+			credits DOUBLE PRECISION NOT NULL DEFAULT 0,
 			finalized BOOLEAN NOT NULL DEFAULT FALSE,
 			input_tokens BIGINT NOT NULL DEFAULT 0,
 			output_tokens BIGINT NOT NULL DEFAULT 0,
@@ -197,6 +197,7 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 	// Add new columns to existing schema
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
 		ALTER TABLE %s 
+		ALTER COLUMN credits TYPE DOUBLE PRECISION,
 		ADD COLUMN IF NOT EXISTS input_tokens BIGINT NOT NULL DEFAULT 0,
 		ADD COLUMN IF NOT EXISTS output_tokens BIGINT NOT NULL DEFAULT 0,
 		ADD COLUMN IF NOT EXISTS reasoning_tokens BIGINT NOT NULL DEFAULT 0,
@@ -271,7 +272,6 @@ func (s *PostgresStore) HandleUsage(ctx context.Context, record cliproxyusage.Re
 		return
 	}
 	s.activeTokensMu.Lock()
-	defer s.activeTokensMu.Unlock()
 	
 	if s.activeTokens == nil {
 		s.activeTokens = make(map[string]*cliproxyusage.Detail)
@@ -286,6 +286,36 @@ func (s *PostgresStore) HandleUsage(ctx context.Context, record cliproxyusage.Re
 	detail.OutputTokens += record.Detail.OutputTokens
 	detail.ReasoningTokens += record.Detail.ReasoningTokens
 	detail.CachedTokens += record.Detail.CachedTokens
+	s.activeTokensMu.Unlock()
+
+	// Proactively update the database so that tokens arriving late (after finalization) are still recorded.
+	// This fixes the race condition where FinalizeExecutionSession runs before the usage queue is drained.
+	go func() {
+		updateCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		credits := cliproxyauth.CalculateTokenCost(record.Model, record.Detail.InputTokens, record.Detail.OutputTokens, record.Detail.ReasoningTokens, record.Detail.CachedTokens)
+
+		query := fmt.Sprintf(`
+			UPDATE %s
+			SET input_tokens = input_tokens + $2,
+				output_tokens = output_tokens + $3,
+				reasoning_tokens = reasoning_tokens + $4,
+				cached_tokens = cached_tokens + $5,
+				credits = credits + $6,
+				updated_at = NOW()
+			WHERE session_id = $1
+		`, s.fullTableName(s.cfg.BillingTable))
+
+		_, _ = s.db.ExecContext(updateCtx, query,
+			sessionID,
+			record.Detail.InputTokens,
+			record.Detail.OutputTokens,
+			record.Detail.ReasoningTokens,
+			record.Detail.CachedTokens,
+			credits,
+		)
+	}()
 }
 
 // FinalizeExecutionSession marks a session as finished and records its credit bucket.

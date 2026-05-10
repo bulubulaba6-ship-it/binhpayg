@@ -113,21 +113,21 @@ usage-statistics-enabled: true
 # Virtual credit rates per model alias (credits per 1M tokens consumed).
 model-pricing:
   claude-opus-4-7:
-    input: 15.0
-    output: 75.0
-    cache: 1.5
+    input: 450.0
+    output: 2250.0
+    cache: 45.0
   claude-opus-4-6:
-    input: 10.0
-    output: 50.0
-    cache: 1.0
+    input: 300.0
+    output: 1500.0
+    cache: 30.0
   claude-sonnet-4-6:
-    input: 3.0
-    output: 15.0
-    cache: 0.3
+    input: 90.0
+    output: 450.0
+    cache: 9.0
   claude-haiku-4-5:
-    input: 0.25
-    output: 1.25
-    cache: 0.025
+    input: 7.5
+    output: 37.5
+    cache: 0.75
 
 # Global rate limits
 request-retry: 1
