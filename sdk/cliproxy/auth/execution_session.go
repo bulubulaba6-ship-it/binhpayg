@@ -15,11 +15,11 @@ import (
 // ExecutionSessionRecord captures the mutable metadata tracked for a long-lived
 // execution session while it is active.
 type ExecutionSessionRecord struct {
-	SessionID string
-	Principal string
-	Provider  string
-	Model     string
-	AuthID    string
+	SessionID       string
+	Principal       string
+	Provider        string
+	Model           string
+	AuthID          string
 	AuthIndex       string
 	StartedAt       time.Time
 	UpdatedAt       time.Time
@@ -65,10 +65,10 @@ type ExecutionQuotaSnapshot struct {
 	WindowExpiresAt time.Time `json:"window_expires_at,omitempty"`
 
 	// Window-based aggregates
-	Interval  WindowSnapshot `json:"interval"`  // 5-hour rolling window
-	Daily     WindowSnapshot `json:"daily"`     // 24-hour window
-	Monthly   WindowSnapshot `json:"monthly"`   // 30-day window
-	Lifetime  WindowSnapshot `json:"lifetime"`  // All-time window
+	Interval WindowSnapshot `json:"interval"` // 5-hour rolling window
+	Daily    WindowSnapshot `json:"daily"`    // 24-hour window
+	Monthly  WindowSnapshot `json:"monthly"`  // 30-day window
+	Lifetime WindowSnapshot `json:"lifetime"` // All-time window
 
 	RecentSessions []ExecutionSessionSummary `json:"recent_sessions,omitempty"`
 }
@@ -195,6 +195,8 @@ func (l *memoryExecutionSessionLedger) HandleUsage(ctx context.Context, record u
 	entry.record.OutputTokens += record.Detail.OutputTokens
 	entry.record.ReasoningTokens += record.Detail.ReasoningTokens
 	entry.record.CachedTokens += record.Detail.CachedTokens
+	// Refresh UpdatedAt so the session is visible in rolling window queries.
+	entry.record.UpdatedAt = time.Now().UTC()
 
 	// Recalculate credits even for in-progress sessions to ensure dashboard visibility.
 	entry.credits = CalculateTokenCost(entry.record.Model, entry.record.InputTokens, entry.record.OutputTokens, entry.record.ReasoningTokens, entry.record.CachedTokens)
@@ -253,32 +255,8 @@ func (l *memoryExecutionSessionLedger) GetExecutionQuotaSummary(_ context.Contex
 	defer l.mu.Unlock()
 
 	var summary ExecutionQuotaSnapshot
-	summary.CreditLimit = 100 // Fallback limit
-
-	// Determine the rolling 5h window start (first session in the block)
-	var windowStart5h time.Time
-	for _, entry := range l.sessions {
-		if entry == nil || strings.TrimSpace(entry.record.Principal) != principal {
-			continue
-		}
-		candidate := entry.finishedAt
-		if candidate.IsZero() {
-			candidate = entry.record.UpdatedAt
-		}
-		if candidate.IsZero() {
-			candidate = entry.record.StartedAt
-		}
-
-		if !candidate.Before(rolling5h) {
-			if windowStart5h.IsZero() || candidate.Before(windowStart5h) {
-				windowStart5h = candidate
-			}
-		}
-	}
-	if windowStart5h.IsZero() {
-		windowStart5h = now
-	}
-	summary.WindowExpiresAt = windowStart5h.Add(5 * time.Hour)
+	summary.CreditLimit = 100                        // Fallback limit
+	summary.WindowExpiresAt = now.Add(5 * time.Hour) // window always extends from now
 
 	for _, entry := range l.sessions {
 		if entry == nil || strings.TrimSpace(entry.record.Principal) != principal {
@@ -322,8 +300,8 @@ func (l *memoryExecutionSessionLedger) GetExecutionQuotaSummary(_ context.Contex
 			summary.Daily.Duration += entry.durationSecs
 		}
 
-		// Aggregate 5h Interval stats
-		if !candidate.Before(windowStart5h) && candidate.Before(summary.WindowExpiresAt) {
+		// Aggregate 5h Interval stats (simple rolling window from now-5h)
+		if !candidate.Before(rolling5h) {
 			summary.Interval.Requests++
 			summary.Interval.Credits += entry.credits
 			summary.Interval.Tokens += tokens
@@ -420,9 +398,9 @@ type pricingEntry struct {
 
 // globalPricing stores configurable per-model pricing, set at startup via SetModelPricing.
 var (
-	globalPricingMu      sync.RWMutex
-	globalPricingMap     map[string]pricingEntry
-	globalPricingLoaded  bool
+	globalPricingMu     sync.RWMutex
+	globalPricingMap    map[string]pricingEntry
+	globalPricingLoaded bool
 )
 
 // SetModelPricing registers per-model virtual credit rates from the application config.
