@@ -95,14 +95,20 @@ type memoryExecutionSession struct {
 	durationSecs int64
 }
 
+// NewMemoryExecutionSessionLedger creates a standalone in-memory ledger and
+// registers it directly with the global usage dispatcher. Use this when you
+// are not going through Manager.SetExecutionSessionLedger.
 func NewMemoryExecutionSessionLedger() ExecutionSessionLedger {
-	return newMemoryExecutionSessionLedger()
-}
-
-func newMemoryExecutionSessionLedger() *memoryExecutionSessionLedger {
-	ledger := &memoryExecutionSessionLedger{sessions: make(map[string]*memoryExecutionSession)}
+	ledger := newMemoryExecutionSessionLedger()
 	usage.RegisterPlugin(ledger)
 	return ledger
+}
+
+// newMemoryExecutionSessionLedger creates the ledger without registering it
+// as a usage plugin. Registration is handled by Manager.SetExecutionSessionLedger
+// so that the correct (possibly overridden) instance receives usage events.
+func newMemoryExecutionSessionLedger() *memoryExecutionSessionLedger {
+	return &memoryExecutionSessionLedger{sessions: make(map[string]*memoryExecutionSession)}
 }
 
 func (l *memoryExecutionSessionLedger) BeginExecutionSession(_ context.Context, record ExecutionSessionRecord) error {

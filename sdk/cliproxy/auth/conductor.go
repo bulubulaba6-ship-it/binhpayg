@@ -23,6 +23,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
+	"github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -1083,6 +1084,12 @@ func (m *Manager) SetRetryConfig(retry int, maxRetryInterval time.Duration, maxR
 }
 
 // SetExecutionSessionLedger attaches durable execution-session tracking.
+// If the ledger also implements usage.Plugin it is registered with the global
+// usage dispatcher so that HandleUsage calls route to the same instance that
+// stores the sessions (fixes the two-ledger split where the default in-memory
+// ledger registered at construction time received usage events, but the
+// durable ledger set here received BeginExecutionSession calls — causing all
+// token counts to be silently dropped).
 func (m *Manager) SetExecutionSessionLedger(ledger ExecutionSessionLedger) {
 	if m == nil {
 		return
@@ -1090,6 +1097,9 @@ func (m *Manager) SetExecutionSessionLedger(ledger ExecutionSessionLedger) {
 	m.mu.Lock()
 	m.sessionLedger = ledger
 	m.mu.Unlock()
+	if plugin, ok := ledger.(usage.Plugin); ok && plugin != nil {
+		usage.RegisterPlugin(plugin)
+	}
 }
 
 func (m *Manager) executionSessionLedger() ExecutionSessionLedger {
