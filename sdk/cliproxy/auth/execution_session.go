@@ -360,6 +360,16 @@ func apiKeyFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
+	if v := ctx.Value("apiKey"); v != nil {
+		switch value := v.(type) {
+		case string:
+			return strings.TrimSpace(value)
+		case fmt.Stringer:
+			return strings.TrimSpace(value.String())
+		default:
+			return strings.TrimSpace(fmt.Sprintf("%v", value))
+		}
+	}
 	ginCtx, ok := ctx.Value("gin").(*gin.Context)
 	if !ok || ginCtx == nil {
 		return ""

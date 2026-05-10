@@ -516,6 +516,9 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	// "gin" key injected by AuthMiddleware via c.Request.Context().
 	if c != nil {
 		parentCtx = context.WithValue(parentCtx, "gin", c)
+		if v, exists := c.Get("apiKey"); exists {
+			parentCtx = context.WithValue(parentCtx, "apiKey", v)
+		}
 	}
 	sessionID := executionSessionIDFromContext(parentCtx)
 	autoSession := false
