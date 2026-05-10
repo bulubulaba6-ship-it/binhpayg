@@ -194,17 +194,22 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 		return fmt.Errorf("postgres store: create billing table: %w", err)
 	}
 	
-	// Add new columns to existing schema
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
-		ALTER TABLE %s 
-		ALTER COLUMN credits TYPE DOUBLE PRECISION,
-		ADD COLUMN IF NOT EXISTS input_tokens BIGINT NOT NULL DEFAULT 0,
-		ADD COLUMN IF NOT EXISTS output_tokens BIGINT NOT NULL DEFAULT 0,
-		ADD COLUMN IF NOT EXISTS reasoning_tokens BIGINT NOT NULL DEFAULT 0,
-		ADD COLUMN IF NOT EXISTS cached_tokens BIGINT NOT NULL DEFAULT 0;
-	`, billingTable)); err != nil {
-		// Ignore error if columns already exist or if dialect doesn't support IF NOT EXISTS
+	// Harden schema migration: run each update independently to ensure success even if columns already exist.
+	alterQueries := []string{
+		fmt.Sprintf("ALTER TABLE %s ALTER COLUMN credits TYPE DOUBLE PRECISION", billingTable),
+		fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS input_tokens BIGINT NOT NULL DEFAULT 0", billingTable),
+		fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS output_tokens BIGINT NOT NULL DEFAULT 0", billingTable),
+		fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS reasoning_tokens BIGINT NOT NULL DEFAULT 0", billingTable),
+		fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS cached_tokens BIGINT NOT NULL DEFAULT 0", billingTable),
+		fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS principal TEXT NOT NULL DEFAULT ''", billingTable),
 	}
+
+	for _, q := range alterQueries {
+		if _, err := s.db.ExecContext(ctx, q); err != nil {
+			log.WithError(err).Debugf("postgres store: migration step skipped or failed (this is usually fine if column exists)")
+		}
+	}
+	
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s ON %s (principal)
 	`, quoteIdentifier(s.cfg.BillingTable+"_principal_idx"), billingTable)); err != nil {
@@ -282,19 +287,26 @@ func (s *PostgresStore) HandleUsage(ctx context.Context, record cliproxyusage.Re
 		detail = &cliproxyusage.Detail{}
 		s.activeTokens[sessionID] = detail
 	}
-	detail.InputTokens += record.Detail.InputTokens
-	detail.OutputTokens += record.Detail.OutputTokens
-	detail.ReasoningTokens += record.Detail.ReasoningTokens
-	detail.CachedTokens += record.Detail.CachedTokens
+	// Calculate the delta (incremental difference) to support cumulative usage updates
+	inDelta := record.Detail.InputTokens - detail.InputTokens
+	outDelta := record.Detail.OutputTokens - detail.OutputTokens
+	reasonDelta := record.Detail.ReasoningTokens - detail.ReasoningTokens
+	cacheDelta := record.Detail.CachedTokens - detail.CachedTokens
+
+	// Update memory state with the new absolute values
+	detail.InputTokens = record.Detail.InputTokens
+	detail.OutputTokens = record.Detail.OutputTokens
+	detail.ReasoningTokens = record.Detail.ReasoningTokens
+	detail.CachedTokens = record.Detail.CachedTokens
 	s.activeTokensMu.Unlock()
 
-	// Proactively update the database so that tokens arriving late (after finalization) are still recorded.
-	// This fixes the race condition where FinalizeExecutionSession runs before the usage queue is drained.
+	// 2. Proactively update database (Additive with Delta)
 	go func() {
 		updateCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		credits := cliproxyauth.CalculateTokenCost(record.Model, record.Detail.InputTokens, record.Detail.OutputTokens, record.Detail.ReasoningTokens, record.Detail.CachedTokens)
+		// Calculate credits for the incremental difference only
+		creditDelta := cliproxyauth.CalculateTokenCost(record.Model, inDelta, outDelta, reasonDelta, cacheDelta)
 
 		query := fmt.Sprintf(`
 			UPDATE %s
@@ -309,11 +321,11 @@ func (s *PostgresStore) HandleUsage(ctx context.Context, record cliproxyusage.Re
 
 		_, _ = s.db.ExecContext(updateCtx, query,
 			sessionID,
-			record.Detail.InputTokens,
-			record.Detail.OutputTokens,
-			record.Detail.ReasoningTokens,
-			record.Detail.CachedTokens,
-			credits,
+			inDelta,
+			outDelta,
+			reasonDelta,
+			cacheDelta,
+			creditDelta,
 		)
 	}()
 }
