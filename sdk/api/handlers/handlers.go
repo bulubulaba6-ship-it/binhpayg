@@ -511,6 +511,12 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	if parentCtx == nil {
 		parentCtx = context.Background()
 	}
+	// Inject Gin context so apiKeyFromContext can read the authenticated principal
+	// downstream in beginExecutionSession → apiKeyFromContext, which looks for the
+	// "gin" key injected by AuthMiddleware via c.Request.Context().
+	if c != nil {
+		parentCtx = context.WithValue(parentCtx, "gin", c)
+	}
 	sessionID := executionSessionIDFromContext(parentCtx)
 	autoSession := false
 	if sessionID == "" {
@@ -522,6 +528,7 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	if c != nil && c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
+
 
 	if requestCtx != nil && logging.GetRequestID(parentCtx) == "" {
 		if requestID := logging.GetRequestID(requestCtx); requestID != "" {
