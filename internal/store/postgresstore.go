@@ -505,7 +505,7 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 
 	recentQuery := fmt.Sprintf(`
 		SELECT
-			session_id, provider, model, started_at, updated_at,
+			session_id, provider, model, principal, started_at, updated_at,
 			duration_seconds, credits, input_tokens, output_tokens, reasoning_tokens, cached_tokens
 		FROM %s
 		WHERE principal = $1
@@ -518,34 +518,34 @@ func (s *PostgresStore) GetExecutionQuotaSummary(ctx context.Context, principal 
 		defer recentRows.Close()
 		for recentRows.Next() {
 			var (
-				recSessionID, recProvider, recModel string
-				recStartedAt, recUpdatedAt          time.Time
-				recDuration             int64
-				recCredits              float64
-				recInput, recOutput, recReasoning, recCached int64
+				recSessionID, recProvider, recModel, recPrincipal string
+				recStartedAt, recUpdatedAt                        time.Time
+				recDuration                                       int64
+				recCredits                                        float64
+				recInput, recOutput, recReasoning, recCached       int64
 			)
 			if err := recentRows.Scan(
-				&recSessionID, &recProvider, &recModel,
+				&recSessionID, &recProvider, &recModel, &recPrincipal,
 				&recStartedAt, &recUpdatedAt, &recDuration, &recCredits,
 				&recInput, &recOutput, &recReasoning, &recCached,
-			); err != nil {
-				return summary, fmt.Errorf("postgres store: scan recent session: %w", err)
+			); err == nil {
+				summary.RecentSessions = append(summary.RecentSessions, cliproxyauth.ExecutionSessionSummary{
+					ExecutionSessionRecord: cliproxyauth.ExecutionSessionRecord{
+						SessionID:       recSessionID,
+						Principal:       recPrincipal,
+						Provider:        recProvider,
+						Model:           recModel,
+						StartedAt:       recStartedAt,
+						UpdatedAt:       recUpdatedAt,
+						InputTokens:     recInput,
+						OutputTokens:    recOutput,
+						ReasoningTokens: recReasoning,
+						CachedTokens:    recCached,
+					},
+					DurationSeconds: recDuration,
+					Credits:         recCredits,
+				})
 			}
-			summary.RecentSessions = append(summary.RecentSessions, cliproxyauth.ExecutionSessionSummary{
-				ExecutionSessionRecord: cliproxyauth.ExecutionSessionRecord{
-					SessionID:       recSessionID,
-					Provider:        recProvider,
-					Model:           recModel,
-					StartedAt:       recStartedAt,
-					UpdatedAt:       recUpdatedAt,
-					InputTokens:     recInput,
-					OutputTokens:    recOutput,
-					ReasoningTokens: recReasoning,
-					CachedTokens:    recCached,
-				},
-				DurationSeconds: recDuration,
-				Credits:         float64(recCredits),
-			})
 		}
 	}
 

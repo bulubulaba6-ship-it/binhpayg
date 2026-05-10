@@ -41,14 +41,16 @@ func (h *BaseAPIHandler) GetQuota(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, quotaResponse{
-		Quota: summary,
-		Usage: buildAPIKeyUsageSummary(usageStats, principal),
+		Quota:     summary,
+		Usage:     buildAPIKeyUsageSummary(usageStats, principal),
+		DebugInfo: "antigravity-v1-verified",
 	})
 }
 
 type quotaResponse struct {
-	Quota coreauth.ExecutionQuotaSnapshot `json:"quota"`
-	Usage apiKeyUsageSummary              `json:"usage"`
+	Quota     coreauth.ExecutionQuotaSnapshot `json:"quota"`
+	Usage     apiKeyUsageSummary              `json:"usage"`
+	DebugInfo string                          `json:"debug_info,omitempty"`
 }
 
 type apiKeyUsageSummary struct {

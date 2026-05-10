@@ -15,18 +15,18 @@ import (
 // ExecutionSessionRecord captures the mutable metadata tracked for a long-lived
 // execution session while it is active.
 type ExecutionSessionRecord struct {
-	SessionID       string
-	Principal       string
-	Provider        string
-	Model           string
-	AuthID          string
-	AuthIndex       string
-	StartedAt       time.Time
-	UpdatedAt       time.Time
-	InputTokens     int64
-	OutputTokens    int64
-	ReasoningTokens int64
-	CachedTokens    int64
+	SessionID       string    `json:"session_id"`
+	Principal       string    `json:"principal,omitempty"`
+	Provider        string    `json:"provider"`
+	Model           string    `json:"model"`
+	AuthID          string    `json:"auth_id"`
+	AuthIndex       string    `json:"auth_index"`
+	StartedAt       time.Time `json:"started_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	InputTokens     int64     `json:"input_tokens"`
+	OutputTokens    int64     `json:"output_tokens"`
+	ReasoningTokens int64     `json:"reasoning_tokens"`
+	CachedTokens    int64     `json:"cached_tokens"`
 }
 
 // ExecutionSessionSummary captures a finalized session and its cost for the quota dashboard.

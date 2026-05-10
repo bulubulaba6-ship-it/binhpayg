@@ -1,0 +1,54 @@
+	// Re-calculate Throughput (TPM) after adding active tokens
+	summary.Interval.Throughput = float64(summary.Interval.Tokens) / 300.0
+	summary.Daily.Throughput = float64(summary.Daily.Tokens) / 1440.0
+	summary.Monthly.Throughput = float64(summary.Monthly.Tokens) / 43200.0
+	summary.Lifetime.Throughput = float64(summary.Lifetime.Tokens) / 43200.0
+
+	recentQuery := fmt.Sprintf(`
+		SELECT
+			session_id, provider, model, principal, started_at, updated_at,
+			duration_seconds, credits, input_tokens, output_tokens, reasoning_tokens, cached_tokens
+		FROM %s
+		WHERE principal = $1
+		ORDER BY started_at DESC
+		LIMIT 20
+	`, s.fullTableName(s.cfg.BillingTable))
+	
+	recentRows, err := s.db.QueryContext(ctx, recentQuery, principal)
+	if err == nil {
+		defer recentRows.Close()
+		for recentRows.Next() {
+			var (
+				recSessionID, recProvider, recModel, recPrincipal string
+				recStartedAt, recUpdatedAt                        time.Time
+				recDuration                                       int64
+				recCredits                                        float64
+				recInput, recOutput, recReasoning, recCached       int64
+			)
+			if err := recentRows.Scan(
+				&recSessionID, &recProvider, &recModel, &recPrincipal,
+				&recStartedAt, &recUpdatedAt, &recDuration, &recCredits,
+				&recInput, &recOutput, &recReasoning, &recCached,
+			); err == nil {
+				summary.RecentSessions = append(summary.RecentSessions, cliproxyauth.ExecutionSessionSummary{
+					ExecutionSessionRecord: cliproxyauth.ExecutionSessionRecord{
+						SessionID:       recSessionID,
+						Principal:       recPrincipal,
+						Provider:        recProvider,
+						Model:           recModel,
+						StartedAt:       recStartedAt,
+						UpdatedAt:       recUpdatedAt,
+						InputTokens:     recInput,
+						OutputTokens:    recOutput,
+						ReasoningTokens: recReasoning,
+						CachedTokens:    recCached,
+					},
+					DurationSeconds: recDuration,
+					Credits:         recCredits,
+				})
+			}
+		}
+	}
+
+	return summary, nil
+}
