@@ -386,15 +386,17 @@ func CreditsForDuration(d time.Duration) int {
 // Credit scale: 1,000 Credits = $1 USD  →  1 Credit = $0.001 USD
 //
 // Pricing table (USD per 1M tokens, mirrors real Anthropic/OpenAI rates):
-//   claude-opus-*       → $15.00 in / $75.00 out / $3.75 cache
-//   claude-sonnet-*     →  $3.00 in / $15.00 out / $0.30 cache
-//   claude-haiku-*      →  $0.25 in /  $1.25 out / $0.03 cache
-//   gpt-4o/gpt-4-turbo  →  $5.00 in / $15.00 out / $2.50 cache
-//   gpt-4               → $30.00 in / $60.00 out / $15.00 cache
-//   o1                  → $15.00 in / $60.00 out / $7.50 cache
-//   gemini-1.5-pro      →  $3.50 in / $10.50 out / $0.88 cache
-//   gemini-1.5-flash    →  $0.35 in /  $1.05 out / $0.08 cache
-//   default (unknown)   →  $0.50 in /  $1.50 out / $0.20 cache
+//
+//	claude-opus-*       → $15.00 in / $75.00 out / $3.75 cache
+//	claude-sonnet-*     →  $3.00 in / $15.00 out / $0.30 cache
+//	claude-haiku-*      →  $0.25 in /  $1.25 out / $0.03 cache
+//	gpt-4o/gpt-4-turbo  →  $5.00 in / $15.00 out / $2.50 cache
+//	gpt-4               → $30.00 in / $60.00 out / $15.00 cache
+//	o1                  → $15.00 in / $60.00 out / $7.50 cache
+//	gemini-1.5-pro      →  $3.50 in / $10.50 out / $0.88 cache
+//	gemini-1.5-flash    →  $0.35 in /  $1.05 out / $0.08 cache
+//	default (unknown)   →  $0.50 in /  $1.50 out / $0.20 cache
+//
 // pricingEntry holds virtual credit rates for a model (credits per 1M tokens).
 type pricingEntry struct {
 	input  float64

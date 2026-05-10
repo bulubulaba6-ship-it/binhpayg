@@ -107,7 +107,7 @@ oauth-model-alias:
     - name: "gemini-2.5-flash-lite"
       alias: "claude-haiku-4-5"
 
-logging-to-file: true
+logging-to-file: false
 usage-statistics-enabled: true
 
 # Virtual credit rates per model alias (credits per 1M tokens consumed).

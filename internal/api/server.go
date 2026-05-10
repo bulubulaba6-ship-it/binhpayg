@@ -1224,6 +1224,9 @@ func AuthMiddleware(manager *sdkaccess.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// Inject Gin context into Request context so apiKeyFromContext can find it
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "gin", c))
+
 		result, err := manager.Authenticate(c.Request.Context(), c.Request)
 		if err == nil {
 			if result != nil {

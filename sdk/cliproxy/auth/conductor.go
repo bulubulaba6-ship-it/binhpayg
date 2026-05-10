@@ -538,7 +538,7 @@ func oauthModelPoolKey(auth *Auth, requestedModel string) string {
 
 func (m *Manager) executionModelCandidates(auth *Auth, routeModel string) []string {
 	requestedModel := rewriteModelForAuth(routeModel, auth)
-	
+
 	if pool := m.resolveOpenAICompatUpstreamModelPool(auth, requestedModel); len(pool) > 0 {
 		if len(pool) == 1 {
 			return pool
@@ -1168,7 +1168,7 @@ func (m *Manager) GetExecutionQuotaSummary(ctx context.Context, principal string
 	if err != nil {
 		return summary, err
 	}
-	
+
 	// Inject credit limit from config
 	if cfg, ok := m.runtimeConfig.Load().(*internalconfig.Config); ok && cfg != nil {
 		limit := cfg.DefaultAPIKeyLimit
@@ -1180,7 +1180,7 @@ func (m *Manager) GetExecutionQuotaSummary(ctx context.Context, principal string
 		}
 		summary.CreditLimit = int64(limit)
 	}
-	
+
 	return summary, nil
 }
 
