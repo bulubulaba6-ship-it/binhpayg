@@ -370,7 +370,9 @@ func (s *PostgresStore) FinalizeExecutionSession(ctx context.Context, sessionID 
 			reasoning_tokens = EXCLUDED.reasoning_tokens,
 			cached_tokens = EXCLUDED.cached_tokens,
 			finalized = TRUE,
-			updated_at = NOW()
+			updated_at = NOW(),
+			-- Preserve the principal written by BeginExecutionSession; never overwrite with empty
+			principal = CASE WHEN target.principal <> '' THEN target.principal ELSE EXCLUDED.principal END
 		WHERE NOT target.finalized
 	`, s.fullTableName(s.cfg.BillingTable))
 	if _, err = tx.ExecContext(ctx, upsertQuery, sessionID, finishedAt, int64(duration/time.Second), credits, inTok, outTok, reasonTok, cacheTok); err != nil {
