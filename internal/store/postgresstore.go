@@ -238,9 +238,10 @@ func (s *PostgresStore) BeginExecutionSession(ctx context.Context, record clipro
 	query := fmt.Sprintf(`
 		INSERT INTO %s AS target (
 			session_id, principal, provider, model, auth_id, auth_index,
-			started_at, last_seen_at, finalized, created_at, updated_at
+			started_at, last_seen_at, finalized, created_at, updated_at,
+			input_tokens, output_tokens, reasoning_tokens, cached_tokens, credits
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, FALSE, NOW(), $8)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, FALSE, NOW(), $8, 0, 0, 0, 0, 0)
 		ON CONFLICT (session_id) DO UPDATE
 		SET principal = EXCLUDED.principal,
 			provider = EXCLUDED.provider,
@@ -309,18 +310,22 @@ func (s *PostgresStore) HandleUsage(ctx context.Context, record cliproxyusage.Re
 		creditDelta := cliproxyauth.CalculateTokenCost(record.Model, inDelta, outDelta, reasonDelta, cacheDelta)
 
 		query := fmt.Sprintf(`
-			UPDATE %s
-			SET input_tokens = input_tokens + $2,
-				output_tokens = output_tokens + $3,
-				reasoning_tokens = reasoning_tokens + $4,
-				cached_tokens = cached_tokens + $5,
-				credits = credits + $6,
+			INSERT INTO %s (
+				session_id, model, input_tokens, output_tokens, reasoning_tokens, cached_tokens, credits, updated_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+			ON CONFLICT (session_id) DO UPDATE
+			SET input_tokens = COALESCE(target.input_tokens, 0) + EXCLUDED.input_tokens,
+				output_tokens = COALESCE(target.output_tokens, 0) + EXCLUDED.output_tokens,
+				reasoning_tokens = COALESCE(target.reasoning_tokens, 0) + EXCLUDED.reasoning_tokens,
+				cached_tokens = COALESCE(target.cached_tokens, 0) + EXCLUDED.cached_tokens,
+				credits = COALESCE(target.credits, 0) + EXCLUDED.credits,
 				updated_at = NOW()
-			WHERE session_id = $1
 		`, s.fullTableName(s.cfg.BillingTable))
 
 		_, _ = s.db.ExecContext(updateCtx, query,
 			sessionID,
+			record.Model,
 			inDelta,
 			outDelta,
 			reasonDelta,
