@@ -3,6 +3,13 @@ cli-proxy-api
 *.exe
 *.exe~
 
+# Scratch / local test files (never commit runtime configs with real keys)
+scratch/wireproxy-runtime.conf
+scratch/wireproxy.pid
+scratch/wireproxy.exe
+scratch/config-direct.yaml
+scratch/static/
+
 # Configuration
 config.yaml
 .env

@@ -229,9 +229,10 @@ type QuotaExceeded struct {
 
 // RoutingConfig configures how credentials are selected for requests.
 type RoutingConfig struct {
-	// Strategy selects the credential selection strategy.
-	// Supported values: "round-robin" (default), "fill-first".
-	Strategy string `yaml:"strategy,omitempty" json:"strategy,omitempty"`
+	// Strategy is the credential selection strategy (e.g. "round-robin").
+	Strategy string `yaml:"strategy" json:"strategy"`
+	// UpstreamProxy is an optional proxy URL (e.g. socks5h://127.0.0.1:1080) for all upstream requests.
+	UpstreamProxy string `yaml:"upstream-proxy" json:"upstream-proxy"`
 
 	// ClaudeCodeSessionAffinity enables session-sticky routing for Claude Code clients.
 	// When enabled, requests with the same session ID (extracted from metadata.user_id)
@@ -633,6 +634,18 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 			return &Config{}, nil
 		}
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Proxy resolution priority (highest to lowest):
+	// 1. PROXY_URL env var — runtime override, e.g. for Jetson/restricted networks
+	// 2. routing.upstream-proxy in config.yaml — explicit per-deployment config
+	// 3. proxy-url in config.yaml (SDKConfig.ProxyURL) — legacy/direct field
+	// If nothing is set, direct connection is used (correct for clean VPS like Railway).
+	if envProxy := strings.TrimSpace(os.Getenv("PROXY_URL")); envProxy != "" {
+		cfg.ProxyURL = envProxy
+		cfg.Routing.UpstreamProxy = envProxy
+	} else if cfg.Routing.UpstreamProxy != "" && cfg.ProxyURL == "" {
+		cfg.ProxyURL = cfg.Routing.UpstreamProxy
 	}
 
 	// NOTE: Startup legacy key migration is intentionally disabled.

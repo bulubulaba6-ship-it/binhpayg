@@ -16,13 +16,20 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X 'main.Version=${VERSION
 
 FROM alpine:3.22.0
 
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata netcat-openbsd
 
 RUN mkdir /CLIProxyAPI
+
+# Install wireproxy (Userspace WireGuard to SOCKS5)
+ADD https://github.com/octeep/wireproxy/releases/download/v1.0.7/wireproxy_linux_amd64.tar.gz /tmp/wireproxy.tar.gz
+RUN tar -xzf /tmp/wireproxy.tar.gz -C /usr/local/bin/ wireproxy && chmod +x /usr/local/bin/wireproxy
 
 COPY --from=builder ./app/CLIProxyAPI /CLIProxyAPI/CLIProxyAPI
 
 COPY config.example.yaml /CLIProxyAPI/config.example.yaml
+COPY wireproxy.conf /CLIProxyAPI/wireproxy.conf
+COPY entrypoint.sh /CLIProxyAPI/entrypoint.sh
+RUN chmod +x /CLIProxyAPI/entrypoint.sh
 
 WORKDIR /CLIProxyAPI
 
@@ -32,4 +39,4 @@ ENV TZ=Asia/Shanghai
 
 RUN cp /usr/share/zoneinfo/${TZ} /etc/localtime && echo "${TZ}" > /etc/timezone
 
-CMD ["./CLIProxyAPI"]
+CMD ["./entrypoint.sh"]

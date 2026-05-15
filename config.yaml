@@ -17,6 +17,7 @@ quota-exceeded:
   antigravity-credits: true
 routing:
   strategy: "round-robin"
+  upstream-proxy: "socks5h://127.0.0.1:1080"
 
 # 100% Mirrored Namespaces for Deterministic Agent Behavior
 oauth-model-alias:

@@ -96,19 +96,21 @@ func BuildHTTPTransport(raw string) (*http.Transport, Mode, error) {
 		return NewDirectTransport(), setting.Mode, nil
 	case ModeProxy:
 		if setting.URL.Scheme == "socks5" || setting.URL.Scheme == "socks5h" {
-			var proxyAuth *proxy.Auth
-			if setting.URL.User != nil {
-				username := setting.URL.User.Username()
-				password, _ := setting.URL.User.Password()
-				proxyAuth = &proxy.Auth{User: username, Password: password}
-			}
-			dialer, errSOCKS5 := proxy.SOCKS5("tcp", setting.URL.Host, proxyAuth, proxy.Direct)
-			if errSOCKS5 != nil {
-				return nil, setting.Mode, fmt.Errorf("create SOCKS5 dialer failed: %w", errSOCKS5)
+			// Use proxy.FromURL so that the "socks5h" scheme is passed through
+			// to the underlying SOCKS5 dialer, which instructs it to forward the
+			// hostname to the proxy for remote DNS resolution (no local DNS leak).
+			dialer, errDialer := proxy.FromURL(setting.URL, proxy.Direct)
+			if errDialer != nil {
+				return nil, setting.Mode, fmt.Errorf("create SOCKS5 dialer failed: %w", errDialer)
 			}
 			transport := cloneDefaultTransport()
 			transport.Proxy = nil
-			transport.DialContext = func(_ context.Context, network, addr string) (net.Conn, error) {
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				if cd, ok := dialer.(interface {
+					DialContext(context.Context, string, string) (net.Conn, error)
+				}); ok {
+					return cd.DialContext(ctx, network, addr)
+				}
 				return dialer.Dial(network, addr)
 			}
 			return transport, setting.Mode, nil
