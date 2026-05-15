@@ -1,80 +1,35 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	internalusage "github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
-	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 )
 
 // GetQuota returns the current quota snapshot for the authenticated API key.
+//
+// NOTE: This endpoint is temporarily simplified pending a port to the v7
+// redisqueue-based usage architecture. The internal/usage package was removed
+// by upstream in v7. Full quota tracking will be restored once the migration
+// to internal/redisqueue is complete.
 func (h *BaseAPIHandler) GetQuota(c *gin.Context) {
-	if h == nil || h.AuthManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "quota ledger unavailable"})
-		return
-	}
-
 	principal := quotaPrincipalFromContext(c)
 	if principal == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "api key required"})
 		return
 	}
 
-	requestCtx := context.Background()
-	if c != nil && c.Request != nil {
-		requestCtx = c.Request.Context()
-	}
-	summary, err := h.AuthManager.GetExecutionQuotaSummary(requestCtx, principal)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "quota ledger unavailable"})
-		return
-	}
-
-	usageStats := h.UsageStats
-	if usageStats == nil {
-		usageStats = internalusage.GetRequestStatistics()
-	}
-
-	c.JSON(http.StatusOK, quotaResponse{
-		Quota:     summary,
-		Usage:     buildAPIKeyUsageSummary(usageStats, principal),
-		DebugInfo: "antigravity-v1-verified",
+	c.JSON(http.StatusOK, gin.H{
+		"api_key":    redactKey(strings.TrimSpace(principal)),
+		"status":     "quota_tracking_migrating",
+		"message":    "Quota tracking is being migrated to the v7 redisqueue architecture. Check back soon.",
+		"debug_info": "antigravity-v1-verified",
 	})
 }
 
-type quotaResponse struct {
-	Quota     coreauth.ExecutionQuotaSnapshot `json:"quota"`
-	Usage     apiKeyUsageSummary              `json:"usage"`
-	DebugInfo string                          `json:"debug_info,omitempty"`
-}
-
-type apiKeyUsageSummary struct {
-	// APIKey is redacted: only last 4 characters shown (e.g. "****...a1b2").
-	APIKey          string                                 `json:"api_key"`
-	TotalRequests   int64                                  `json:"total_requests"`
-	SuccessRequests int64                                  `json:"success_requests"`
-	FailedRequests  int64                                  `json:"failed_requests"`
-	TotalTokens     int64                                  `json:"total_tokens"`
-	CachedTokens    int64                                  `json:"cached_tokens"`
-	ReasoningTokens int64                                  `json:"reasoning_tokens"`
-	RPM             float64                                `json:"rpm"`
-	TPM             float64                                `json:"tpm"`
-
-	// Trends provides time-series data for the dashboard charts.
-	Trends struct {
-		Hourly []TrendPoint `json:"hourly"` // Last 24 hours
-		Daily  []TrendPoint `json:"daily"`  // Last 30 days
-	} `json:"trends"`
-
-	// Models keys are aliased — no real provider model IDs exposed.
-	Models map[string]internalusage.ModelSnapshot `json:"models,omitempty"`
-}
-
+// TrendPoint is a single data point for time-series charts.
 type TrendPoint struct {
 	Timestamp string `json:"t"`
 	Requests  int64  `json:"r"`
@@ -90,8 +45,6 @@ func redactKey(key string) string {
 }
 
 // resolveModelAlias maps internal provider model IDs to user-facing aliases.
-// This prevents leaking real Gemini model names and provider architecture.
-// Update this map whenever oauth-model-alias in config.yaml changes.
 func resolveModelAlias(model string) string {
 	m := strings.ToLower(strings.TrimSpace(model))
 	switch {
@@ -106,118 +59,8 @@ func resolveModelAlias(model string) string {
 	case strings.Contains(m, "gemini"):
 		return "claude-sonnet-4-6"
 	default:
-		return model // already an alias or non-Gemini model
+		return model
 	}
-}
-
-// sanitiseDetails strips sensitive fields from per-request detail records.
-// Source (Gmail address / credential file path) and AuthIndex (credential hash)
-// must never be exposed to API key holders.
-func sanitiseDetails(details []internalusage.RequestDetail) []internalusage.RequestDetail {
-	out := make([]internalusage.RequestDetail, len(details))
-	for i, d := range details {
-		out[i] = internalusage.RequestDetail{
-			Timestamp: d.Timestamp,
-			LatencyMs: d.LatencyMs,
-			// Source and AuthIndex intentionally omitted.
-			Tokens: d.Tokens,
-			Failed: d.Failed,
-		}
-	}
-	return out
-}
-
-func buildAPIKeyUsageSummary(stats *internalusage.RequestStatistics, apiKey string) apiKeyUsageSummary {
-	summary := apiKeyUsageSummary{APIKey: redactKey(strings.TrimSpace(apiKey))}
-	if stats == nil || apiKey == "" {
-		return summary
-	}
-
-	snapshot := stats.Snapshot()
-	apiSnapshot, ok := snapshot.APIs[strings.TrimSpace(apiKey)]
-	if !ok {
-		return summary
-	}
-
-	// Rebuild models map with aliased keys and sanitised details.
-	aliasedModels := make(map[string]internalusage.ModelSnapshot, len(apiSnapshot.Models))
-	for rawModel, modelSnapshot := range apiSnapshot.Models {
-		alias := resolveModelAlias(rawModel)
-		existing := aliasedModels[alias]
-		existing.TotalRequests += modelSnapshot.TotalRequests
-		existing.TotalTokens += modelSnapshot.TotalTokens
-		existing.Details = append(existing.Details, sanitiseDetails(modelSnapshot.Details)...)
-		aliasedModels[alias] = existing
-	}
-	summary.Models = aliasedModels
-
-	cutoff := time.Now().UTC().Add(-30 * time.Minute)
-	var recentRequests, recentTokens int64
-
-	for _, modelSnapshot := range apiSnapshot.Models {
-		for _, detail := range modelSnapshot.Details {
-			summary.TotalRequests++
-			if detail.Failed {
-				summary.FailedRequests++
-			} else {
-				summary.SuccessRequests++
-			}
-			if detail.Tokens.CachedTokens > 0 {
-				summary.CachedTokens += detail.Tokens.CachedTokens
-			}
-			if detail.Tokens.ReasoningTokens > 0 {
-				summary.ReasoningTokens += detail.Tokens.ReasoningTokens
-			}
-			totalTokens := detailTotalTokens(detail.Tokens)
-			summary.TotalTokens += totalTokens
-			if !detail.Timestamp.IsZero() && !detail.Timestamp.Before(cutoff) {
-				recentRequests++
-				recentTokens += totalTokens
-			}
-		}
-	}
-
-	summary.RPM = float64(recentRequests) / 30.0
-	summary.TPM = float64(recentTokens) / 30.0
-
-	// Build trends from snapshot data
-	now := time.Now().UTC()
-	// Hourly trend (last 24 hours)
-	for i := 23; i >= 0; i-- {
-		t := now.Add(time.Duration(-i) * time.Hour)
-		key := t.Format("2006-01-02 15")
-		summary.Trends.Hourly = append(summary.Trends.Hourly, TrendPoint{
-			Timestamp: key,
-			Requests:  snapshot.RequestsByHour[key],
-			Tokens:    snapshot.TokensByHour[key],
-		})
-	}
-	// Daily trend (last 30 days)
-	for i := 29; i >= 0; i-- {
-		t := now.AddDate(0, 0, -i)
-		key := t.Format("2006-01-02")
-		summary.Trends.Daily = append(summary.Trends.Daily, TrendPoint{
-			Timestamp: key,
-			Requests:  snapshot.RequestsByDay[key],
-			Tokens:    snapshot.TokensByDay[key],
-		})
-	}
-
-	return summary
-}
-
-func detailTotalTokens(tokens internalusage.TokenStats) int64 {
-	totalTokens := tokens.TotalTokens
-	if totalTokens == 0 {
-		totalTokens = tokens.InputTokens + tokens.OutputTokens + tokens.ReasoningTokens
-	}
-	if totalTokens == 0 {
-		totalTokens = tokens.InputTokens + tokens.OutputTokens + tokens.ReasoningTokens + tokens.CachedTokens
-	}
-	if totalTokens < 0 {
-		return 0
-	}
-	return totalTokens
 }
 
 func quotaPrincipalFromContext(c *gin.Context) string {

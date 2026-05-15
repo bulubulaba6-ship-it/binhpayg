@@ -14,13 +14,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	. "github.com/router-for-me/CLIProxyAPI/v6/internal/constant"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/api/handlers"
+	. "github.com/router-for-me/CLIProxyAPI/v7/internal/constant"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/interfaces"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
@@ -130,7 +129,7 @@ func (h *ClaudeCodeAPIHandler) ClaudeCountTokens(c *gin.Context) {
 // Parameters:
 //   - c: The Gin context for the request.
 func (h *ClaudeCodeAPIHandler) ClaudeModels(c *gin.Context) {
-	models := h.FilterModelsForAPIKey(c, "claude", h.Models())
+	models := h.Models()
 	firstID := ""
 	lastID := ""
 	if len(models) > 0 {
@@ -318,26 +317,11 @@ type claudeErrorResponse struct {
 }
 
 func (h *ClaudeCodeAPIHandler) toClaudeError(msg *interfaces.ErrorMessage) claudeErrorResponse {
-	var errText string
-	if msg != nil && msg.Error != nil {
-		errText = msg.Error.Error()
-	}
-	status := http.StatusInternalServerError
-	if msg.StatusCode > 0 {
-		status = msg.StatusCode
-	}
-
-	if status != http.StatusOK && status != http.StatusBadRequest {
-		errText = "The server is experiencing high concurrency and traffic. Retrying..."
-	} else if status == http.StatusBadRequest && strings.TrimSpace(errText) == "" {
-		errText = "Invalid request payload or parameters."
-	}
-
 	return claudeErrorResponse{
 		Type: "error",
 		Error: claudeErrorDetail{
 			Type:    "api_error",
-			Message: errText,
+			Message: msg.Error.Error(),
 		},
 	}
 }

@@ -60,3 +60,4 @@ _bmad-output/*
 ._*
 
 *bun
+.gocache/

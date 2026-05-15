@@ -14,16 +14,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/logging"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/thinking"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
-	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
-	coreexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/config"
-	sdktranslator "github.com/router-for-me/CLIProxyAPI/v6/sdk/translator"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/interfaces"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/thinking"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
+	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
+	coreexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/config"
+	sdktranslator "github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	"golang.org/x/net/context"
 )
 
@@ -56,6 +54,7 @@ const (
 
 type pinnedAuthContextKey struct{}
 type selectedAuthCallbackContextKey struct{}
+type executionSessionContextKey struct{}
 type disallowFreeAuthContextKey struct{}
 
 // WithPinnedAuthID returns a child context that requests execution on a specific auth ID.
@@ -90,7 +89,7 @@ func WithExecutionSessionID(ctx context.Context, sessionID string) context.Conte
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return context.WithValue(ctx, coreauth.ExecutionSessionContextKey{}, sessionID)
+	return context.WithValue(ctx, executionSessionContextKey{}, sessionID)
 }
 
 // WithDisallowFreeAuth returns a child context that requests skipping known free-tier credentials.
@@ -102,22 +101,18 @@ func WithDisallowFreeAuth(ctx context.Context) context.Context {
 }
 
 // BuildErrorResponseBody builds an OpenAI-compatible JSON error response body.
-// We intercept upstream error texts to obfuscate backend provider details and model names.
+// If errText is already valid JSON, it is returned as-is to preserve upstream error payloads.
 func BuildErrorResponseBody(status int, errText string) []byte {
 	if status <= 0 {
 		status = http.StatusInternalServerError
 	}
-
-	// For any non-200 upstream error (except 400 Bad Request which may indicate a user error like prompt too long),
-	// obfuscate the error message to avoid leaking backend details.
-	if status != http.StatusOK && status != http.StatusBadRequest {
-		errText = "The server is experiencing high concurrency and traffic. Retrying..."
-	} else if status == http.StatusBadRequest && strings.TrimSpace(errText) == "" {
-		errText = "Invalid request payload or parameters."
-	}
-
 	if strings.TrimSpace(errText) == "" {
 		errText = http.StatusText(status)
+	}
+
+	trimmed := strings.TrimSpace(errText)
+	if trimmed != "" && json.Valid([]byte(trimmed)) {
+		return []byte(trimmed)
 	}
 
 	errType := "invalid_request_error"
@@ -203,15 +198,23 @@ func requestExecutionMetadata(ctx context.Context) map[string]any {
 	// Idempotency-Key is an optional client-supplied header used to correlate retries.
 	// Only include it if the client explicitly provides it.
 	key := ""
+	requestPath := ""
 	if ctx != nil {
 		if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil && ginCtx.Request != nil {
 			key = strings.TrimSpace(ginCtx.GetHeader("Idempotency-Key"))
+			requestPath = strings.TrimSpace(ginCtx.FullPath())
+			if requestPath == "" && ginCtx.Request.URL != nil {
+				requestPath = strings.TrimSpace(ginCtx.Request.URL.Path)
+			}
 		}
 	}
 
 	meta := make(map[string]any)
 	if key != "" {
 		meta[idempotencyKeyMetadataKey] = key
+	}
+	if requestPath != "" {
+		meta[coreexecutor.RequestPathMetadataKey] = requestPath
 	}
 	if pinnedAuthID := pinnedAuthIDFromContext(ctx); pinnedAuthID != "" {
 		meta[coreexecutor.PinnedAuthMetadataKey] = pinnedAuthID
@@ -271,7 +274,7 @@ func executionSessionIDFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
-	raw := ctx.Value(coreauth.ExecutionSessionContextKey{})
+	raw := ctx.Value(executionSessionContextKey{})
 	switch v := raw.(type) {
 	case string:
 		return strings.TrimSpace(v)
@@ -299,9 +302,6 @@ type BaseAPIHandler struct {
 
 	// Cfg holds the current application configuration.
 	Cfg *config.SDKConfig
-
-	// UsageStats stores the in-memory usage aggregates used by quota views.
-	UsageStats *usage.RequestStatistics
 }
 
 // NewBaseAPIHandlers creates a new API handlers instance.
@@ -317,7 +317,6 @@ func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *B
 	return &BaseAPIHandler{
 		Cfg:         cfg,
 		AuthManager: authManager,
-		UsageStats:  usage.GetRequestStatistics(),
 	}
 }
 
@@ -328,149 +327,6 @@ func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *B
 //   - clients: The new slice of AI service clients
 //   - cfg: The new application configuration
 func (h *BaseAPIHandler) UpdateClients(cfg *config.SDKConfig) { h.Cfg = cfg }
-
-func requestAPIKeyFromContext(c *gin.Context) string {
-	if c == nil {
-		return ""
-	}
-	if value, exists := c.Get("apiKey"); exists {
-		switch typed := value.(type) {
-		case string:
-			return strings.TrimSpace(typed)
-		case fmt.Stringer:
-			return strings.TrimSpace(typed.String())
-		default:
-			return strings.TrimSpace(fmt.Sprintf("%v", typed))
-		}
-	}
-	return ""
-}
-
-func normalizeModelAllowlist(models []string) map[string]struct{} {
-	if len(models) == 0 {
-		return nil
-	}
-	allowed := make(map[string]struct{}, len(models))
-	for _, model := range models {
-		key := strings.ToLower(strings.TrimSpace(model))
-		if key == "" {
-			continue
-		}
-		allowed[key] = struct{}{}
-	}
-	if len(allowed) == 0 {
-		return nil
-	}
-	return allowed
-}
-
-func modelListingCandidates(model map[string]any) []string {
-	if len(model) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, 3)
-	out := make([]string, 0, 3)
-	add := func(value string) {
-		key := strings.ToLower(strings.TrimSpace(value))
-		if key == "" {
-			return
-		}
-		if _, exists := seen[key]; exists {
-			return
-		}
-		seen[key] = struct{}{}
-		out = append(out, key)
-	}
-	if id, ok := model["id"].(string); ok {
-		add(id)
-	}
-	if name, ok := model["name"].(string); ok {
-		add(name)
-		trimmed := strings.TrimSpace(name)
-		if strings.HasPrefix(strings.ToLower(trimmed), "models/") {
-			add(strings.TrimPrefix(trimmed, "models/"))
-		}
-	}
-	if displayName, ok := model["display_name"].(string); ok {
-		add(displayName)
-	}
-	return out
-}
-
-func modelMatchesAllowlist(model map[string]any, allowed map[string]struct{}) bool {
-	if len(allowed) == 0 || len(model) == 0 {
-		return false
-	}
-	for _, candidate := range modelListingCandidates(model) {
-		if _, ok := allowed[candidate]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func (h *BaseAPIHandler) FilterModelsForAPIKey(c *gin.Context, provider string, models []map[string]any) []map[string]any {
-	if h == nil || c == nil || len(models) == 0 || h.Cfg == nil || len(h.Cfg.APIKeyModels) == 0 {
-		return models
-	}
-	apiKey := requestAPIKeyFromContext(c)
-	if apiKey == "" {
-		return models
-	}
-	providerKey := strings.ToLower(strings.TrimSpace(provider))
-	if providerKey == "" {
-		return models
-	}
-	perKeyModels, ok := h.Cfg.APIKeyModels[apiKey]
-	if !ok || len(perKeyModels) == 0 {
-		return models
-	}
-	allowed := normalizeModelAllowlist(perKeyModels[providerKey])
-	if len(allowed) == 0 {
-		return models
-	}
-	filtered := make([]map[string]any, 0, len(models))
-	for _, model := range models {
-		if modelMatchesAllowlist(model, allowed) {
-			filtered = append(filtered, model)
-		}
-	}
-	return filtered
-}
-
-// FilterModelsForAPIKeyAllProviders filters models using the union of all per-provider
-// allowlists configured for the authenticated API key. This is used by the unified
-// /v1/models endpoint which serves models from all providers at once.
-func (h *BaseAPIHandler) FilterModelsForAPIKeyAllProviders(c *gin.Context, models []map[string]any) []map[string]any {
-	if h == nil || c == nil || len(models) == 0 || h.Cfg == nil || len(h.Cfg.APIKeyModels) == 0 {
-		return models
-	}
-	apiKey := requestAPIKeyFromContext(c)
-	if apiKey == "" {
-		return models
-	}
-	perKeyModels, ok := h.Cfg.APIKeyModels[apiKey]
-	if !ok || len(perKeyModels) == 0 {
-		return models
-	}
-	// Merge allowed models from all configured providers for this key.
-	combined := make(map[string]struct{})
-	for _, providerModels := range perKeyModels {
-		for id, v := range normalizeModelAllowlist(providerModels) {
-			combined[id] = v
-		}
-	}
-	if len(combined) == 0 {
-		return models
-	}
-	filtered := make([]map[string]any, 0, len(models))
-	for _, model := range models {
-		if modelMatchesAllowlist(model, combined) {
-			filtered = append(filtered, model)
-		}
-	}
-	return filtered
-}
 
 // GetAlt extracts the 'alt' parameter from the request query string.
 // It checks both 'alt' and '$alt' parameters and returns the appropriate value.
@@ -495,8 +351,7 @@ func (h *BaseAPIHandler) GetAlt(c *gin.Context) string {
 
 // GetContextWithCancel creates a new context with cancellation capabilities.
 // It embeds the Gin context and the API handler into the new context for later use.
-// Requests without an explicit execution session get a short-lived session so quota
-// accounting can track one-off chat completions.
+// The returned cancel function also handles logging the API response if request logging is enabled.
 //
 // Parameters:
 //   - handler: The API handler associated with the request.
@@ -511,58 +366,47 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	if parentCtx == nil {
 		parentCtx = context.Background()
 	}
-	// Inject Gin context so apiKeyFromContext can read the authenticated principal
-	// downstream in beginExecutionSession → apiKeyFromContext, which looks for the
-	// "gin" key injected by AuthMiddleware via c.Request.Context().
-	if c != nil {
-		parentCtx = context.WithValue(parentCtx, "gin", c)
-		if v, exists := c.Get("apiKey"); exists {
-			parentCtx = context.WithValue(parentCtx, "apiKey", v)
-		}
-	}
-	sessionID := executionSessionIDFromContext(parentCtx)
-	autoSession := false
-	if sessionID == "" {
-		sessionID = uuid.NewString()
-		autoSession = true
-	}
 
 	var requestCtx context.Context
 	if c != nil && c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
 
-
 	if requestCtx != nil && logging.GetRequestID(parentCtx) == "" {
 		if requestID := logging.GetRequestID(requestCtx); requestID != "" {
 			parentCtx = logging.WithRequestID(parentCtx, requestID)
-		} else if requestID := logging.GetGinRequestID(c); requestID != "" {
+		} else if requestID = logging.GetGinRequestID(c); requestID != "" {
 			parentCtx = logging.WithRequestID(parentCtx, requestID)
 		}
 	}
 	newCtx, cancel := context.WithCancel(parentCtx)
-	cancelCtx := newCtx
-	if sessionID != "" {
-		newCtx = WithExecutionSessionID(newCtx, sessionID)
-	}
-	var closeSessionOnce sync.Once
-	closeAutoSession := func() {
-		if !autoSession || sessionID == "" || h == nil || h.AuthManager == nil {
-			return
+
+	endpoint := ""
+	if c != nil && c.Request != nil {
+		path := strings.TrimSpace(c.FullPath())
+		if path == "" && c.Request.URL != nil {
+			path = strings.TrimSpace(c.Request.URL.Path)
 		}
-		closeSessionOnce.Do(func() {
-			h.AuthManager.CloseExecutionSession(sessionID)
-		})
+		if path != "" {
+			method := strings.TrimSpace(c.Request.Method)
+			if method != "" {
+				endpoint = method + " " + path
+			} else {
+				endpoint = path
+			}
+		}
 	}
-	finish := func() {
-		cancel()
-		closeAutoSession()
+	if endpoint != "" {
+		newCtx = logging.WithEndpoint(newCtx, endpoint)
 	}
+	newCtx = logging.WithResponseStatusHolder(newCtx)
+
+	cancelCtx := newCtx
 	if requestCtx != nil && requestCtx != parentCtx {
 		go func() {
 			select {
 			case <-requestCtx.Done():
-				finish()
+				cancel()
 			case <-cancelCtx.Done():
 			}
 		}()
@@ -570,12 +414,15 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	newCtx = context.WithValue(newCtx, "gin", c)
 	newCtx = context.WithValue(newCtx, "handler", handler)
 	return newCtx, func(params ...interface{}) {
+		if c != nil {
+			logging.SetResponseStatus(cancelCtx, c.Writer.Status())
+		}
 		if h.Cfg.RequestLog && len(params) == 1 {
 			if existing, exists := c.Get("API_RESPONSE"); exists {
 				if existingBytes, ok := existing.([]byte); ok && len(bytes.TrimSpace(existingBytes)) > 0 {
 					switch params[0].(type) {
 					case error, string:
-						finish()
+						cancel()
 						return
 					}
 				}
@@ -597,7 +444,7 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 					if existingBytes, ok := existing.([]byte); ok && len(existingBytes) > 0 {
 						trimmedPayload := bytes.TrimSpace(payload)
 						if len(trimmedPayload) > 0 && bytes.Contains(existingBytes, trimmedPayload) {
-							finish()
+							cancel()
 							return
 						}
 					}
@@ -606,7 +453,7 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 			}
 		}
 
-		finish()
+		cancel()
 	}
 }
 
@@ -692,7 +539,7 @@ func (h *BaseAPIHandler) ExecuteWithAuthManager(ctx context.Context, handlerType
 		return nil, nil, errMsg
 	}
 	reqMeta := requestExecutionMetadata(ctx)
-	reqMeta[coreexecutor.RequestedModelMetadataKey] = normalizedModel
+	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
 	payload := rawJSON
 	if len(payload) == 0 {
 		payload = nil
@@ -740,7 +587,7 @@ func (h *BaseAPIHandler) ExecuteCountWithAuthManager(ctx context.Context, handle
 		return nil, nil, errMsg
 	}
 	reqMeta := requestExecutionMetadata(ctx)
-	reqMeta[coreexecutor.RequestedModelMetadataKey] = normalizedModel
+	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
 	payload := rawJSON
 	if len(payload) == 0 {
 		payload = nil
@@ -792,7 +639,7 @@ func (h *BaseAPIHandler) ExecuteStreamWithAuthManager(ctx context.Context, handl
 		return nil, nil, errChan
 	}
 	reqMeta := requestExecutionMetadata(ctx)
-	reqMeta[coreexecutor.RequestedModelMetadataKey] = normalizedModel
+	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
 	payload := rawJSON
 	if len(payload) == 0 {
 		payload = nil
@@ -1003,14 +850,22 @@ func (h *BaseAPIHandler) getRequestDetails(modelName string) (providers []string
 	resolvedModelName := modelName
 	initialSuffix := thinking.ParseSuffix(modelName)
 	if initialSuffix.ModelName == "auto" {
-		resolvedBase := util.ResolveAutoModel(initialSuffix.ModelName)
-		if initialSuffix.HasSuffix {
-			resolvedModelName = fmt.Sprintf("%s(%s)", resolvedBase, initialSuffix.RawSuffix)
+		if h != nil && h.AuthManager != nil && h.AuthManager.HomeEnabled() {
+			resolvedModelName = modelName
 		} else {
-			resolvedModelName = resolvedBase
+			resolvedBase := util.ResolveAutoModel(initialSuffix.ModelName)
+			if initialSuffix.HasSuffix {
+				resolvedModelName = fmt.Sprintf("%s(%s)", resolvedBase, initialSuffix.RawSuffix)
+			} else {
+				resolvedModelName = resolvedBase
+			}
 		}
 	} else {
-		resolvedModelName = util.ResolveAutoModel(modelName)
+		if h != nil && h.AuthManager != nil && h.AuthManager.HomeEnabled() {
+			resolvedModelName = modelName
+		} else {
+			resolvedModelName = util.ResolveAutoModel(modelName)
+		}
 	}
 
 	parsed := thinking.ParseSuffix(resolvedModelName)
@@ -1021,6 +876,10 @@ func (h *BaseAPIHandler) getRequestDetails(modelName string) (providers []string
 			StatusCode: http.StatusServiceUnavailable,
 			Error:      fmt.Errorf("model %s is only supported on /v1/images/generations and /v1/images/edits", baseModel),
 		}
+	}
+
+	if h != nil && h.AuthManager != nil && h.AuthManager.HomeEnabled() {
+		return []string{"home"}, resolvedModelName, nil
 	}
 
 	providers = util.GetProviderName(baseModel)

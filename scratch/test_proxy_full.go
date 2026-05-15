@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Package main: Local integration test for the Proxy + Server pipeline.
 // Tests all cases: Direct mode, Proxy config loading, and real API call routing.
 package main
@@ -12,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/proxyutil"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/proxyutil"
 )
 
 func main() {
