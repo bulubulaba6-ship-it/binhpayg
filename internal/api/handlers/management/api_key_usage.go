@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 )
 
@@ -101,6 +102,19 @@ func (h *Handler) GetAPIKeyUsage(c *gin.Context) {
 			Failed:         auth.Failed,
 			RecentRequests: recent,
 		}
+	}
+
+	// Merge client API key usage into a pseudo-provider "client_api_keys"
+	clientSnapshots := middleware.GetClientUsageSnapshot()
+	if len(clientSnapshots) > 0 {
+		clientBucket := make(map[string]apiKeyUsageEntry, len(clientSnapshots))
+		for apiKey, entry := range clientSnapshots {
+			clientBucket[apiKey] = apiKeyUsageEntry{
+				Success: entry.Success,
+				Failed:  entry.Failed,
+			}
+		}
+		out["client_api_keys"] = clientBucket
 	}
 
 	c.JSON(http.StatusOK, out)

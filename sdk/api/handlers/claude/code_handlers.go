@@ -130,6 +130,10 @@ func (h *ClaudeCodeAPIHandler) ClaudeCountTokens(c *gin.Context) {
 //   - c: The Gin context for the request.
 func (h *ClaudeCodeAPIHandler) ClaudeModels(c *gin.Context) {
 	models := h.Models()
+	
+	// Apply custom API key model filtering
+	models = h.FilterModelsForAPIKeyAllProviders(c, models)
+
 	firstID := ""
 	lastID := ""
 	if len(models) > 0 {
