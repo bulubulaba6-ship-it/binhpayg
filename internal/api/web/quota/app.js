@@ -107,9 +107,7 @@ const app = {
     return rawModel;
   },
 
-  renderCharts: (usageData) => {
-    const models = usageData.models || {};
-
+  renderCharts: (sessions, models) => {
     // 1. Usage Trend (30-day)
     const ctxUsage = document.getElementById('usageChart');
     if (ctxUsage) {
@@ -122,14 +120,15 @@ const app = {
       });
 
       const dayCounts = {};
-      Object.values(models).forEach(m => {
-        (m.details || []).forEach(d => {
-          if (d.timestamp) {
-            const key = new Date(d.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      if (sessions) {
+        sessions.forEach(s => {
+          const ts = s.UpdatedAt || s.StartedAt || s.Timestamp;
+          if (ts) {
+            const key = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             dayCounts[key] = (dayCounts[key] || 0) + 1;
           }
         });
-      });
+      }
 
       app.usageChartInstance = new Chart(ctxUsage, {
         type: 'line',
@@ -336,7 +335,7 @@ const app = {
       }
 
       // Charts + ledger
-      app.renderCharts(data.usage);
+      app.renderCharts(data.quota.recent_sessions, data.usage.models);
       app.renderLedger(data.quota.recent_sessions, data.usage.models);
 
       // Last-updated indicator

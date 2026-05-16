@@ -55,7 +55,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		sessions = entry.Sessions
 
 		for _, s := range entry.Sessions {
-			totalTokens += s.InputTokens + s.OutputTokens + s.CachedTokens
+			totalTokens += s.InputTokens + s.OutputTokens
 			if m, ok := modelsMap[s.Model].(gin.H); ok {
 				m["total_requests"] = m["total_requests"].(int) + 1
 				modelsMap[s.Model] = m
