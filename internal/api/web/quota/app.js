@@ -27,10 +27,10 @@ const app = {
   // Reasoning tokens are billed at output rate (industry standard).
   // Update here whenever you change model-pricing in config.yaml.
   pricing: {
-    'claude-opus-4-7':  { input: 1.0,  output: 3.0,  cache: 0.10  },
-    'claude-opus-4-6':  { input: 0.7,  output: 2.0,  cache: 0.07  },
-    'claude-sonnet-4-6':{ input: 0.3,  output: 1.0,  cache: 0.03  },
-    'claude-haiku-4-5': { input: 0.15, output: 0.5,  cache: 0.015 },
+    'claude-opus-4-7':  { input: 280.0, output: 560.0, cache: 28.0  },
+    'claude-opus-4-6':  { input: 280.0, output: 560.0, cache: 28.0  },
+    'claude-sonnet-4-6':{ input: 210.0, output: 420.0, cache: 21.0  },
+    'claude-haiku-4-5': { input: 175.0, output: 350.0, cache: 17.5  },
   },
 
   // Compute virtual credits for a single session.
@@ -252,10 +252,11 @@ const app = {
     rows.forEach(r => {
       const tr = document.createElement('tr');
       const shortId = r.id.length > 12 ? r.id.substring(0, 8) + '…' : r.id;
+      const reTokPart = r.reasoningTokens > 0 ? ` / ${r.reasoningTokens}` : '';
       tr.innerHTML = `
         <td class="mono" title="${r.id}">${shortId}</td>
         <td>${r.model}</td>
-        <td style="color:var(--text-muted);">${r.inputTokens} / ${r.outputTokens} / ${r.cachedTokens} / ${r.reasoningTokens}</td>
+        <td style="color:var(--text-muted);">${r.inputTokens} / ${r.outputTokens} / ${r.cachedTokens}${reTokPart}</td>
         <td>${app.formatDate(r.timestamp)}</td>
         <td class="text-right"><span class="badge-cost">${r.credits.toFixed(5)} CR</span></td>
       `;
