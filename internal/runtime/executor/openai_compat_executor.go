@@ -176,9 +176,16 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	// Translate response back to source format when needed
 	var param any
 	out := sdktranslator.TranslateNonStream(ctx, to, from, req.Model, opts.OriginalRequest, translated, body, &param)
-	if gjson.ValidBytes(out) {
-		out = e.overrideModel(out, req.Model)
+	
+	// Rewrite the "model" field in the response to the client-visible alias.
+	modelAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
+	if modelAlias == "" {
+		modelAlias = req.Model
 	}
+	if gjson.ValidBytes(out) {
+		out = e.overrideModel(out, modelAlias)
+	}
+	
 	resp = cliproxyexecutor.Response{Payload: out, Headers: httpResp.Header.Clone()}
 	return resp, nil
 }
@@ -312,11 +319,18 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 
 			// OpenAI-compatible streams must use SSE data lines.
 			chunks := sdktranslator.TranslateStream(ctx, to, from, req.Model, opts.OriginalRequest, translated, bytes.Clone(trimmedLine), &param)
+			
+			// Alias to rewrite in response: use the client-visible alias.
+			modelAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
+			if modelAlias == "" {
+				modelAlias = req.Model
+			}
+			
 			for i := range chunks {
 				if bytes.HasPrefix(chunks[i], []byte("data: ")) {
 					jsonPart := bytes.TrimPrefix(chunks[i], []byte("data: "))
 					if !bytes.Equal(bytes.TrimSpace(jsonPart), []byte("[DONE]")) && gjson.ValidBytes(jsonPart) {
-						jsonPart = e.overrideModel(jsonPart, req.Model)
+						jsonPart = e.overrideModel(jsonPart, modelAlias)
 						chunks[i] = append([]byte("data: "), jsonPart...)
 					}
 				}
