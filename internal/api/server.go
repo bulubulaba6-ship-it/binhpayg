@@ -385,8 +385,11 @@ func (s *Server) setupRoutes() {
 	s.engine.GET("/healthz", healthzHandler)
 	s.engine.HEAD("/healthz", healthzHandler)
 	
-	// Legacy dashboard alias
-	s.engine.GET("/quota-check", AuthMiddleware(s.accessManager), s.handlers.GetPostPayQuota)
+	// Legacy dashboard web portal
+	s.engine.GET("/quota-check", func(c *gin.Context) {
+		c.File("internal/api/web/quota/index.html")
+	})
+	s.engine.Static("/static/quota", "internal/api/web/quota")
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)

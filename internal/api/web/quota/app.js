@@ -298,7 +298,7 @@ const app = {
   // ── Core fetch ───────────────────────────────────────────────────────────
   fetchData: async (key, showErrors = true) => {
     try {
-      const res = await fetch('/v1/quota?key=' + encodeURIComponent(key), {
+      const res = await fetch('/v1/billing/quota?key=' + encodeURIComponent(key), {
         headers: { 'Authorization': 'Bearer ' + key }
       });
       if (!res.ok) throw new Error('Authentication failed (' + res.status + ')');
