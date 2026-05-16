@@ -293,6 +293,20 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	// subscribe-config heartbeat connection is healthy.
 	engine.Use(s.homeHeartbeatMiddleware())
 
+	// Initialize isolated post-pay billing ledger
+	if cfg.PostPayBilling.Enabled {
+		ledgerFile := cfg.PostPayBilling.LedgerFile
+		if ledgerFile == "" {
+			ledgerFile = "postpay_ledger.json"
+		}
+		fullLedgerPath := filepath.Join(cfg.AuthDir, ledgerFile)
+		if err := middleware.LoadPostPayUsage(fullLedgerPath); err != nil {
+			log.Errorf("Failed to load post-pay ledger %s: %v", fullLedgerPath, err)
+		}
+		middleware.StartPostPayPersister(fullLedgerPath)
+		log.Infof("Initialized isolated post-pay billing ledger at %s", fullLedgerPath)
+	}
+
 	// Setup routes
 	s.setupRoutes()
 
@@ -384,6 +398,8 @@ func (s *Server) setupRoutes() {
 	v1.Use(middleware.ClientQuotaMiddleware(s.cfg))
 	{
 		v1.GET("/models", s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers))
+		v1.GET("/quota", s.handlers.GetQuota)
+		v1.GET("/billing/quota", s.handlers.GetPostPayQuota)
 		v1.POST("/chat/completions", openaiHandlers.ChatCompletions)
 		v1.POST("/completions", openaiHandlers.Completions)
 		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)

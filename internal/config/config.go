@@ -153,7 +153,23 @@ type Config struct {
 	// Payload defines default and override rules for provider payload parameters.
 	Payload PayloadConfig `yaml:"payload" json:"payload"`
 
+	// PostPayBilling defines isolated tracking and billing logic for specific API keys.
+	PostPayBilling PostPayBillingConfig `yaml:"post-pay-billing" json:"post-pay-billing"`
+
 	legacyMigrationPending bool `yaml:"-" json:"-"`
+}
+
+// PostPayBillingConfig holds the isolated post-pay billing configuration.
+type PostPayBillingConfig struct {
+	Enabled     bool                               `yaml:"enabled" json:"enabled"`
+	LedgerFile  string                             `yaml:"ledger-file" json:"ledger-file"`
+	Clients     map[string]PostPayBillingClientCfg `yaml:"clients" json:"clients"`
+	MarkupRates map[string]ModelPricingEntry      `yaml:"markup-rates" json:"markup-rates"`
+}
+
+// PostPayBillingClientCfg defines settings for a single post-pay client.
+type PostPayBillingClientCfg struct {
+	CreditLimit float64 `yaml:"credit-limit" json:"credit-limit"`
 }
 
 // ModelPricingEntry defines the virtual credit cost per 1M tokens for a specific model alias.

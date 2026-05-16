@@ -338,6 +338,25 @@ nonstream-keepalive-interval: 0
 #     - from: "claude-haiku-4-5-20251001"
 #       to: "gemini-2.5-flash"
 
+# Post-Pay Billing (Isolated Module)
+# This module completely isolates persistent tracking and custom markup rates
+# to only the clients explicitly listed below. It prevents your free-tier users
+# from bloating the JSON ledger and enforces strict 0ms-latency Kill Switches.
+#
+# Your isolated React dashboard can fetch the exact cost and session ledger via:
+# GET /v1/billing/quota?key=your-api-key-3
+#
+# post-pay-billing:
+#   enabled: true
+#   ledger-file: "mrnhan_ledger.json"         # Stored in the auth-dir folder
+#   clients:
+#     "your-api-key-3":
+#       credit-limit: 20000                   # $20.00 USD hard cap (0ms kill switch)
+#   markup-rates:
+#     "claude-opus-4-7": { input: 280, output: 560, cache: 28 }
+#     "claude-sonnet-4-6": { input: 210, output: 420, cache: 21 }
+#     "claude-haiku-4-5": { input: 175, output: 350, cache: 17.5 }
+
 # Global OAuth model name aliases (per channel)
 # These aliases rename model IDs for both model listing and request routing.
 # Supported channels: gemini-cli, vertex, aistudio, antigravity, claude, codex, kimi.

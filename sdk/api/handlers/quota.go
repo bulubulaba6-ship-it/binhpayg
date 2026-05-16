@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
 )
 
 // GetQuota returns the current quota snapshot for the authenticated API key.
@@ -26,6 +27,70 @@ func (h *BaseAPIHandler) GetQuota(c *gin.Context) {
 		"status":     "quota_tracking_migrating",
 		"message":    "Quota tracking is being migrated to the v7 redisqueue architecture. Check back soon.",
 		"debug_info": "antigravity-v1-verified",
+	})
+}
+
+// GetPostPayQuota returns the rich JSON ledger required by the custom isolated React dashboard.
+// It explicitly reads from the isolated postPayUsage map.
+func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
+	principal := quotaPrincipalFromContext(c)
+	if principal == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "api key required"})
+		return
+	}
+
+	snapshot := middleware.GetPostPaySnapshot()
+	var creditsConsumed float64
+	var successCount int64
+	var failedCount int64
+	var totalTokens int64
+
+	modelsMap := gin.H{}
+	var sessions []middleware.SessionSummary
+
+	if entry, exists := snapshot[principal]; exists {
+		creditsConsumed = entry.CreditsConsumed
+		successCount = entry.Success
+		failedCount = entry.Failed
+		sessions = entry.Sessions
+
+		for _, s := range entry.Sessions {
+			totalTokens += s.InputTokens + s.OutputTokens + s.CachedTokens
+			if m, ok := modelsMap[s.Model].(gin.H); ok {
+				m["total_requests"] = m["total_requests"].(int) + 1
+				modelsMap[s.Model] = m
+			} else {
+				modelsMap[s.Model] = gin.H{"total_requests": 1}
+			}
+		}
+	}
+
+	if sessions == nil {
+		sessions = []middleware.SessionSummary{}
+	}
+	
+	// Default to unlimited (-1) unless explicitly configured in PostPayBilling
+	creditLimit := middleware.GetPostPayCreditLimit(principal)
+
+	c.JSON(http.StatusOK, gin.H{
+		"usage": gin.H{
+			"success_requests": successCount,
+			"failed_requests":  failedCount,
+			"total_tokens":     totalTokens,
+			"rpm":              0.0,
+			"models":           modelsMap,
+		},
+		"quota": gin.H{
+			"credits_used":       creditsConsumed,
+			"total_credits_used": creditsConsumed,
+			"credit_limit":       creditLimit,
+			"window_expires_at":  "0001-01-01T00:00:00Z",
+			"recent_sessions":    sessions,
+		},
+		"api_key":    redactKey(strings.TrimSpace(principal)),
+		"status":     "active",
+		"message":    fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", creditsConsumed/1000.0),
+		"debug_info": "aiapigiare-postpay-isolated",
 	})
 }
 
