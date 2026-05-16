@@ -61,3 +61,7 @@ _bmad-output/*
 
 *bun
 .gocache/
+
+test-output
+test-output.exe
+config.yaml.bak
