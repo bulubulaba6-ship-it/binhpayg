@@ -132,8 +132,15 @@ func quotaPrincipalFromContext(c *gin.Context) string {
 	if c == nil {
 		return ""
 	}
-	if value, exists := c.Get("apiKey"); exists {
-		switch typed := value.(type) {
+	
+	// AuthMiddleware in server.go sets "userApiKey"
+	val, exists := c.Get("userApiKey")
+	if !exists {
+		val, exists = c.Get("apiKey") // Fallback
+	}
+	
+	if exists {
+		switch typed := val.(type) {
 		case string:
 			return strings.TrimSpace(typed)
 		case fmt.Stringer:
