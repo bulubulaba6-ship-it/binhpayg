@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
 )
 
 type statusError struct {
@@ -15,7 +14,7 @@ type statusError struct {
 	message string
 }
 
-func (e *statusError) Error() string { return e.message }
+func (e *statusError) Error() string   { return e.message }
 func (e *statusError) StatusCode() int { return e.code }
 
 // ValidateUpstreamResponse ensures that an upstream HTTP response with status 200

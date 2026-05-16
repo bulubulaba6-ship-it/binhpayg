@@ -256,7 +256,7 @@ func resolveUpstreamModelPoolFromAliasTable(m *Manager, auth *Auth, requestedMod
 				out = append(out, resolved)
 			}
 		}
-		
+
 		if len(out) > 0 {
 			return out
 		}

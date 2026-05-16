@@ -37,7 +37,7 @@ func main() {
 		parentEmail := fmt.Sprintf("user_%02d@gmail.com", i)
 		numProjects := rand.Intn(5) + 1 // 1 to 5 projects per account
 		parentProjectCounts[parentEmail] = numProjects
-		
+
 		for p := 1; p <= numProjects; p++ {
 			id := fmt.Sprintf("%s_project_%d", parentEmail, p)
 			auths = append(auths, &auth.Auth{
@@ -67,7 +67,7 @@ func main() {
 
 func testLoadDistribution(provider string, numRequests int, auths []*auth.Auth, ctx context.Context, opts cliproxyexecutor.Options) {
 	selector := &auth.RoundRobinSelector{}
-	
+
 	// Filter auths down to the provider to simulate getAvailableAuths behavior inside Pick
 	var providerAuths []*auth.Auth
 	for _, a := range auths {
@@ -84,9 +84,9 @@ func testLoadDistribution(provider string, numRequests int, auths []*auth.Auth, 
 		if err != nil {
 			panic(err)
 		}
-		
+
 		hitCounts[picked.ID]++
-		
+
 		parent := picked.ID
 		if p, ok := picked.Attributes["gemini_virtual_parent"]; ok && p != "" {
 			parent = p
@@ -132,7 +132,7 @@ func testLoadDistribution(provider string, numRequests int, auths []*auth.Auth, 
 		for i := 1; i <= 3; i++ {
 			parentEmail := fmt.Sprintf("user_%02d@gmail.com", i)
 			fmt.Printf("  %s (Total hits: %d)\n", parentEmail, parentHits[parentEmail])
-			
+
 			// Find all projects for this parent
 			var projects []string
 			for id, hits := range hitCounts {

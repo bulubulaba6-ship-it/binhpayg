@@ -89,7 +89,7 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					limit = customLimit
 				}
 			}
-			
+
 			if limit > 0 {
 				clientUsageMu.RLock()
 				entry, exists := clientUsage[apiKey]

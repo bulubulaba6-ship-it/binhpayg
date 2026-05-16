@@ -404,7 +404,7 @@ func TestGetExecutionQuotaSummary_RecentSessionsCappedAt20(t *testing.T) {
 	now := time.Now().UTC()
 
 	for i := 0; i < 25; i++ {
-		id := string(rune('A' + i % 26)) + string(rune('0' + i % 10))
+		id := string(rune('A'+i%26)) + string(rune('0'+i%10))
 		start := now.Add(-time.Duration(i+1) * time.Minute)
 		mustBeginSession(t, l, ExecutionSessionRecord{
 			SessionID: id, Principal: "user-a", Model: "claude-haiku-4-5",

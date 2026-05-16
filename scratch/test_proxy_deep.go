@@ -21,14 +21,14 @@ func main() {
 
 	// 2. Load Config
 	cfg, _ := config.LoadConfig("config.yaml")
-	
+
 	// 3. Khởi tạo Client dùng logic Proxy của hệ thống
 	httpClient := &http.Client{Timeout: 3 * time.Second}
 	util.SetProxy(&cfg.SDKConfig, httpClient)
 
 	fmt.Printf("🚀 Đang thử gửi request tới: %s\n", ts.URL)
 	fmt.Printf("🛡️ Proxy đang bật: %s\n", cfg.ProxyURL)
-	
+
 	_, err := httpClient.Get(ts.URL)
 
 	if err != nil && (fmt.Sprintf("%v", err) != "") {

@@ -17,10 +17,10 @@ func (s *Server) serveAPIKeyQuotaViewer(c *gin.Context) {
 	if path == "" || path == "/" {
 		path = "index.html"
 	}
-	
+
 	// Remove leading slash if present
 	path = strings.TrimPrefix(path, "/")
-	
+
 	fileData, err := quotaWebFS.ReadFile("web/quota/" + path)
 	if err != nil {
 		c.String(http.StatusNotFound, "File not found")
