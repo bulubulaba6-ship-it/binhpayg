@@ -37,7 +37,6 @@ type PostPayUsageEntry struct {
 	Success         int64            `json:"Success"`
 	Failed          int64            `json:"Failed"`
 	Timestamp       time.Time        `json:"Timestamp"`
-	TotalTokens     int64            `json:"TotalTokens"`
 	Sessions        []SessionSummary `json:"Sessions,omitempty"`
 }
 
@@ -95,7 +94,6 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				postPayUsage[apiKey] = entry
 			}
 			entry.CreditsConsumed += credits
-			entry.TotalTokens += record.Detail.InputTokens + record.Detail.OutputTokens
 			if success {
 				entry.Success++
 				entry.Sessions = append([]SessionSummary{{

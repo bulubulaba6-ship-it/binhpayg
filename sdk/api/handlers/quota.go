@@ -52,14 +52,14 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		totalCredits = entry.CreditsConsumed
 		successCount = entry.Success
 		failedCount = entry.Failed
-		totalTokens = entry.TotalTokens
 		sessions = entry.Sessions
 	}
 
-	// Compute model breakdown from the session window (last 100).
+	// Compute model breakdown and token totals from the session window (last 100).
 	// These are the sessions we have full token detail for.
 	modelsMap := gin.H{}
 	for _, s := range sessions {
+		totalTokens += s.InputTokens + s.OutputTokens
 		if m, ok := modelsMap[s.Model].(gin.H); ok {
 			m["total_requests"] = m["total_requests"].(int) + 1
 			modelsMap[s.Model] = m
