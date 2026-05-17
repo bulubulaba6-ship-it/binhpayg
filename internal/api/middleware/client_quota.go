@@ -307,18 +307,48 @@ func LoadPostPayUsage(filePath string) error {
 		return err
 	}
 
-	// Backwards compatibility migration: initialize all-time counters from legacy sessions
-	// if they were not present in the JSON file.
+	// Backwards compatibility migration: extrapolate all-time counters from legacy sessions
 	for _, entry := range postPayUsage {
+		sessionCount := int64(len(entry.Sessions))
+		
 		if entry.Models == nil || len(entry.Models) == 0 {
 			entry.Models = make(map[string]int64)
+			var sessionModels = make(map[string]int64)
 			for _, s := range entry.Sessions {
-				entry.Models[s.Model]++
+				sessionModels[s.Model]++
+			}
+			
+			if sessionCount > 0 && entry.Success > sessionCount {
+				multiplier := float64(entry.Success) / float64(sessionCount)
+				var assigned int64
+				var lastModel string
+				for model, count := range sessionModels {
+					extrapolated := int64(float64(count) * multiplier)
+					entry.Models[model] = extrapolated
+					assigned += extrapolated
+					lastModel = model
+				}
+				// Fix rounding errors so it perfectly sums to Success count
+				if assigned < entry.Success && lastModel != "" {
+					entry.Models[lastModel] += (entry.Success - assigned)
+				}
+			} else {
+				for model, count := range sessionModels {
+					entry.Models[model] = count
+				}
 			}
 		}
+
 		if entry.TotalTokens == 0 {
+			var sessionTokens int64
 			for _, s := range entry.Sessions {
-				entry.TotalTokens += s.InputTokens + s.OutputTokens
+				sessionTokens += s.InputTokens + s.OutputTokens
+			}
+			if sessionCount > 0 && entry.Success > sessionCount {
+				multiplier := float64(entry.Success) / float64(sessionCount)
+				entry.TotalTokens = int64(float64(sessionTokens) * multiplier)
+			} else {
+				entry.TotalTokens = sessionTokens
 			}
 		}
 	}
