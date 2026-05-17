@@ -173,6 +173,14 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
+		// Never block read-only informational endpoints — the user must always
+		// be able to check their quota, models list, and billing dashboard,
+		// even if they have exceeded the credit limit.
+		// Only inference (POST) routes are subject to the kill-switch.
+		if c.Request.Method == http.MethodGet {
+			c.Next()
+			return
+		}
 		// Isolated Post-Pay Kill Switch (reads live config — hot-reload aware)
 		if liveCfg.PostPayBilling.Enabled {
 			if clientCfg, ok := liveCfg.PostPayBilling.Clients[apiKey]; ok {
