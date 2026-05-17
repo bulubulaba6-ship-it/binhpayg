@@ -52,6 +52,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		totalCredits = entry.CreditsConsumed
 		successCount = entry.Success
 		failedCount = entry.Failed
+		totalTokens = entry.TotalTokens
 		sessions = entry.Sessions
 	}
 
@@ -72,9 +73,6 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		}
 	}
 	
-	for _, s := range sessions {
-		totalTokens += s.InputTokens + s.OutputTokens
-	}
 
 	// 5h window credits: sum credits only from sessions within the last 5 hours.
 	// The ledger keeps the last 100 sessions with timestamps, so we can compute this.

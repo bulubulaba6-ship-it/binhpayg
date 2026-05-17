@@ -37,6 +37,7 @@ type PostPayUsageEntry struct {
 	Success         int64            `json:"Success"`
 	Failed          int64            `json:"Failed"`
 	Timestamp       time.Time        `json:"Timestamp"`
+	TotalTokens     int64            `json:"TotalTokens"`
 	Models          map[string]int64 `json:"Models,omitempty"`
 	Sessions        []SessionSummary `json:"Sessions,omitempty"`
 }
@@ -95,6 +96,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				postPayUsage[apiKey] = entry
 			}
 			entry.CreditsConsumed += credits
+			entry.TotalTokens += record.Detail.InputTokens + record.Detail.OutputTokens
 			if success {
 				entry.Success++
 				if entry.Models == nil {
@@ -300,7 +302,27 @@ func LoadPostPayUsage(filePath string) error {
 		}
 		return err
 	}
-	return json.Unmarshal(data, &postPayUsage)
+	err = json.Unmarshal(data, &postPayUsage)
+	if err != nil {
+		return err
+	}
+
+	// Backwards compatibility migration: initialize all-time counters from legacy sessions
+	// if they were not present in the JSON file.
+	for _, entry := range postPayUsage {
+		if entry.Models == nil || len(entry.Models) == 0 {
+			entry.Models = make(map[string]int64)
+			for _, s := range entry.Sessions {
+				entry.Models[s.Model]++
+			}
+		}
+		if entry.TotalTokens == 0 {
+			for _, s := range entry.Sessions {
+				entry.TotalTokens += s.InputTokens + s.OutputTokens
+			}
+		}
+	}
+	return nil
 }
 
 // SavePostPayUsage saves the current post-pay token ledger to disk atomically.
