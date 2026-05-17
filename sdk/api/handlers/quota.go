@@ -55,17 +55,25 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		sessions = entry.Sessions
 	}
 
-	// Compute model breakdown and token totals from the session window (last 100).
-	// These are the sessions we have full token detail for.
 	modelsMap := gin.H{}
+	if entry.Models != nil && len(entry.Models) > 0 {
+		for modelAlias, count := range entry.Models {
+			modelsMap[modelAlias] = gin.H{"total_requests": count}
+		}
+	} else {
+		// Fallback for missing Models (before we started tracking it)
+		for _, s := range sessions {
+			if m, ok := modelsMap[s.Model].(gin.H); ok {
+				m["total_requests"] = m["total_requests"].(int) + 1
+				modelsMap[s.Model] = m
+			} else {
+				modelsMap[s.Model] = gin.H{"total_requests": 1}
+			}
+		}
+	}
+	
 	for _, s := range sessions {
 		totalTokens += s.InputTokens + s.OutputTokens
-		if m, ok := modelsMap[s.Model].(gin.H); ok {
-			m["total_requests"] = m["total_requests"].(int) + 1
-			modelsMap[s.Model] = m
-		} else {
-			modelsMap[s.Model] = gin.H{"total_requests": 1}
-		}
 	}
 
 	// 5h window credits: sum credits only from sessions within the last 5 hours.

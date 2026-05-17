@@ -200,9 +200,7 @@ const app = {
                 label: (ctx) => {
                   const label = ctx.label || '';
                   const count = ctx.raw || 0;
-                  const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                  const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
-                  return ` ${label}: ${count} reqs (${pct}%)`;
+                  return ` ${label}: ${app.formatNumber(count)}`;
                 }
               }
             }

@@ -37,6 +37,7 @@ type PostPayUsageEntry struct {
 	Success         int64            `json:"Success"`
 	Failed          int64            `json:"Failed"`
 	Timestamp       time.Time        `json:"Timestamp"`
+	Models          map[string]int64 `json:"Models,omitempty"`
 	Sessions        []SessionSummary `json:"Sessions,omitempty"`
 }
 
@@ -96,6 +97,10 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 			entry.CreditsConsumed += credits
 			if success {
 				entry.Success++
+				if entry.Models == nil {
+					entry.Models = make(map[string]int64)
+				}
+				entry.Models[record.Alias]++
 				entry.Sessions = append([]SessionSummary{{
 					SessionID:       record.SessionID,
 					Model:           record.Alias,
