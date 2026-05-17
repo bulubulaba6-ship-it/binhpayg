@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
@@ -65,6 +66,17 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		}
 	}
 
+	// Compute real RPM: count sessions in the last 30 minutes, divide by 30.
+	window := 30 * time.Minute
+	cutoff := time.Now().Add(-window)
+	var recentRequests int64
+	for _, s := range sessions {
+		if s.Timestamp.After(cutoff) {
+			recentRequests++
+		}
+	}
+	rpm := float64(recentRequests) / 30.0
+
 	if sessions == nil {
 		sessions = []middleware.SessionSummary{}
 	}
@@ -77,7 +89,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"success_requests": successCount,
 			"failed_requests":  failedCount,
 			"total_tokens":     totalTokens,
-			"rpm":              0.0,
+			"rpm":              rpm,
 			"models":           modelsMap,
 		},
 		"quota": gin.H{
