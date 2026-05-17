@@ -194,11 +194,26 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				if clientCfg.CreditLimit > 0 {
 					postPayUsageMu.RLock()
 					entry, exists := postPayUsage[apiKey]
+					
+					var fiveHCredits float64
+					if exists && entry != nil {
+						fiveHCutoff := time.Now().Add(-5 * time.Hour)
+						for _, s := range entry.Sessions {
+							if s.Timestamp.After(fiveHCutoff) {
+								if pricing, ok := liveCfg.ModelPricing[s.Model]; ok {
+									fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
+									fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
+									fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
+								}
+							}
+						}
+					}
 					postPayUsageMu.RUnlock()
-					if exists && entry.CreditsConsumed >= clientCfg.CreditLimit {
+					
+					if exists && fiveHCredits >= clientCfg.CreditLimit {
 						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 							"error": gin.H{
-								"message": "insufficient_quota: You exceeded your current quota, please check your plan and billing details.",
+								"message": "insufficient_quota: You exceeded your 5-hour window quota, please check your plan and billing details.",
 								"type":    "insufficient_quota",
 								"code":    "insufficient_quota",
 							},
