@@ -297,7 +297,7 @@ const app = {
     const info = document.getElementById('ledgerPageInfo');
     const prev = document.getElementById('ledgerPrev');
     const next = document.getElementById('ledgerNext');
-    if (info) info.textContent = `Page ${app._ledgerPage + 1} of ${totalPages} (${rows.length} sessions)`;
+    if (info) info.textContent = `Page ${app._ledgerPage + 1} of ${totalPages} · showing ${rows.length} most recent sessions`;
     if (prev) prev.disabled = app._ledgerPage === 0;
     if (next) next.disabled = app._ledgerPage >= totalPages - 1;
     const pg = document.getElementById('ledgerPagination');
