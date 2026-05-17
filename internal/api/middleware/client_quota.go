@@ -39,6 +39,7 @@ type PostPayUsageEntry struct {
 	Timestamp       time.Time        `json:"Timestamp"`
 	TotalTokens     int64            `json:"TotalTokens"`
 	Models          map[string]int64 `json:"Models,omitempty"`
+	DailyRequests   map[string]int64 `json:"DailyRequests,omitempty"`
 	Sessions        []SessionSummary `json:"Sessions,omitempty"`
 }
 
@@ -103,6 +104,10 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					entry.Models = make(map[string]int64)
 				}
 				entry.Models[record.Alias]++
+				if entry.DailyRequests == nil {
+					entry.DailyRequests = make(map[string]int64)
+				}
+				entry.DailyRequests[time.Now().Format("2006-01-02")]++
 				entry.Sessions = append([]SessionSummary{{
 					SessionID:       record.SessionID,
 					Model:           record.Alias,
@@ -350,6 +355,35 @@ func LoadPostPayUsage(filePath string) error {
 			} else {
 				for model, count := range sessionModels {
 					entry.Models[model] = count
+				}
+			}
+		}
+
+		if entry.DailyRequests == nil || len(entry.DailyRequests) == 0 {
+			entry.DailyRequests = make(map[string]int64)
+			var sessionDays = make(map[string]int64)
+			for _, s := range entry.Sessions {
+				dayStr := s.Timestamp.Format("2006-01-02")
+				sessionDays[dayStr]++
+			}
+			
+			if sessionCount > 0 && entry.Success > sessionCount {
+				multiplier := float64(entry.Success) / float64(sessionCount)
+				var assigned int64
+				var lastDay string
+				for day, count := range sessionDays {
+					extrapolated := int64(float64(count) * multiplier)
+					entry.DailyRequests[day] = extrapolated
+					assigned += extrapolated
+					lastDay = day
+				}
+				// Fix rounding errors so it perfectly sums to Success count
+				if assigned < entry.Success && lastDay != "" {
+					entry.DailyRequests[lastDay] += (entry.Success - assigned)
+				}
+			} else {
+				for day, count := range sessionDays {
+					entry.DailyRequests[day] = count
 				}
 			}
 		}

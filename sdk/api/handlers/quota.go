@@ -45,6 +45,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	var successCount int64
 	var failedCount int64
 	var totalTokens int64
+	var dailyRequests map[string]int64
 
 	var sessions []middleware.SessionSummary
 
@@ -56,6 +57,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		failedCount = e.Failed
 		totalTokens = e.TotalTokens
 		sessions = e.Sessions
+		dailyRequests = e.DailyRequests
 	}
 
 	modelsMap := gin.H{}
@@ -118,6 +120,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"total_tokens":     totalTokens,
 			"rpm":              rpm,
 			"models":           modelsMap,
+			"daily_requests":   dailyRequests,
 		},
 		"quota": gin.H{
 			"credits_used":       fiveHCredits,   // 5-hour rolling window
