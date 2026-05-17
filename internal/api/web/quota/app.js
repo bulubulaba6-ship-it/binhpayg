@@ -12,6 +12,10 @@ const app = {
   CACHE_TTL: 5 * 60 * 1000,        // 5 minutes
   REFRESH_INTERVAL: 30 * 1000,     // 30 seconds (matches usage aggregation cycle)
 
+  // ── Ledger pagination state ──────────────────────────────────────────────
+  _ledgerRows: [],
+  _ledgerPage: 0,
+  _ledgerPageSize: 20,
   // ── Null-safe DOM helpers ────────────────────────────────────────────────
   setText: (id, value) => {
     const el = document.getElementById(id);
@@ -190,7 +194,18 @@ const app = {
           maintainAspectRatio: false,
           cutout: '68%',
           plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 10, padding: 14, font: { size: 12 } } }
+            legend: { position: 'bottom', labels: { boxWidth: 10, padding: 14, font: { size: 12 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const label = ctx.label || '';
+                  const count = ctx.raw || 0;
+                  const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                  const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+                  return ` ${label}: ${count} reqs (${pct}%)`;
+                }
+              }
+            }
           }
         }
       });
@@ -199,14 +214,8 @@ const app = {
 
   // ── Ledger ───────────────────────────────────────────────────────────────
   renderLedger: (sessions, usageModels) => {
-    const tbody = document.getElementById('historyBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
     let rows = [];
-
     if (sessions && sessions.length > 0) {
-      // Postgres-backed rows (full persistent history)
       rows = sessions.map(s => {
         const alias = app.resolveAlias(s.Model || '');
         const inTok  = s.InputTokens     || 0;
@@ -222,7 +231,6 @@ const app = {
         };
       });
     } else if (usageModels && Object.keys(usageModels).length > 0) {
-      // In-memory fallback: flatten model details into rows
       Object.keys(usageModels).forEach(rawModel => {
         const alias = app.resolveAlias(rawModel);
         (usageModels[rawModel].details || []).forEach(d => {
@@ -242,26 +250,59 @@ const app = {
       });
       rows.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
+    // Store all rows, reset to page 0
+    app._ledgerRows = rows;
+    app._ledgerPage = 0;
+    app._renderLedgerPage();
+  },
 
-    if (rows.length === 0) {
+  _renderLedgerPage: () => {
+    const tbody = document.getElementById('historyBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const rows = app._ledgerRows;
+    const pageSize = app._ledgerPageSize;
+    const page = app._ledgerPage;
+    const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+
+    // Clamp page
+    if (page >= totalPages) app._ledgerPage = totalPages - 1;
+    if (app._ledgerPage < 0) app._ledgerPage = 0;
+
+    const start = app._ledgerPage * pageSize;
+    const pageRows = rows.slice(start, start + pageSize);
+
+    if (pageRows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:40px;">No recent session activity</td></tr>';
-      return;
+    } else {
+      pageRows.forEach(r => {
+        const tr = document.createElement('tr');
+        const shortId = r.id.length > 12 ? r.id.substring(0, 8) + '…' : r.id;
+        const reTokPart = r.reasoningTokens > 0 ? ` / ${r.reasoningTokens}` : '';
+        tr.innerHTML = `
+          <td class="mono" title="${r.id}">${shortId}</td>
+          <td>${r.model}</td>
+          <td style="color:var(--text-muted);">${r.inputTokens} / ${r.outputTokens} / ${r.cachedTokens}${reTokPart}</td>
+          <td>${app.formatDate(r.timestamp)}</td>
+          <td class="text-right"><span class="badge-cost">${r.credits.toFixed(5)} CR</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
     }
 
-    rows.forEach(r => {
-      const tr = document.createElement('tr');
-      const shortId = r.id.length > 12 ? r.id.substring(0, 8) + '…' : r.id;
-      const reTokPart = r.reasoningTokens > 0 ? ` / ${r.reasoningTokens}` : '';
-      tr.innerHTML = `
-        <td class="mono" title="${r.id}">${shortId}</td>
-        <td>${r.model}</td>
-        <td style="color:var(--text-muted);">${r.inputTokens} / ${r.outputTokens} / ${r.cachedTokens}${reTokPart}</td>
-        <td>${app.formatDate(r.timestamp)}</td>
-        <td class="text-right"><span class="badge-cost">${r.credits.toFixed(5)} CR</span></td>
-      `;
-      tbody.appendChild(tr);
-    });
+    // Update pagination controls
+    const info = document.getElementById('ledgerPageInfo');
+    const prev = document.getElementById('ledgerPrev');
+    const next = document.getElementById('ledgerNext');
+    if (info) info.textContent = `Page ${app._ledgerPage + 1} of ${totalPages} (${rows.length} sessions)`;
+    if (prev) prev.disabled = app._ledgerPage === 0;
+    if (next) next.disabled = app._ledgerPage >= totalPages - 1;
+    const pg = document.getElementById('ledgerPagination');
+    if (pg) pg.style.display = rows.length > pageSize ? 'flex' : 'none';
   },
+
+  ledgerPrev: () => { app._ledgerPage--; app._renderLedgerPage(); },
+  ledgerNext: () => { app._ledgerPage++; app._renderLedgerPage(); },
 
   // ── Auto-refresh ─────────────────────────────────────────────────────────
   startAutoRefresh: (key) => {

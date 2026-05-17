@@ -41,37 +41,56 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	}
 
 	snapshot := middleware.GetPostPaySnapshot()
-	var creditsConsumed float64
+	var totalCredits float64  // all-time cumulative (from ledger)
 	var successCount int64
 	var failedCount int64
 	var totalTokens int64
 
-	modelsMap := gin.H{}
 	var sessions []middleware.SessionSummary
 
 	if entry, exists := snapshot[principal]; exists {
-		creditsConsumed = entry.CreditsConsumed
+		totalCredits = entry.CreditsConsumed
 		successCount = entry.Success
 		failedCount = entry.Failed
 		sessions = entry.Sessions
+	}
 
-		for _, s := range entry.Sessions {
-			totalTokens += s.InputTokens + s.OutputTokens
-			if m, ok := modelsMap[s.Model].(gin.H); ok {
-				m["total_requests"] = m["total_requests"].(int) + 1
-				modelsMap[s.Model] = m
-			} else {
-				modelsMap[s.Model] = gin.H{"total_requests": 1}
+	// Compute model breakdown and token totals from the session window (last 100).
+	// These are the sessions we have full token detail for.
+	modelsMap := gin.H{}
+	for _, s := range sessions {
+		totalTokens += s.InputTokens + s.OutputTokens
+		if m, ok := modelsMap[s.Model].(gin.H); ok {
+			m["total_requests"] = m["total_requests"].(int) + 1
+			modelsMap[s.Model] = m
+		} else {
+			modelsMap[s.Model] = gin.H{"total_requests": 1}
+		}
+	}
+
+	// 5h window credits: sum credits only from sessions within the last 5 hours.
+	// The ledger keeps the last 100 sessions with timestamps, so we can compute this.
+	fiveHCutoff := time.Now().Add(-5 * time.Hour)
+	var fiveHCredits float64
+	// We use the per-session markup rates from live config for accuracy.
+	liveCfg := middleware.GetLiveConfig()
+	for _, s := range sessions {
+		if s.Timestamp.After(fiveHCutoff) {
+			if liveCfg != nil {
+				if pricing, ok := liveCfg.PostPayBilling.MarkupRates[s.Model]; ok {
+					fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
+					fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
+					fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
+				}
 			}
 		}
 	}
 
-	// Compute real RPM: count sessions in the last 30 minutes, divide by 30.
-	window := 30 * time.Minute
-	cutoff := time.Now().Add(-window)
+	// RPM: sessions in last 30 minutes ÷ 30.
+	rpmCutoff := time.Now().Add(-30 * time.Minute)
 	var recentRequests int64
 	for _, s := range sessions {
-		if s.Timestamp.After(cutoff) {
+		if s.Timestamp.After(rpmCutoff) {
 			recentRequests++
 		}
 	}
@@ -80,7 +99,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	if sessions == nil {
 		sessions = []middleware.SessionSummary{}
 	}
-	
+
 	// Default to unlimited (-1) unless explicitly configured in PostPayBilling
 	creditLimit := middleware.GetPostPayCreditLimit(principal)
 
@@ -93,18 +112,19 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"models":           modelsMap,
 		},
 		"quota": gin.H{
-			"credits_used":       creditsConsumed,
-			"total_credits_used": creditsConsumed,
+			"credits_used":       fiveHCredits,   // 5-hour rolling window
+			"total_credits_used": totalCredits,   // all-time cumulative
 			"credit_limit":       creditLimit,
 			"window_expires_at":  "0001-01-01T00:00:00Z",
 			"recent_sessions":    sessions,
 		},
 		"api_key":    redactKey(strings.TrimSpace(principal)),
 		"status":     "active",
-		"message":    fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", creditsConsumed/1000.0),
+		"message":    fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),
 		"debug_info": "aiapigiare-postpay-isolated",
 	})
 }
+
 
 // TrendPoint is a single data point for time-series charts.
 type TrendPoint struct {

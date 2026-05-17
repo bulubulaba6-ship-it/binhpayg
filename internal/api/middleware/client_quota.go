@@ -263,11 +263,21 @@ func GetPostPaySnapshot() map[string]PostPayUsageEntry {
 	return out
 }
 
+// GetLiveConfig returns the current live config snapshot (hot-reload aware, thread-safe).
+func GetLiveConfig() *config.Config {
+	liveCfgMu.RLock()
+	defer liveCfgMu.RUnlock()
+	return globalConfig
+}
+
 // GetPostPayCreditLimit returns the configured credit limit for a given API key.
 // Returns -1 if no specific limit is configured.
 func GetPostPayCreditLimit(apiKey string) float64 {
-	if globalConfig != nil && globalConfig.PostPayBilling.Enabled {
-		if clientCfg, ok := globalConfig.PostPayBilling.Clients[apiKey]; ok && clientCfg.CreditLimit > 0 {
+	liveCfgMu.RLock()
+	cfg := globalConfig
+	liveCfgMu.RUnlock()
+	if cfg != nil && cfg.PostPayBilling.Enabled {
+		if clientCfg, ok := cfg.PostPayBilling.Clients[apiKey]; ok && clientCfg.CreditLimit > 0 {
 			return clientCfg.CreditLimit
 		}
 	}

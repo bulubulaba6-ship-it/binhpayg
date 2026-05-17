@@ -129,6 +129,14 @@
           </tbody>
         </table>
       </div>
+      <!-- Ledger pagination -->
+      <div id="ledgerPagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 2px;font-size:13px;color:var(--text-muted);">
+        <span id="ledgerPageInfo"></span>
+        <div style="display:flex;gap:6px;">
+          <button id="ledgerPrev" onclick="app.ledgerPrev()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;">← Prev</button>
+          <button id="ledgerNext" onclick="app.ledgerNext()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;">Next →</button>
+        </div>
+      </div>
     </div>
 
   </main>
