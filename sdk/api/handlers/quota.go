@@ -48,21 +48,23 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 
 	var sessions []middleware.SessionSummary
 
-	if entry, exists := snapshot[principal]; exists {
-		totalCredits = entry.CreditsConsumed
-		successCount = entry.Success
-		failedCount = entry.Failed
-		totalTokens = entry.TotalTokens
-		sessions = entry.Sessions
+	var entry *middleware.PostPayUsageEntry
+	if e, exists := snapshot[principal]; exists {
+		entry = &e
+		totalCredits = e.CreditsConsumed
+		successCount = e.Success
+		failedCount = e.Failed
+		totalTokens = e.TotalTokens
+		sessions = e.Sessions
 	}
 
 	modelsMap := gin.H{}
-	if entry.Models != nil && len(entry.Models) > 0 {
+	if entry != nil && len(entry.Models) > 0 {
 		for modelAlias, count := range entry.Models {
 			modelsMap[modelAlias] = gin.H{"total_requests": count}
 		}
 	} else {
-		// Fallback for missing Models (before we started tracking it)
+		// Fallback: build from the last 100 sessions (before persistent Models tracking)
 		for _, s := range sessions {
 			if m, ok := modelsMap[s.Model].(gin.H); ok {
 				m["total_requests"] = m["total_requests"].(int) + 1
