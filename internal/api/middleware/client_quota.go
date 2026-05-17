@@ -47,12 +47,16 @@ var (
 	postPayUsageMu sync.RWMutex
 	postPayUsage   = make(map[string]*PostPayUsageEntry)
 
-	globalConfig  *config.Config
+	liveCfgMu    sync.RWMutex
+	globalConfig *config.Config
 )
 
-// SetClientQuotaConfig injects the global config to evaluate limits.
+// SetClientQuotaConfig injects the live config so the middleware always reads the latest
+// credit-limit and billing settings without requiring a server restart.
 func SetClientQuotaConfig(cfg *config.Config) {
+	liveCfgMu.Lock()
 	globalConfig = cfg
+	liveCfgMu.Unlock()
 }
 
 func init() {
@@ -71,10 +75,13 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 	success := !record.Failed
 
 	// Isolated Post-Pay Billing Logic
-	if globalConfig != nil && globalConfig.PostPayBilling.Enabled {
-		if _, isPostPay := globalConfig.PostPayBilling.Clients[apiKey]; isPostPay {
+	liveCfgMu.RLock()
+	liveCfg := globalConfig
+	liveCfgMu.RUnlock()
+	if liveCfg != nil && liveCfg.PostPayBilling.Enabled {
+		if _, isPostPay := liveCfg.PostPayBilling.Clients[apiKey]; isPostPay {
 			var credits float64 = 0
-			if pricing, ok := globalConfig.PostPayBilling.MarkupRates[alias]; ok {
+			if pricing, ok := liveCfg.PostPayBilling.MarkupRates[alias]; ok {
 				credits += float64(record.Detail.InputTokens) * pricing.Input / 1_000_000.0
 				credits += float64(record.Detail.OutputTokens) * pricing.Output / 1_000_000.0
 				credits += float64(record.Detail.CachedTokens) * pricing.Cache / 1_000_000.0
@@ -110,8 +117,11 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 	}
 
 	var credits float64 = 0
-	if globalConfig != nil && globalConfig.ModelPricing != nil {
-		if pricing, ok := globalConfig.ModelPricing[alias]; ok {
+	liveCfgMu.RLock()
+	locCfg := globalConfig
+	liveCfgMu.RUnlock()
+	if locCfg != nil && locCfg.ModelPricing != nil {
+		if pricing, ok := locCfg.ModelPricing[alias]; ok {
 			credits += float64(record.Detail.InputTokens) * pricing.Input / 1_000_000.0
 			credits += float64(record.Detail.OutputTokens) * pricing.Output / 1_000_000.0
 			credits += float64(record.Detail.CachedTokens) * pricing.Cache / 1_000_000.0
@@ -136,6 +146,8 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 }
 
 // ClientQuotaMiddleware intercepts requests to enforce APIKeyLimits.
+// NOTE: All billing config reads use globalConfig (updated on hot-reload) so that
+// changes to credit-limit take effect immediately without a server restart.
 func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 	SetClientQuotaConfig(cfg)
 	return func(c *gin.Context) {
@@ -146,55 +158,69 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 			}
 		}
 
-		if apiKey != "" && cfg != nil {
-			// Isolated Post-Pay Kill Switch
-			if cfg.PostPayBilling.Enabled {
-				if clientCfg, ok := cfg.PostPayBilling.Clients[apiKey]; ok {
-					if clientCfg.CreditLimit > 0 {
-						postPayUsageMu.RLock()
-						entry, exists := postPayUsage[apiKey]
-						postPayUsageMu.RUnlock()
-						if exists && entry.CreditsConsumed >= clientCfg.CreditLimit {
-							c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-								"error": gin.H{
-									"message": "insufficient_quota: You exceeded your current quota, please check your plan and billing details.",
-									"type":    "insufficient_quota",
-									"code":    "insufficient_quota",
-								},
-							})
-							return
-						}
+		if apiKey == "" {
+			c.Next()
+			return
+		}
+
+		// Always read live config from globalConfig so hot-reload takes effect instantly.
+		liveCfgMu.RLock()
+		liveCfg := globalConfig
+		liveCfgMu.RUnlock()
+
+		if liveCfg == nil {
+			c.Next()
+			return
+		}
+
+		// Isolated Post-Pay Kill Switch (reads live config — hot-reload aware)
+		if liveCfg.PostPayBilling.Enabled {
+			if clientCfg, ok := liveCfg.PostPayBilling.Clients[apiKey]; ok {
+				if clientCfg.CreditLimit > 0 {
+					postPayUsageMu.RLock()
+					entry, exists := postPayUsage[apiKey]
+					postPayUsageMu.RUnlock()
+					if exists && entry.CreditsConsumed >= clientCfg.CreditLimit {
+						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+							"error": gin.H{
+								"message": "insufficient_quota: You exceeded your current quota, please check your plan and billing details.",
+								"type":    "insufficient_quota",
+								"code":    "insufficient_quota",
+							},
+						})
+						return
 					}
-					c.Next()
-					return // Skip standard volatile kill switch
 				}
+				c.Next()
+				return // Skip standard volatile kill switch
 			}
+		}
 
-			limit := cfg.DefaultAPIKeyLimit
-			if cfg.APIKeyLimits != nil {
-				if customLimit, ok := cfg.APIKeyLimits[apiKey]; ok {
-					limit = customLimit
-				}
+		// Standard volatile kill switch (also reads live config)
+		limit := liveCfg.DefaultAPIKeyLimit
+		if liveCfg.APIKeyLimits != nil {
+			if customLimit, ok := liveCfg.APIKeyLimits[apiKey]; ok {
+				limit = customLimit
 			}
+		}
 
-			if limit > 0 {
-				clientUsageMu.RLock()
-				entry, exists := clientUsage[apiKey]
-				clientUsageMu.RUnlock()
+		if limit > 0 {
+			clientUsageMu.RLock()
+			entry, exists := clientUsage[apiKey]
+			clientUsageMu.RUnlock()
 
-				if exists {
-					now := time.Now()
-					if now.Sub(entry.Timestamp) <= 5*time.Hour {
-						if entry.CreditsConsumed >= float64(limit) {
-							c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-								"error": gin.H{
-									"message": "insufficient_quota: You exceeded your current quota, please check your plan and billing details.",
-									"type":    "insufficient_quota",
-									"code":    "insufficient_quota",
-								},
-							})
-							return
-						}
+			if exists {
+				now := time.Now()
+				if now.Sub(entry.Timestamp) <= 5*time.Hour {
+					if entry.CreditsConsumed >= float64(limit) {
+						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+							"error": gin.H{
+								"message": "insufficient_quota: You exceeded your current quota, please check your plan and billing details.",
+								"type":    "insufficient_quota",
+								"code":    "insufficient_quota",
+							},
+						})
+						return
 					}
 				}
 			}
