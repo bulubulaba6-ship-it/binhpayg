@@ -66,6 +66,36 @@ CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
 see [MANAGEMENT_API.md](https://help.router-for.me/management/api)
 
+## Prepaid Billing System (Pay-As-You-Go)
+
+CLIProxyAPI includes a production-grade, thread-safe prepaid billing system that allows you to charge clients based on virtual credits with automatic tier-based pricing.
+
+### Features
+- **Strict Prepaid Enforcement**: Automatically blocks API access (returns `402 Payment Required`) if `CreditsConsumed >= CreditsPurchased`. New client keys are blocked on their first request until a deposit is made.
+- **Dynamic Tier-Based Pricing**: Deposits convert USD to credits according to cumulative lifetime deposit brackets:
+  - **Tier 1 (Test/Casual)**: < 50K cr ($1 = 6,000 cr)
+  - **Tier 2 (Indie Devs)**: 50K - 100K cr ($1 = 6,500 cr)
+  - **Tier 3 (Pro Agents)**: 100K - 200K cr ($1 = 7,200 cr)
+  - **Tier 4 (Startups)**: 200K - 300K cr ($1 = 8,000 cr)
+  - **Tier 5 (Scale-ups)**: 300K - 500K cr ($1 = 9,000 cr)
+  - **Tier 6 (The Whale)**: > 500K cr ($1 = 10,500 cr)
+- **Secure Webhook Endpoint**: `POST /v1/billing/deposit` enables automatic credit injection, secured via `Authorization: Bearer <webhook-secret>` header.
+- **Transaction Idempotency**: Safe from network retries. Supply a `txn_id` in the deposit payload to prevent duplicate credit creation.
+- **Isolated Velocity Limit**: Protects upstream providers with an independent 5-hour rolling credit limit (`429 Rate Limit Exceeded`).
+- **Billing Dashboard**: A responsive visual frontend providing toggles between 5-hour velocity windows and Lifetime Usage, showing current Tier levels dynamically.
+
+### Configuration
+Enable the billing ledger and clients in `config.yaml`:
+```yaml
+post-pay-billing:
+  enabled: true
+  ledger-file: "post_pay_ledger.json"
+  webhook-secret: "your-super-secure-webhook-secret"
+  clients:
+    your-client-api-key:
+      credit-limit: 2000000 # 5h velocity limit (0 to disable velocity checks)
+```
+
 ## Usage Statistics
 
 Since v6.10.0, CLIProxyAPI and [CPAMC](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) no longer ship built-in usage statistics. If you need usage statistics, use:
