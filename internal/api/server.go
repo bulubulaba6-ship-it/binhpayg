@@ -432,6 +432,13 @@ func (s *Server) setupRoutes() {
 		codexDirect.POST("/responses/compact", openaiResponsesHandlers.Compact)
 	}
 
+	// Webhook-only billing management routes — authenticated by webhook_secret, NOT user API key.
+	// These MUST be outside the ClientQuotaMiddleware group to avoid kill-switch blocking deposits.
+	billingMgmt := s.engine.Group("/v1/billing")
+	{
+		billingMgmt.POST("/deposit", s.handlers.PostDeposit)
+	}
+
 	// Gemini compatible API routes
 	v1beta := s.engine.Group("/v1beta")
 	v1beta.Use(AuthMiddleware(s.accessManager))

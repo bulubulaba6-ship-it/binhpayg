@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 
 	snapshot := middleware.GetPostPaySnapshot()
 	var totalCredits float64  // all-time cumulative (from ledger)
+	var creditsPurchased float64
 	var successCount int64
 	var failedCount int64
 	var totalTokens int64
@@ -53,6 +55,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	if e, exists := snapshot[principal]; exists {
 		entry = &e
 		totalCredits = e.CreditsConsumed
+		creditsPurchased = e.CreditsPurchased
 		successCount = e.Success
 		failedCount = e.Failed
 		totalTokens = e.TotalTokens
@@ -113,6 +116,20 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	// Default to unlimited (-1) unless explicitly configured in PostPayBilling
 	creditLimit := middleware.GetPostPayCreditLimit(principal)
 
+	// Calculate Tier based on CreditsPurchased
+	tier := 1
+	if creditsPurchased >= 500_000 {
+		tier = 6
+	} else if creditsPurchased >= 300_000 {
+		tier = 5
+	} else if creditsPurchased >= 200_000 {
+		tier = 4
+	} else if creditsPurchased >= 100_000 {
+		tier = 3
+	} else if creditsPurchased >= 50_000 {
+		tier = 2
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"usage": gin.H{
 			"success_requests": successCount,
@@ -125,6 +142,8 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		"quota": gin.H{
 			"credits_used":       fiveHCredits,   // 5-hour rolling window
 			"total_credits_used": totalCredits,   // all-time cumulative
+			"credits_purchased":  creditsPurchased,
+			"tier":               tier,
 			"credit_limit":       creditLimit,
 			"window_expires_at":  "0001-01-01T00:00:00Z",
 			"recent_sessions":    sessions,
@@ -193,4 +212,58 @@ func quotaPrincipalFromContext(c *gin.Context) string {
 		}
 	}
 	return ""
+}
+
+type DepositRequest struct {
+	APIKey    string  `json:"api_key" binding:"required"`
+	USDAmount float64 `json:"usd_amount" binding:"required,gt=0"`
+	TxnID     string  `json:"txn_id,omitempty"`
+}
+
+// PostDeposit handles adding credits to an API key based on cumulative purchase tiers.
+func (h *BaseAPIHandler) PostDeposit(c *gin.Context) {
+	// 1. Authenticate webhook secret
+	liveCfg := middleware.GetLiveConfig()
+	if liveCfg == nil || !liveCfg.PostPayBilling.Enabled {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "post-pay billing not enabled"})
+		return
+	}
+	
+	secret := liveCfg.PostPayBilling.WebhookSecret
+	if secret == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "webhook secret not configured"})
+		return
+	}
+
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "Bearer "+secret {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid webhook secret"})
+		return
+	}
+
+	// 2. Parse request
+	var req DepositRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload: " + err.Error()})
+		return
+	}
+
+	// 3. Process deposit
+	added, newTotal, tier, isDuplicate := middleware.ProcessDeposit(req.APIKey, req.USDAmount, req.TxnID)
+
+	// 4. Force immediate disk save for ledger
+	fullLedgerPath := filepath.Join(liveCfg.AuthDir, liveCfg.PostPayBilling.LedgerFile)
+	_ = middleware.SavePostPayUsage(fullLedgerPath)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"api_key":          redactKey(req.APIKey),
+			"usd_deposited":    req.USDAmount,
+			"credits_added":    added,
+			"new_total_bought": newTotal,
+			"new_tier":         tier,
+			"duplicate_txn":    isDuplicate,
+		},
+	})
 }

@@ -429,18 +429,50 @@ const app = {
     if (!app.lastQuotaData) return;
     const quota = app.lastQuotaData;
     const mode = document.getElementById('creditToggle') ? document.getElementById('creditToggle').value : '5h';
-    const val = mode === '5h' ? (quota.credits_used || 0) : (quota.total_credits_used || 0);
     
-    app.setText('valCredits', val.toFixed(5));
-    const limit = quota.credit_limit;
-    if (!limit || limit === -1 || limit === 0) {
-      app.setText('valLimit', 'Unlimited');
-      app.setStyle('creditProgress', 'width', '0%');
+    const limitSpan = document.getElementById('limitSpan');
+    const tierBadge = document.getElementById('tierBadge');
+    const valResetText = document.getElementById('valResetText');
+
+    if (mode === '5h') {
+      const val = quota.credits_used || 0;
+      app.setText('valCredits', val.toFixed(5));
+      
+      if (limitSpan) limitSpan.style.display = 'inline';
+      if (tierBadge) tierBadge.style.display = 'none';
+      if (valResetText) valResetText.textContent = 'Resets in 5h window';
+
+      const limit = quota.credit_limit;
+      if (!limit || limit === -1 || limit === 0) {
+        app.setText('valLimit', 'Unlimited');
+        app.setStyle('creditProgress', 'width', '0%');
+      } else {
+        app.setText('valLimit', app.formatNumber(limit));
+        let pct = Math.min(100, (val / limit) * 100);
+        app.setStyle('creditProgress', 'width', pct + '%');
+        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
+      }
     } else {
-      app.setText('valLimit', app.formatNumber(limit));
-      let pct = Math.min(100, (val / limit) * 100);
-      app.setStyle('creditProgress', 'width', pct + '%');
-      app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
+      const val = quota.total_credits_used || 0;
+      app.setText('valCredits', val.toFixed(5));
+      
+      if (limitSpan) limitSpan.style.display = 'none';
+      if (tierBadge) {
+        tierBadge.style.display = 'inline-block';
+        const tier = quota.tier || 1;
+        tierBadge.textContent = 'Tier ' + tier;
+        tierBadge.title = 'Based on ' + (quota.credits_purchased || 0).toFixed(0) + ' cumulative credits purchased';
+      }
+      if (valResetText) valResetText.textContent = 'All-time usage';
+
+      const purchased = quota.credits_purchased || 0;
+      if (purchased === 0) {
+        app.setStyle('creditProgress', 'width', '0%');
+      } else {
+        let pct = Math.min(100, (val / purchased) * 100);
+        app.setStyle('creditProgress', 'width', pct + '%');
+        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
+      }
     }
   }
 };

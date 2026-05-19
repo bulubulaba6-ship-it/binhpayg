@@ -51,8 +51,11 @@
             <option value="total">All-Time</option>
           </select>
         </div>
-        <div class="stat-value"><span id="valCredits">0.00000</span> <span class="stat-limit">/ <span id="valLimit">100</span></span></div>
-        <div class="stat-sub" id="valReset">Resets in ...</div>
+        <div class="stat-value"><span id="valCredits">0.00000</span> <span id="limitSpan" class="stat-limit">/ <span id="valLimit">100</span></span></div>
+        <div class="stat-sub" id="valReset" style="display:flex; justify-content:space-between; align-items:center;">
+          <span id="valResetText">Resets in ...</span>
+          <span id="tierBadge" style="display:none; background:var(--accent-color); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">Tier 1</span>
+        </div>
         <div class="progress-track">
           <div class="progress-fill" id="creditProgress"></div>
         </div>

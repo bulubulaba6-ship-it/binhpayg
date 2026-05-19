@@ -161,10 +161,11 @@ type Config struct {
 
 // PostPayBillingConfig holds the isolated post-pay billing configuration.
 type PostPayBillingConfig struct {
-	Enabled     bool                               `yaml:"enabled" json:"enabled"`
-	LedgerFile  string                             `yaml:"ledger-file" json:"ledger-file"`
-	Clients     map[string]PostPayBillingClientCfg `yaml:"clients" json:"clients"`
-	MarkupRates map[string]ModelPricingEntry      `yaml:"markup-rates" json:"markup-rates"`
+	Enabled       bool                               `yaml:"enabled" json:"enabled"`
+	LedgerFile    string                             `yaml:"ledger-file" json:"ledger-file"`
+	WebhookSecret string                             `yaml:"webhook-secret" json:"webhook-secret"`
+	Clients       map[string]PostPayBillingClientCfg `yaml:"clients" json:"clients"`
+	MarkupRates   map[string]ModelPricingEntry      `yaml:"markup-rates" json:"markup-rates"`
 }
 
 // PostPayBillingClientCfg defines settings for a single post-pay client.

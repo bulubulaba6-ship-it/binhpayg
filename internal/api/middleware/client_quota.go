@@ -34,6 +34,7 @@ type SessionSummary struct {
 
 type PostPayUsageEntry struct {
 	CreditsConsumed float64          `json:"CreditsConsumed"`
+	CreditsPurchased float64         `json:"CreditsPurchased"`
 	Success         int64            `json:"Success"`
 	Failed          int64            `json:"Failed"`
 	Timestamp       time.Time        `json:"Timestamp"`
@@ -41,6 +42,7 @@ type PostPayUsageEntry struct {
 	Models          map[string]int64 `json:"Models,omitempty"`
 	DailyRequests   map[string]int64 `json:"DailyRequests,omitempty"`
 	Sessions        []SessionSummary `json:"Sessions,omitempty"`
+	ProcessedTxns   []string         `json:"ProcessedTxns,omitempty"`
 }
 
 var (
@@ -196,35 +198,50 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 		// Isolated Post-Pay Kill Switch (reads live config — hot-reload aware)
 		if liveCfg.PostPayBilling.Enabled {
 			if clientCfg, ok := liveCfg.PostPayBilling.Clients[apiKey]; ok {
-				if clientCfg.CreditLimit > 0 {
-					postPayUsageMu.RLock()
-					entry, exists := postPayUsage[apiKey]
-					
-					var fiveHCredits float64
-					if exists && entry != nil {
-						fiveHCutoff := time.Now().Add(-5 * time.Hour)
-						for _, s := range entry.Sessions {
-							if s.Timestamp.After(fiveHCutoff) {
-								if pricing, ok := liveCfg.ModelPricing[s.Model]; ok {
-									fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
-									fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
-									fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
-								}
+				postPayUsageMu.RLock()
+				entry, exists := postPayUsage[apiKey]
+				
+				var fiveHCredits float64
+				var creditsConsumed float64
+				var creditsPurchased float64
+				if exists && entry != nil {
+					creditsConsumed = entry.CreditsConsumed
+					creditsPurchased = entry.CreditsPurchased
+					fiveHCutoff := time.Now().Add(-5 * time.Hour)
+					for _, s := range entry.Sessions {
+						if s.Timestamp.After(fiveHCutoff) {
+							if pricing, ok := liveCfg.ModelPricing[s.Model]; ok {
+								fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
+								fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
+								fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
 							}
 						}
 					}
-					postPayUsageMu.RUnlock()
-					
-					if exists && fiveHCredits >= clientCfg.CreditLimit {
-						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-							"error": gin.H{
-								"message": "insufficient_quota: You exceeded your 5-hour window quota, please check your plan and billing details.",
-								"type":    "insufficient_quota",
-								"code":    "insufficient_quota",
-							},
-						})
-						return
-					}
+				}
+				postPayUsageMu.RUnlock()
+				
+				// 1. Balance Exhaustion (Hard Limit)
+				if creditsConsumed >= creditsPurchased {
+					c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
+						"error": gin.H{
+							"message": "insufficient_balance: You have exhausted your prepaid credit balance. Please deposit funds to continue.",
+							"type":    "insufficient_balance",
+							"code":    "insufficient_balance",
+						},
+					})
+					return
+				}
+
+				// 2. Velocity Limit (Abuse Protection)
+				if clientCfg.CreditLimit > 0 && exists && fiveHCredits >= clientCfg.CreditLimit {
+					c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+						"error": gin.H{
+							"message": "rate_limit_exceeded: You exceeded your 5-hour velocity limit. Please slow down your requests.",
+							"type":    "rate_limit_exceeded",
+							"code":    "rate_limit_exceeded",
+						},
+					})
+					return
 				}
 				c.Next()
 				return // Skip standard volatile kill switch
@@ -433,4 +450,64 @@ func StartPostPayPersister(filePath string) {
 			_ = SavePostPayUsage(filePath)
 		}
 	}()
+}
+
+// ProcessDeposit adds USD funds to an API key, converting them to credits
+// based on the cumulative purchasing tier. It is idempotent if a txnID is provided.
+func ProcessDeposit(apiKey string, usdAmount float64, txnID string) (addedCredits float64, newTotalPurchased float64, tier int, isDuplicate bool) {
+	postPayUsageMu.Lock()
+	defer postPayUsageMu.Unlock()
+	
+	entry, exists := postPayUsage[apiKey]
+	if !exists {
+		entry = &PostPayUsageEntry{Timestamp: time.Now()}
+		postPayUsage[apiKey] = entry
+	}
+	
+	if txnID != "" {
+		for _, id := range entry.ProcessedTxns {
+			if id == txnID {
+				// Determine tier without modifying
+				t := 1
+				if entry.CreditsPurchased >= 500_000 { t = 6 } else if entry.CreditsPurchased >= 300_000 { t = 5 } else if entry.CreditsPurchased >= 200_000 { t = 4 } else if entry.CreditsPurchased >= 100_000 { t = 3 } else if entry.CreditsPurchased >= 50_000 { t = 2 }
+				return 0, entry.CreditsPurchased, t, true
+			}
+		}
+	}
+	
+	// Determine current Tier based on CreditsPurchased *BEFORE* this deposit
+	var rate float64
+	current := entry.CreditsPurchased
+	if current < 50_000 {
+		rate = 6_000
+		tier = 1
+	} else if current < 100_000 {
+		rate = 6_500
+		tier = 2
+	} else if current < 200_000 {
+		rate = 7_200
+		tier = 3
+	} else if current < 300_000 {
+		rate = 8_000
+		tier = 4
+	} else if current < 500_000 {
+		rate = 9_000
+		tier = 5
+	} else {
+		rate = 10_500
+		tier = 6
+	}
+
+	addedCredits = usdAmount * rate
+	entry.CreditsPurchased += addedCredits
+	newTotalPurchased = entry.CreditsPurchased
+	
+	if txnID != "" {
+		entry.ProcessedTxns = append(entry.ProcessedTxns, txnID)
+		if len(entry.ProcessedTxns) > 100 {
+			entry.ProcessedTxns = entry.ProcessedTxns[1:] // Keep last 100 txns to prevent unbounded growth
+		}
+	}
+	
+	return addedCredits, newTotalPurchased, tier, false
 }

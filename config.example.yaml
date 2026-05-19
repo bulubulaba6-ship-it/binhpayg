@@ -349,6 +349,7 @@ nonstream-keepalive-interval: 0
 # post-pay-billing:
 #   enabled: true
 #   ledger-file: "mrnhan_ledger.json"         # Stored in the auth-dir folder
+#   webhook-secret: "your_webhook_secret_here" # For /v1/billing/deposit endpoint
 #   clients:
 #     "your-api-key-3":
 #       credit-limit: 20000                   # $20.00 USD hard cap (0ms kill switch)
