@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AI API Giá Rẻ — Quota Dashboard  app.js  v7
+// FinkRouter — Quota Dashboard  app.js  v7
 // Features: key caching (5min), auto-refresh (30s), reasoning token cost,
 //           null-safe DOM helpers, client-side credit computation.
 // ─────────────────────────────────────────────────────────────────────────────

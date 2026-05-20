@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AiApiGiaRe Quota Dashboard</title>
+  <title>FinkRouter Quota Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -244,7 +244,7 @@
   <div class="loading-overlay" id="loading">Loading data...</div>
 
   <header class="header">
-    <div class="brand">AiApiGiaRe Dashboard</div>
+    <div class="brand">FinkRouter Dashboard</div>
     <form class="api-key-form" id="apiKeyForm">
       <input type="password" id="apiKeyInput" class="input-field" placeholder="Enter API Key (sk-...)" autocomplete="off">
       <button type="submit" class="btn">View Quota</button>
@@ -359,12 +359,12 @@
       const key = input.value.trim();
       if (!key) return;
 
-      localStorage.setItem('aiapigiare_apikey', key);
+      localStorage.setItem('FinkRouter_apikey', key);
       await loadData(key);
     });
 
     // Auto load on start
-    const savedKey = localStorage.getItem('aiapigiare_apikey');
+    const savedKey = localStorage.getItem('FinkRouter_apikey');
     if (savedKey) {
       input.value = savedKey;
       loadData(savedKey);

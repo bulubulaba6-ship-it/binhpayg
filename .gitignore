@@ -65,3 +65,5 @@ _bmad-output/*
 test-output
 test-output.exe
 config.yaml.bak
+
+*coworkkit

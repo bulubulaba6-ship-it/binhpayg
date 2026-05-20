@@ -151,7 +151,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		"api_key":    redactKey(strings.TrimSpace(principal)),
 		"status":     "active",
 		"message":    fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),
-		"debug_info": "aiapigiare-postpay-isolated",
+		"debug_info": "finkrouter-postpay-isolated",
 	})
 }
 
