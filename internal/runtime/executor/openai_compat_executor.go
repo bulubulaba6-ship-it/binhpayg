@@ -22,7 +22,6 @@ import (
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -192,16 +191,6 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	// Translate response back to source format when needed
 	var param any
 	out := sdktranslator.TranslateNonStream(ctx, to, from, req.Model, opts.OriginalRequest, translated, body, &param)
-	
-	// Rewrite the "model" field in the response to the client-visible alias.
-	modelAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
-	if modelAlias == "" {
-		modelAlias = req.Model
-	}
-	if gjson.ValidBytes(out) {
-		out = e.overrideModel(out, modelAlias)
-	}
-	
 	resp = cliproxyexecutor.Response{Payload: out, Headers: httpResp.Header.Clone()}
 	return resp, nil
 }
@@ -426,21 +415,7 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 
 			// OpenAI-compatible streams must use SSE data lines.
 			chunks := sdktranslator.TranslateStream(ctx, to, from, req.Model, opts.OriginalRequest, translated, bytes.Clone(trimmedLine), &param)
-			
-			// Alias to rewrite in response: use the client-visible alias.
-			modelAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
-			if modelAlias == "" {
-				modelAlias = req.Model
-			}
-			
 			for i := range chunks {
-				if bytes.HasPrefix(chunks[i], []byte("data: ")) {
-					jsonPart := bytes.TrimPrefix(chunks[i], []byte("data: "))
-					if !bytes.Equal(bytes.TrimSpace(jsonPart), []byte("[DONE]")) && gjson.ValidBytes(jsonPart) {
-						jsonPart = e.overrideModel(jsonPart, modelAlias)
-						chunks[i] = append([]byte("data: "), jsonPart...)
-					}
-				}
 				select {
 				case out <- cliproxyexecutor.StreamChunk{Payload: chunks[i]}:
 				case <-ctx.Done():
