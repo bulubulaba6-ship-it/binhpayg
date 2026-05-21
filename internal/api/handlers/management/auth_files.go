@@ -268,7 +268,7 @@ func publicCallbackURL(c *gin.Context, path string) string {
 	// Fall back to the known public domain if the host cannot be determined
 	// (e.g. internal health-check requests without proper Host headers).
 	if host == "" || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.") {
-		host = "api.finkrouter.io"
+		host = "api.finkrouter.io.vn"
 		scheme = "https"
 	}
 

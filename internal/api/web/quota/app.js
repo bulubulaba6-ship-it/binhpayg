@@ -27,14 +27,14 @@ const app = {
   },
 
   // ── Virtual credit pricing ────────────────────────────────────────────────
-  // Mirrors config.yaml model-pricing exactly (credits per 1M tokens).
+  // Mirrors config.yaml markup-rates exactly (credits per 1M tokens).
+  // 1000 credits = $1.00 USD. Update here whenever config.yaml changes.
   // Reasoning tokens are billed at output rate (industry standard).
-  // Update here whenever you change model-pricing in config.yaml.
   pricing: {
-    'claude-opus-4-7':  { input: 280.0, output: 560.0, cache: 28.0  },
-    'claude-opus-4-6':  { input: 280.0, output: 560.0, cache: 28.0  },
-    'claude-sonnet-4-6':{ input: 210.0, output: 420.0, cache: 21.0  },
-    'claude-haiku-4-5': { input: 175.0, output: 350.0, cache: 17.5  },
+    'claude-opus-4-7':  { input: 400.0, output: 1600.0, cache: 100.0 },
+    'claude-opus-4-6':  { input: 350.0, output: 1400.0, cache:  80.0 },
+    'claude-sonnet-4-6':{ input: 300.0, output: 1200.0, cache:  60.0 },
+    'claude-haiku-4-5': { input: 270.0, output: 1100.0, cache:  50.0 },
   },
 
   // Compute virtual credits for a single session.
