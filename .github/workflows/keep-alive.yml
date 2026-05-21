@@ -1,0 +1,89 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# keep-alive.yml
+#
+# Pings the FinkRouter service on Render every 10 minutes so it never sleeps.
+#
+# HOW IT WORKS
+# ────────────
+# Render free-tier web services spin down after 15 minutes of inactivity.
+# This workflow runs on GitHub Actions (never sleeps) and sends a lightweight
+# HEAD request to /healthz every 10 minutes — well within the 15-min window.
+#
+# SETUP (one-time, in zok213/fink repo settings)
+# ────────────────────────────────────────────────
+# 1. Go to: Settings → Secrets and variables → Actions → Variables (not Secrets)
+# 2. Add a Repository Variable named:  RENDER_URL
+#    Value example: https://finkrouter.onrender.com
+#    (no trailing slash)
+#
+# HOUR MATH
+# ─────────
+# Render gives 750 free instance-hours per month per workspace.
+# 1 service × 24h × 31 days = 744h  ✅  fits inside 750h with room to spare.
+# Spun-down services do NOT consume hours, so keeping it alive 24/7 is the
+# correct strategy — you use ~744h and stay free forever.
+#
+# RATE
+# ────
+# Every 10 minutes = 144 pings/day × ~3 sec each = ~7 min of GitHub Actions
+# time per day. GitHub gives 2,000 free minutes/month. Usage: ~210 min/month.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Keep Alive — FinkRouter on Render
+
+on:
+  schedule:
+    # Every 10 minutes, 24 hours a day, 7 days a week.
+    # GitHub Actions scheduler has ~1 min jitter; this is fine for 15-min window.
+    - cron: '*/10 * * * *'
+
+  # Allow manual trigger from the Actions tab for testing.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping /healthz
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Ping service
+        env:
+          RENDER_URL: ${{ vars.RENDER_URL }}
+        run: |
+          if [ -z "$RENDER_URL" ]; then
+            echo "::error::RENDER_URL variable is not set."
+            echo "Go to: Settings → Secrets and variables → Actions → Variables"
+            echo "Add a variable named RENDER_URL with your Render service URL."
+            exit 1
+          fi
+
+          TARGET="${RENDER_URL}/healthz"
+          echo "Pinging: $TARGET"
+
+          # HEAD request — no body downloaded, minimal bandwidth.
+          # --max-time 30: give the service time to wake from a cold start.
+          # --retry 2: retry on transient network errors.
+          # --retry-delay 5: wait 5s between retries.
+          HTTP_STATUS=$(curl \
+            --silent \
+            --output /dev/null \
+            --write-out "%{http_code}" \
+            --request HEAD \
+            --max-time 30 \
+            --retry 2 \
+            --retry-delay 5 \
+            "$TARGET")
+
+          echo "HTTP status: $HTTP_STATUS"
+
+          # Treat 200 and 204 as success. Anything else is logged as a warning
+          # but does NOT fail the workflow — a 503 just means Render is waking
+          # the service up, which is exactly what we want.
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "204" ]; then
+            echo "✅ Service is alive."
+          elif [ "$HTTP_STATUS" = "000" ]; then
+            echo "⚠️  No response (service may be waking up). Will retry next cycle."
+          else
+            echo "⚠️  Unexpected status $HTTP_STATUS. Service may be restarting."
+          fi
