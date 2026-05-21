@@ -107,16 +107,11 @@ streaming:
 # ==============================================================================
 # POST-PAY BILLING
 # 1000 credits = $1.00 USD
-# DeepSeek V4 Flash actual cost vs markup:
-#   Input:  $0.27/M tokens → 270 credits cost → charge 400  (~48% margin)
-#   Output: $1.10/M tokens → 1100 credits cost → charge 1600 (~45% margin)
-#   Cache:  $0.07/M tokens → 70 credits cost  → charge 100  (~43% margin)
-#
-# Model tiers (same backend, different perceived value):
-#   claude-opus-4-7   → "premium" tier → highest markup
-#   claude-opus-4-6   → "standard" tier
-#   claude-sonnet-4-6 → "mid" tier
-#   claude-haiku-4-5  → "fast" tier → lowest markup
+# DeepSeek V4 Flash actual cost:
+#   Input (cache miss): $0.14/M = 140 credits cost
+#   Input (cache hit):  $0.003/M = 3 credits cost
+#   Output:             $0.28/M = 280 credits cost
+# Pricing follows formrnhan config — ~2x margin on DeepSeek cost.
 # ==============================================================================
 post-pay-billing:
   enabled: true
@@ -132,26 +127,22 @@ post-pay-billing:
       credit-limit: 20000
 
   markup-rates:
-    # "Premium" — same DeepSeek backend, highest margin.
     "claude-opus-4-7":
-      input:  400    # credits per 1M input tokens
-      output: 1600   # credits per 1M output tokens
-      cache:  100    # credits per 1M cached tokens
-    # "Standard"
+      input:  280
+      output: 560
+      cache:  28
     "claude-opus-4-6":
-      input:  350
-      output: 1400
-      cache:  80
-    # "Mid"
+      input:  280
+      output: 560
+      cache:  28
     "claude-sonnet-4-6":
-      input:  300
-      output: 1200
-      cache:  60
-    # "Fast / Lite"
+      input:  210
+      output: 420
+      cache:  21
     "claude-haiku-4-5":
-      input:  270
-      output: 1100
-      cache:  50
+      input:  175
+      output: 350
+      cache:  17.5
 
 # ==============================================================================
 # DEEPSEEK V4 FLASH — OPENAI-COMPATIBLE BACKEND
