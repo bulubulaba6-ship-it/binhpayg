@@ -395,7 +395,7 @@ func (s *Server) setupRoutes() {
 		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
-	s.engine.StaticFS("/static/quota", http.FS(quota.FS))
+	s.engine.StaticFS("/dashboard", http.FS(quota.FS))
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)

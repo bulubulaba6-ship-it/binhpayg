@@ -403,10 +403,15 @@ body {
 }
 
 .chart-card {
-  background: var(--surface-dark);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   padding: var(--sp-xl);
   transition: box-shadow 0.2s;
+}
+
+.chart-card:hover {
+  box-shadow: 0 1px 3px rgba(20,20,19,0.08);
 }
 
 .card-header {
@@ -421,12 +426,12 @@ body {
   font-size: 1.15rem;
   font-weight: 400;
   letter-spacing: -0.02em;
-  color: var(--on-dark);
+  color: var(--ink);
 }
 
 .subtitle {
   font-size: 0.78rem;
-  color: var(--on-dark-soft);
+  color: var(--muted);
   margin-top: 3px;
 }
 

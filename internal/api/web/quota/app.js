@@ -370,12 +370,12 @@ const app = {
         if (diffMs > 0) {
           const h = Math.floor(diffMs / 3600000);
           const m = Math.floor((diffMs % 3600000) / 60000);
-          app.setText('valReset', 'Resets in ' + h + 'h ' + m + 'm');
+          app.setText('valResetText', 'Resets in ' + h + 'h ' + m + 'm');
         } else {
-          app.setText('valReset', 'Resetting shortly…');
+          app.setText('valResetText', 'Resetting shortly…');
         }
       } else {
-        app.setText('valReset', 'Cumulative session limit');
+        app.setText('valResetText', 'Cumulative session limit');
       }
 
       // Charts + ledger
@@ -434,12 +434,28 @@ const app = {
     const tierBadge = document.getElementById('tierBadge');
     const valResetText = document.getElementById('valResetText');
 
+    const getEstCost = (val) => {
+      let rate = 6000;
+      if (val >= 500000) rate = 10500;
+      else if (val >= 300000) rate = 9000;
+      else if (val >= 200000) rate = 8000;
+      else if (val >= 100000) rate = 7200;
+      else if (val >= 50000) rate = 6500;
+      return { cost: val / rate, rate: rate };
+    };
+
     if (mode === '5h') {
       const val = quota.credits_used || 0;
       app.setText('valCredits', val.toFixed(5));
+      const est = getEstCost(val);
       
       if (limitSpan) limitSpan.style.display = 'inline';
-      if (tierBadge) tierBadge.style.display = 'none';
+      if (tierBadge) {
+        tierBadge.style.display = 'inline-block';
+        tierBadge.innerHTML = `~$${est.cost.toFixed(3)}`;
+        tierBadge.title = `Estimated cost ($1 = ${app.formatNumber(est.rate)} cr)`;
+        tierBadge.style.background = 'var(--primary)';
+      }
       if (valResetText) valResetText.textContent = 'Resets in 5h window';
 
       const limit = quota.credit_limit;
@@ -450,18 +466,19 @@ const app = {
         app.setText('valLimit', app.formatNumber(limit));
         let pct = Math.min(100, (val / limit) * 100);
         app.setStyle('creditProgress', 'width', pct + '%');
-        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
+        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--error)' : 'var(--primary)');
       }
     } else {
       const val = quota.total_credits_used || 0;
       app.setText('valCredits', val.toFixed(5));
+      const est = getEstCost(val);
       
       if (limitSpan) limitSpan.style.display = 'none';
       if (tierBadge) {
         tierBadge.style.display = 'inline-block';
-        const tier = quota.tier || 1;
-        tierBadge.textContent = 'Tier ' + tier;
-        tierBadge.title = 'Based on ' + (quota.credits_purchased || 0).toFixed(0) + ' cumulative credits purchased';
+        tierBadge.innerHTML = `~$${est.cost.toFixed(3)}`;
+        tierBadge.title = `Estimated cost ($1 = ${app.formatNumber(est.rate)} cr)`;
+        tierBadge.style.background = 'var(--primary)';
       }
       if (valResetText) valResetText.textContent = 'All-time usage';
 
@@ -471,7 +488,7 @@ const app = {
       } else {
         let pct = Math.min(100, (val / purchased) * 100);
         app.setStyle('creditProgress', 'width', pct + '%');
-        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--danger)' : 'var(--accent-color)');
+        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--error)' : 'var(--primary)');
       }
     }
   }
