@@ -63,6 +63,13 @@ func GinLogrusLogger() gin.HandlerFunc {
 			return
 		}
 
+		statusCode := c.Writer.Status()
+
+		// Eliminate scanning noise by ignoring 404s for non-API paths
+		if statusCode == http.StatusNotFound && requestID == "" {
+			return
+		}
+
 		if raw != "" {
 			path = path + "?" + raw
 		}
@@ -74,7 +81,6 @@ func GinLogrusLogger() gin.HandlerFunc {
 			latency = latency.Truncate(time.Millisecond)
 		}
 
-		statusCode := c.Writer.Status()
 		clientIP := c.ClientIP()
 		method := c.Request.Method
 		errorMessage := c.Errors.ByType(gin.ErrorTypePrivate).String()
