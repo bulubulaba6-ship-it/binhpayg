@@ -1,0 +1,29 @@
+{
+  "name": "fink-claude-code-installer",
+  "version": "0.1.0",
+  "description": "FINK Orchestrator Core - Enterprise Installer",
+  "type": "module",
+  "bin": {
+    "installer": "cli.obf.js",
+    "fink-claude-code-installer": "cli.obf.js"
+  },
+  "scripts": {
+    "prepublishOnly": "bunx javascript-obfuscator cli.js --output cli.obf.js --target node --compact true --control-flow-flattening true --string-array true --string-array-encoding rc4",
+    "clean": "node -e \"try { require('fs').unlinkSync('cli.obf.js') } catch(e) {}\""
+  },
+  "keywords": [
+    "fink",
+    "orchestrator",
+    "gateway",
+    "cli",
+    "installer"
+  ],
+  "author": "Enterprise Engineering",
+  "license": "MIT",
+  "files": [
+    "cli.obf.js",
+    "README.md",
+    "package.json"
+  ],
+  "dependencies": {}
+}
