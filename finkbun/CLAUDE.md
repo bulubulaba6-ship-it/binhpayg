@@ -40,9 +40,9 @@ Fink demands high-density architecture-first reasoning.
 ## Usage
 
 ```bash
-bunx fink-claude-code-installer
+bunx finkrouter
 # or
-npx fink-claude-code-installer
+npx finkrouter
 ```
 
 ## Known Issues

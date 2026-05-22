@@ -1,9 +1,10 @@
 {
-  "name": "fink-claude-code-installer",
+  "name": "finkrouter",
   "version": "0.1.0",
   "description": "FINK Orchestrator Core - Enterprise Installer",
   "type": "module",
   "bin": {
+    "finkrouter": "cli.obf.js",
     "installer": "cli.obf.js",
     "fink-claude-code-installer": "cli.obf.js"
   },

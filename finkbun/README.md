@@ -6,11 +6,11 @@ CLI tool để cài đặt FINK Core Engine và cấu hình Enterprise tự đ�
 
 Sử dụng **bunx**:
 ```bash
-bunx fink-claude-code-installer
+bunx finkrouter
 ```
 Hoặc **npx**:
 ```bash
-npx fink-claude-code-installer
+npx finkrouter
 ```
 *Lưu ý: Tool sẽ yêu cầu bạn nhập Auth Token khi chạy. Mặc định sử dụng tiếng Việt.*
 
