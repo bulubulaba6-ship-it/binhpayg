@@ -1,6 +1,6 @@
 # Bind to all interfaces for cloud routing
 host: ""
-port: 8319
+port: 8317
 # Disabled to eliminate I/O blocking
 debug: false
 commercial-mode: true

@@ -14,7 +14,7 @@ host: ""
 # Render injects a PORT env variable; set this to match your Render service
 
 # "Port" setting (default 10000 on Render, or whatever you configured).
-port: 10000
+port: 8317
 # Management API
 remote-management:
   allow-remote: true
