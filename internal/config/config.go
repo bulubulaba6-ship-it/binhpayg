@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -697,6 +698,16 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 		cfg.Routing.UpstreamProxy = envProxy
 	} else if cfg.Routing.UpstreamProxy != "" && cfg.ProxyURL == "" {
 		cfg.ProxyURL = cfg.Routing.UpstreamProxy
+	}
+
+	// Override port if PORT environment variable is set (useful for PaaS deployments like Railway/Render)
+	if envPort := strings.TrimSpace(os.Getenv("PORT")); envPort != "" {
+		if portInt, errPort := strconv.Atoi(envPort); errPort == nil && portInt > 0 {
+			cfg.Port = portInt
+			log.Infof("Overriding config port with PORT environment variable: %d", portInt)
+		} else {
+			log.Warnf("Invalid PORT environment variable value: %q, falling back to config port", envPort)
+		}
 	}
 
 	// NOTE: Startup legacy key migration is intentionally disabled.
