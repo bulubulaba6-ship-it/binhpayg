@@ -215,11 +215,33 @@ body {
   background: var(--surface-card);
   border: 1px solid var(--hairline);
   border-radius: var(--r-xl);
-  padding: var(--sp-xxl) var(--sp-xxl) var(--sp-xl);
-  max-width: 420px;
+  padding: 0;
+  max-width: 600px;
   width: 100%;
   animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1);
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(20,20,19,0.08);
+}
+
+.welcome-left {
+  background: rgba(204,120,92,0.04);
+  padding: var(--sp-xxl) var(--sp-xl);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   text-align: center;
+  border-right: 1px solid var(--hairline);
+}
+
+.welcome-right {
+  flex: 1.2;
+  padding: var(--sp-xxl) var(--sp-xl);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 @keyframes slideUp {
@@ -228,24 +250,25 @@ body {
 }
 
 .welcome-logo {
-  margin: 0 auto var(--sp-lg);
+  color: var(--primary);
+  margin-bottom: var(--sp-md);
   display: block;
 }
 
-.welcome-card h2 {
+.welcome-left h2 {
   font-family: var(--font-display);
-  font-size: 1.75rem;
-  font-weight: 400;
+  font-size: 1.5rem;
+  font-weight: 500;
   color: var(--ink);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   margin-bottom: 6px;
   line-height: 1.15;
 }
 
-.welcome-card .welcome-sub {
-  font-size: 0.875rem;
+.welcome-left .welcome-sub {
+  font-size: 0.85rem;
   color: var(--muted);
-  margin-bottom: var(--sp-xl);
+  margin-bottom: 0;
   line-height: 1.55;
 }
 
@@ -311,7 +334,8 @@ body {
 .welcome-hint {
   font-size: 0.75rem;
   color: var(--muted-soft);
-  margin-top: var(--sp-sm);
+  margin-top: var(--sp-md);
+  text-align: center;
 }
 
 /* ── Dashboard ───────────────────────────────────────────────── */
@@ -534,6 +558,8 @@ tbody tr:hover { background: var(--surface-soft); }
   .search-box input { width: 140px; }
   .nav-content { flex-direction: column; gap: 12px; align-items: stretch; height: auto; padding: 12px 0; }
   .navbar { height: auto; }
-  .welcome-card { padding: var(--sp-xl) var(--sp-lg) var(--sp-lg); }
+  .welcome-card { flex-direction: column; max-width: 400px; padding: 0; }
+  .welcome-left { border-right: none; border-bottom: 1px solid var(--hairline); padding: var(--sp-xl) var(--sp-lg); }
+  .welcome-right { padding: var(--sp-xl) var(--sp-lg); }
   .container { margin: var(--sp-md) auto; padding: 0 var(--sp-md); }
 }
