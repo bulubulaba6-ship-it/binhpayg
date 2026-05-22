@@ -221,24 +221,18 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				postPayUsageMu.RUnlock()
 				
 				// 1. Balance Exhaustion (Hard Limit)
-				if creditsConsumed >= creditsPurchased {
-					c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
-						"error": gin.H{
-							"message": "insufficient_balance: You have exhausted your prepaid credit balance. Please deposit funds to continue.",
-							"type":    "insufficient_balance",
-							"code":    "insufficient_balance",
-						},
-					})
-					return
+				// For post-pay, the effective limit is the sum of payments made plus the allowed line of credit.
+				effectiveLimit := creditsPurchased
+				if clientCfg.CreditLimit > 0 {
+					effectiveLimit += clientCfg.CreditLimit
 				}
 
-				// 2. Velocity Limit (Abuse Protection)
-				if clientCfg.CreditLimit > 0 && exists && fiveHCredits >= clientCfg.CreditLimit {
-					c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				if creditsConsumed >= effectiveLimit {
+					c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
 						"error": gin.H{
-							"message": "rate_limit_exceeded: You exceeded your 5-hour velocity limit. Please slow down your requests.",
-							"type":    "rate_limit_exceeded",
-							"code":    "rate_limit_exceeded",
+							"message": "insufficient_balance: You have exhausted your credit limit. Please deposit funds to continue.",
+							"type":    "insufficient_balance",
+							"code":    "insufficient_balance",
 						},
 					})
 					return
