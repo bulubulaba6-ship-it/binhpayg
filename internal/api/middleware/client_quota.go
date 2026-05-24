@@ -33,16 +33,16 @@ type SessionSummary struct {
 }
 
 type PostPayUsageEntry struct {
-	CreditsConsumed float64          `json:"CreditsConsumed"`
-	CreditsPurchased float64         `json:"CreditsPurchased"`
-	Success         int64            `json:"Success"`
-	Failed          int64            `json:"Failed"`
-	Timestamp       time.Time        `json:"Timestamp"`
-	TotalTokens     int64            `json:"TotalTokens"`
-	Models          map[string]int64 `json:"Models,omitempty"`
-	DailyRequests   map[string]int64 `json:"DailyRequests,omitempty"`
-	Sessions        []SessionSummary `json:"Sessions,omitempty"`
-	ProcessedTxns   []string         `json:"ProcessedTxns,omitempty"`
+	CreditsConsumed  float64          `json:"CreditsConsumed"`
+	CreditsPurchased float64          `json:"CreditsPurchased"`
+	Success          int64            `json:"Success"`
+	Failed           int64            `json:"Failed"`
+	Timestamp        time.Time        `json:"Timestamp"`
+	TotalTokens      int64            `json:"TotalTokens"`
+	Models           map[string]int64 `json:"Models,omitempty"`
+	DailyRequests    map[string]int64 `json:"DailyRequests,omitempty"`
+	Sessions         []SessionSummary `json:"Sessions,omitempty"`
+	ProcessedTxns    []string         `json:"ProcessedTxns,omitempty"`
 }
 
 var (
@@ -87,7 +87,11 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 		if _, isPostPay := liveCfg.PostPayBilling.Clients[apiKey]; isPostPay {
 			var credits float64 = 0
 			if pricing, ok := liveCfg.PostPayBilling.MarkupRates[alias]; ok {
-				credits += float64(record.Detail.InputTokens) * pricing.Input / 1_000_000.0
+				billableInput := record.Detail.InputTokens - record.Detail.CachedTokens
+				if billableInput < 0 {
+					billableInput = 0
+				}
+				credits += float64(billableInput) * pricing.Input / 1_000_000.0
 				credits += float64(record.Detail.OutputTokens) * pricing.Output / 1_000_000.0
 				credits += float64(record.Detail.CachedTokens) * pricing.Cache / 1_000_000.0
 			}
@@ -136,7 +140,11 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 	liveCfgMu.RUnlock()
 	if locCfg != nil && locCfg.ModelPricing != nil {
 		if pricing, ok := locCfg.ModelPricing[alias]; ok {
-			credits += float64(record.Detail.InputTokens) * pricing.Input / 1_000_000.0
+			billableInput := record.Detail.InputTokens - record.Detail.CachedTokens
+			if billableInput < 0 {
+				billableInput = 0
+			}
+			credits += float64(billableInput) * pricing.Input / 1_000_000.0
 			credits += float64(record.Detail.OutputTokens) * pricing.Output / 1_000_000.0
 			credits += float64(record.Detail.CachedTokens) * pricing.Cache / 1_000_000.0
 		}
@@ -200,7 +208,7 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 			if clientCfg, ok := liveCfg.PostPayBilling.Clients[apiKey]; ok {
 				postPayUsageMu.RLock()
 				entry, exists := postPayUsage[apiKey]
-				
+
 				var fiveHCredits float64
 				var creditsConsumed float64
 				var creditsPurchased float64
@@ -219,7 +227,7 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					}
 				}
 				postPayUsageMu.RUnlock()
-				
+
 				// 1. Balance Exhaustion (Hard Limit)
 				// For post-pay, the effective limit is the sum of payments made plus the allowed line of credit.
 				effectiveLimit := creditsPurchased
@@ -341,14 +349,14 @@ func LoadPostPayUsage(filePath string) error {
 	// Backwards compatibility migration: extrapolate all-time counters from legacy sessions
 	for _, entry := range postPayUsage {
 		sessionCount := int64(len(entry.Sessions))
-		
+
 		if entry.Models == nil || len(entry.Models) == 0 {
 			entry.Models = make(map[string]int64)
 			var sessionModels = make(map[string]int64)
 			for _, s := range entry.Sessions {
 				sessionModels[s.Model]++
 			}
-			
+
 			if sessionCount > 0 && entry.Success > sessionCount {
 				multiplier := float64(entry.Success) / float64(sessionCount)
 				var assigned int64
@@ -377,7 +385,7 @@ func LoadPostPayUsage(filePath string) error {
 				dayStr := s.Timestamp.Format("2006-01-02")
 				sessionDays[dayStr]++
 			}
-			
+
 			if sessionCount > 0 && entry.Success > sessionCount {
 				multiplier := float64(entry.Success) / float64(sessionCount)
 				var assigned int64
@@ -423,12 +431,12 @@ func SavePostPayUsage(filePath string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	
+
 	tmpPath := filePath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return err
@@ -451,24 +459,34 @@ func StartPostPayPersister(filePath string) {
 func ProcessDeposit(apiKey string, usdAmount float64, txnID string) (addedCredits float64, newTotalPurchased float64, tier int, isDuplicate bool) {
 	postPayUsageMu.Lock()
 	defer postPayUsageMu.Unlock()
-	
+
 	entry, exists := postPayUsage[apiKey]
 	if !exists {
 		entry = &PostPayUsageEntry{Timestamp: time.Now()}
 		postPayUsage[apiKey] = entry
 	}
-	
+
 	if txnID != "" {
 		for _, id := range entry.ProcessedTxns {
 			if id == txnID {
 				// Determine tier without modifying
 				t := 1
-				if entry.CreditsPurchased >= 500_000 { t = 6 } else if entry.CreditsPurchased >= 300_000 { t = 5 } else if entry.CreditsPurchased >= 200_000 { t = 4 } else if entry.CreditsPurchased >= 100_000 { t = 3 } else if entry.CreditsPurchased >= 50_000 { t = 2 }
+				if entry.CreditsPurchased >= 500_000 {
+					t = 6
+				} else if entry.CreditsPurchased >= 300_000 {
+					t = 5
+				} else if entry.CreditsPurchased >= 200_000 {
+					t = 4
+				} else if entry.CreditsPurchased >= 100_000 {
+					t = 3
+				} else if entry.CreditsPurchased >= 50_000 {
+					t = 2
+				}
 				return 0, entry.CreditsPurchased, t, true
 			}
 		}
 	}
-	
+
 	// Determine current Tier based on CreditsPurchased *BEFORE* this deposit
 	var rate float64
 	current := entry.CreditsPurchased
@@ -495,13 +513,13 @@ func ProcessDeposit(apiKey string, usdAmount float64, txnID string) (addedCredit
 	addedCredits = usdAmount * rate
 	entry.CreditsPurchased += addedCredits
 	newTotalPurchased = entry.CreditsPurchased
-	
+
 	if txnID != "" {
 		entry.ProcessedTxns = append(entry.ProcessedTxns, txnID)
 		if len(entry.ProcessedTxns) > 100 {
 			entry.ProcessedTxns = entry.ProcessedTxns[1:] // Keep last 100 txns to prevent unbounded growth
 		}
 	}
-	
+
 	return addedCredits, newTotalPurchased, tier, false
 }
