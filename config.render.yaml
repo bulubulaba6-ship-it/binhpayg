@@ -1,0 +1,161 @@
+# ==============================================================================
+# FinkRouter — config.render.yaml (Render deployment / DeepSeek V4 Flash)
+# Backend: DeepSeek V4 Flash (all models)
+# Billing: Post-Pay (1000 credits = $1.00 USD)
+# ==============================================================================
+
+# Bind all interfaces so Render can route traffic in.
+host: ""
+# Render injects a PORT env variable; set this to match your Render service
+# "Port" setting (default 10000 on Render, or whatever you configured).
+port: 8317
+
+# Management API
+remote-management:
+  allow-remote: true
+  # Set a strong secret key — change this before deploying!
+  secret-key: "$2a$10$krTTgB/OXAj1kewsqH7yPe9qpdwCl1Dm/sCudemC4PdYdKQyB87zy"
+  disable-control-panel: false
+  panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+
+# Auth directory — on Render free tier the filesystem is ephemeral (resets on
+# every sleep/wake cycle). Using ./auths is fine since we have no OAuth files
+# here; only the billing ledger lives here (see ledger-file below).
+auth-dir: "./auths"
+
+# ==============================================================================
+# CLIENT API KEYS
+# Each paying user gets one key. The quota dashboard reads from this list.
+# Format: fink_<tier>_<random hex>
+# ==============================================================================
+api-keys:
+  - fink_max_d41d8cd98f00b204e9800998ecf8427e
+  - fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8
+
+# Restrict each key to exactly the models it should see.
+api-key-models:
+  "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+    claude:
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
+    claude:
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+
+# ==============================================================================
+# GENERAL SETTINGS
+# ==============================================================================
+debug: false
+pprof:
+  enable: false
+  addr: "127.0.0.1:8316"
+# On Render, stdout is streamed to the log dashboard — keep logging-to-file off.
+logging-to-file: false
+logs-max-total-size-mb: 0
+error-logs-max-files: 10
+# Enable usage stats so the quota dashboard charts work.
+usage-statistics-enabled: true
+# Keep 30 min of sessions in memory for RPM calculation (1800s).
+redis-usage-queue-retention-seconds: 1800
+proxy-url: ""
+force-model-prefix: false
+passthrough-headers: false
+# Retry on transient upstream errors (5xx / timeouts).
+request-retry: 3
+max-retry-credentials: 0
+max-retry-interval: 30
+disable-cooling: false
+# Disable image generation (DeepSeek V4 Flash is text-only).
+disable-image-generation: true
+commercial-mode: false
+
+quota-exceeded:
+  switch-project: false
+  switch-preview-model: false
+  antigravity-credits: false
+
+# ==============================================================================
+# ROUTING
+# ==============================================================================
+routing:
+  strategy: "round-robin"
+  # Enable session affinity so one user always hits the same DeepSeek key
+  # (important for consistent context and billing accuracy).
+  session-affinity: true
+  session-affinity-ttl: "5h"
+ws-auth: true
+enable-gemini-cli-endpoint: false
+# Send SSE keep-alive pings every 20s to prevent Render from closing long-poll
+# connections during slow DeepSeek streaming responses.
+nonstream-keepalive-interval: 0
+streaming:
+  keepalive-seconds: 20
+
+# ==============================================================================
+# POST-PAY BILLING
+# ==============================================================================
+post-pay-billing:
+  enabled: true
+  # NOTE: On Render free tier this file resets on sleep/restart (ephemeral FS).
+  # For persistent billing, mount a disk (paid plan) or export to Postgres.
+  ledger-file: "finkrouter_ledger.json"
+  # webhook-secret: "your_deposit_webhook_secret_here"
+
+  clients:
+    "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+      # $20 hard cap. 20000 credits = $20.
+      credit-limit: 20000
+    "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
+      # 2000 credits hard cap.
+      credit-limit: 2000
+
+  markup-rates:
+    "claude-opus-4-7":
+      input: 280
+      output: 560
+      cache: 28
+    "claude-opus-4-6":
+      input: 280
+      output: 560
+      cache: 28
+    "claude-sonnet-4-6":
+      input: 210
+      output: 420
+      cache: 21
+    "claude-haiku-4-5":
+      input: 175
+      output: 350
+      cache: 17.5
+
+# ==============================================================================
+# DEEPSEEK V4 FLASH — OPENAI-COMPATIBLE BACKEND
+# All client-facing model names route to deepseek-v4-flash via DeepSeek API.
+# ==============================================================================
+openai-compatibility:
+  - name: Anthropic
+    priority: 1
+    base-url: https://api.deepseek.com/v1
+    api-key-entries:
+      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
+    # DeepSeek supports thinking/extended reasoning on v4-flash.
+    models:
+      - name: deepseek-v4-flash
+        alias: claude-opus-4-7
+      - name: deepseek-v4-flash
+        alias: claude-opus-4-6
+      - name: deepseek-v4-flash
+        alias: claude-sonnet-4-6
+      - name: deepseek-v4-flash
+        alias: claude-haiku-4-5
+
+payload:
+  override-raw:
+    - models:
+        - name: "*"
+      params:
+        "messages.-1": '{"role": "user", "content": "[System Instruction: Please ensure your response is in the exact language of the user prompt. If the prompt is in English, reply in English. Do not default to Chinese.]"}'
