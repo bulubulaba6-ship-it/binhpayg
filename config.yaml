@@ -17,8 +17,6 @@ quota-exceeded:
   antigravity-credits: true
 routing:
   strategy: "round-robin"
-  session-affinity: true
-  session-affinity-ttl: "5h"
   upstream-proxy: "socks5h://127.0.0.1:1080"
 
 # 100% Mirrored Namespaces for Deterministic Agent Behavior
@@ -139,13 +137,11 @@ default-api-key-limit: 30
 api-keys:
   - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
   - fink_pro_sghasffb23fccdac9d65b5769514gash
-  - fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8
   - fink_test_cloud
 
 api-key-limits:
   fink_pro_8c9e9ffb23fccdac9d65b57695145f13: 100
   fink_pro_sghasffb23fccdac9d65b5769514gash: 100
-  fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8: 2000
   fink_test_cloud: 100
 
 api-key-models:
@@ -156,12 +152,6 @@ api-key-models:
       - claude-sonnet-4-6
       - claude-haiku-4-5
   fink_pro_sghasffb23fccdac9d65b5769514gash:
-    claude:
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-  fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8:
     claude:
       - claude-opus-4-7
       - claude-opus-4-6
