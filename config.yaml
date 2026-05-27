@@ -29,18 +29,19 @@ auth-dir: "./auths"
 # Format: fink_<tier>_<random hex>
 # ==============================================================================
 api-keys:
-  - fink_max_d41d8cd98f00b204e9800998ecf8427e
+  - fink_pro_8c9e9ffb23fccdac9d65b57695145f13
+  - fink_pro_sghasffb23fccdac9d65b5769514gash
   - fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8
 
 # Restrict each key to exactly the models it should see.
 api-key-models:
-  "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+  fink_pro_8c9e9ffb23fccdac9d65b57695145f13:
     claude:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
+  fink_pro_sghasffb23fccdac9d65b5769514gash:
     claude:
       - claude-opus-4-7
       - claude-opus-4-6
@@ -107,10 +108,10 @@ post-pay-billing:
   # webhook-secret: "your_deposit_webhook_secret_here"
 
   clients:
-    "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+    fink_pro_8c9e9ffb23fccdac9d65b57695145f13:
       # $20 hard cap. 20000 credits = $20.
       credit-limit: 20000
-    "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
+    fink_pro_sghasffb23fccdac9d65b5769514gash:
       # 2000 credits hard cap.
       credit-limit: 2000
 
