@@ -400,7 +400,7 @@
         <div style="margin-bottom: 12px; display: flex; align-items: flex-end; gap: 8px;">
            <div style="flex: 1;">
                <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">Email Address</label>
-               <input type="email" id="checkoutEmail" style="margin-bottom: 0;" placeholder="you@example.com" oninput="app.validateOTPCheckout()" onblur="this.value = this.value.trim(); app.validateOTPCheckout()" autocomplete="email">
+               <input type="email" id="checkoutEmail" style="margin-bottom: 0; height: 42px;" placeholder="you@example.com" oninput="app.validateOTPCheckout()" onblur="this.value = this.value.trim(); app.validateOTPCheckout()" autocomplete="email">
            </div>
            <button id="checkoutSendOtpBtn" class="auth-btn" style="width: auto; padding: 0 16px; height: 42px; margin-bottom: 0;" onclick="app.sendPurchaseOTP()">Send OTP</button>
         </div>
