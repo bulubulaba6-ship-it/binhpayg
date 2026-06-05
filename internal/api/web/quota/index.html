@@ -351,7 +351,7 @@
     <div class="welcome-card">
       <div class="welcome-left">
         <img src="/dashboard/favicon.png" alt="FinkRouter Logo" style="width: 48px; height: 48px; margin: 0 auto var(--sp-sm); display: block; border-radius: 8px;">
-        <h2>Secure Gateway</h2>
+        <h2>FINKROUTER</h2>
         <p style="color:var(--muted); font-size:0.85rem;">Private network proxy access</p>
       </div>
       <div class="welcome-right">
@@ -400,7 +400,7 @@
         <div style="margin-bottom: 12px; display: flex; align-items: flex-end; gap: 8px;">
            <div style="flex: 1;">
                <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">Email Address</label>
-               <input type="email" id="checkoutEmail" placeholder="you@example.com" oninput="app.validateOTPCheckout()" onblur="this.value = this.value.trim(); app.validateOTPCheckout()" autocomplete="email">
+               <input type="email" id="checkoutEmail" style="margin-bottom: 0;" placeholder="you@example.com" oninput="app.validateOTPCheckout()" onblur="this.value = this.value.trim(); app.validateOTPCheckout()" autocomplete="email">
            </div>
            <button id="checkoutSendOtpBtn" class="auth-btn" style="width: auto; padding: 0 16px; height: 42px; margin-bottom: 0;" onclick="app.sendPurchaseOTP()">Send OTP</button>
         </div>
