@@ -67,3 +67,10 @@ test-output.exe
 config.yaml.bak
 
 *coworkkit
+
+*node_modules
+
+antigravity_models.json
+package-lock.json
+
+/finkbun

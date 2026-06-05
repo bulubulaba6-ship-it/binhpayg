@@ -166,7 +166,7 @@ type PostPayBillingConfig struct {
 	LedgerFile    string                             `yaml:"ledger-file" json:"ledger-file"`
 	WebhookSecret string                             `yaml:"webhook-secret" json:"webhook-secret"`
 	Clients       map[string]PostPayBillingClientCfg `yaml:"clients" json:"clients"`
-	MarkupRates   map[string]ModelPricingEntry      `yaml:"markup-rates" json:"markup-rates"`
+	MarkupRates   map[string]ModelPricingEntry       `yaml:"markup-rates" json:"markup-rates"`
 }
 
 // PostPayBillingClientCfg defines settings for a single post-pay client.
