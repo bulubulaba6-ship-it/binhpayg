@@ -564,7 +564,16 @@ const app = {
     if (otpWrap) otpWrap.style.display = 'none';
     if (otpInput) otpInput.value = '';
     if (otpHint) otpHint.textContent = '';
-    if (sendBtn) { sendBtn.disabled = true; sendBtn.style.opacity = '0.45'; sendBtn.style.cursor = 'not-allowed'; sendBtn.textContent = 'Send OTP'; }
+    if (sendBtn) { 
+      sendBtn.disabled = true; 
+      sendBtn.style.opacity = '0.45'; 
+      sendBtn.style.cursor = 'not-allowed'; 
+      sendBtn.textContent = 'Send OTP'; 
+      if (app.otpTimerInterval) {
+        clearInterval(app.otpTimerInterval);
+        app.otpTimerInterval = null;
+      }
+    }
     if (errEl) errEl.style.display = 'none';
     if (btn) { btn.disabled = true; btn.style.opacity = '0.45'; btn.style.cursor = 'not-allowed'; btn.textContent = 'Pay with VietQR'; }
 
@@ -636,13 +645,37 @@ const app = {
       
       // Success: lock email, show OTP field
       emailInput.disabled = true;
-      sendBtn.textContent = 'Sent!';
       otpWrap.style.display = 'block';
       
       const otpInput = document.getElementById('checkoutOTP');
       if (otpInput) {
         setTimeout(() => otpInput.focus(), 100);
       }
+
+      // Start 3-minute countdown timer
+      let timeLeft = 180;
+      sendBtn.textContent = `Sent! (${timeLeft}s)`;
+      if (app.otpTimerInterval) clearInterval(app.otpTimerInterval);
+      
+      app.otpTimerInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+          clearInterval(app.otpTimerInterval);
+          app.otpTimerInterval = null;
+          // Only re-enable if email is actually still filled (the form wasn't reset)
+          if (emailInput.value.trim() !== '') {
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '1';
+            sendBtn.style.cursor = 'pointer';
+            sendBtn.textContent = 'Resend OTP';
+          } else {
+            sendBtn.textContent = 'Send OTP';
+          }
+        } else {
+          sendBtn.textContent = `Sent! (${timeLeft}s)`;
+        }
+      }, 1000);
+
     } catch (e) {
       errDiv.textContent = e.message;
       errDiv.style.display = 'block';
@@ -858,3 +891,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('overviewTab').style.display = 'none';
   document.getElementById('storeTab').style.display = 'none';
 });
+app.otpTimerInterval = null;
+
