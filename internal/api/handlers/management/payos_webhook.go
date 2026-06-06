@@ -125,9 +125,12 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		return
 	}
 
-	checksumKey := os.Getenv("PAYOS_CHECKSUM_KEY")
+	checksumKey := os.Getenv("PAYOS_WEBHOOK_CHECKSUM_KEY")
 	if checksumKey == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "payos checksum key not configured"})
+		checksumKey = os.Getenv("PAYOS_CHECKSUM_KEY")
+	}
+	if checksumKey == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "payos webhook checksum key not configured"})
 		return
 	}
 
