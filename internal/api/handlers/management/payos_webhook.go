@@ -109,8 +109,13 @@ func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey st
 		switch val := v.(type) {
 		case float64:
 			strVal = strconv.FormatFloat(val, 'f', -1, 64)
+		case string:
+			strVal = val
+		case bool:
+			strVal = strconv.FormatBool(val)
 		default:
-			strVal = fmt.Sprintf("%v", val)
+			// Ignore arrays and objects per payOS specification
+			continue
 		}
 
 		if strVal == "null" || strVal == "undefined" || strVal == "" {
@@ -340,6 +345,7 @@ func sendAPIKeyEmail(toEmail, apiKey, plan string) {
   </div>
   <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #eee; color: #777; font-size: 12px;">
     <p style="margin: 0 0 5px;">Need help? Contact our support team at <a href="mailto:support@finkrouter.com" style="color: #eca8d6; text-decoration: none;">support@finkrouter.com</a></p>
+    <p style="margin: 0 0 10px;">Or message us directly on <strong style="color: #333;">Zalo</strong> or <strong style="color: #333;">Telegram</strong>.</p>
     <p style="margin: 0;">© 2026 FinkRouter. All rights reserved.</p>
   </div>
 </div>`
