@@ -246,9 +246,9 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		}
 		if errCheck == sql.ErrNoRows {
 			_, errInsert := db.Exec(`
-				INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
-				VALUES ('PayOS Key', $1, $2, $3, $4, 'active', $5, $6)
-			`, keyHash, prefix, userEmail, displayPlan, orderCode, time.Now().Unix())
+				INSERT INTO api_keys (key_hash, key_prefix, email, plan, status, order_code, created_at)
+				VALUES ($1, $2, $3, $4, 'active', $5, $6)
+			`, keyHash, prefix, userEmail, displayPlan, orderCode, time.Now())
 			if errInsert != nil {
 				log.Errorf("failed to insert api key to postgres: %v", errInsert)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})

@@ -30,7 +30,7 @@ const c = {
 
 const TXT = {
   vi: {
-    title: "FINK ORCHESTRATOR CORE — v1.0.6",
+    title: "FINK ORCHESTRATOR CORE — v1.1.4",
     boot: [],
     setup: "ĐANG CÀI ĐẶT FINK ENTERPRISE CORE...",
     auth_req: "YÊU CẦU XÁC THỰC FINK",
@@ -82,14 +82,14 @@ const TXT = {
     installing_repomix: "Đang triển khai Repomix Analytics...",
     repomix_ok: "Repomix install.",
     client_title: "CHỌN AI CLIENT",
-    client_prompt: "Lựa chọn của bạn (1-4):",
+    client_prompt: "Lựa chọn của bạn (1-3):",
     installing_codex: "Đang cấu hình Codex Client...",
     installed_codex: "Cấu hình Codex hoàn tất.",
     installing_cursor: "Đang cấu hình Cursor/Amp...",
     installed_cursor: "Cấu hình Cursor hoàn tất.",
   },
   en: {
-    title: "FINK ORCHESTRATOR CORE — v1.0.6",
+    title: "FINK ORCHESTRATOR CORE — v1.1.4",
     boot: [],
     setup: "INITIALIZING FINK ENTERPRISE CORE...",
     auth_req: "FINK AUTHENTICATION REQUIRED",
@@ -141,7 +141,7 @@ const TXT = {
     installing_repomix: "Deploying Repomix Analytics...",
     repomix_ok: "Repomix online. Global rules applied.",
     client_title: "SELECT TARGET AI CLIENT",
-    client_prompt: "Selection (1-4):",
+    client_prompt: "Selection (1-3):",
     installing_codex: "Configuring Codex Client...",
     installed_codex: "Codex configuration complete.",
     installing_cursor: "Configuring Cursor/Amp...",
@@ -159,7 +159,7 @@ const lang = getLangSelection();
 const T = TXT[lang];
 
 // --- VERSIONING ---
-const VERSION = "1.1.3";
+const VERSION = "1.1.4";
 const API_BASE_URL = "https://api.finkrouter.io.vn";
 const UPDATE_URL = `${API_BASE_URL}/v1/meta/version`;
 const DEFAULT_MODEL = "claude-opus-4-8";
@@ -516,8 +516,7 @@ async function promptClient() {
   const options = [
     `  ${c.b}1.${c.r} Claude Code  ${c.d}(Anthropic — claude-opus-4-8)${c.r}`,
     `  ${c.b}2.${c.r} Codex        ${c.d}(OpenAI — gpt-5.5)${c.r}`,
-    `  ${c.b}3.${c.r} Cursor / Amp ${c.d}(IDE Extension)${c.r}`,
-    `  ${c.b}4.${c.r} All          ${c.d}(Claude + Codex + Cursor)${c.r}`,
+    `  ${c.b}3.${c.r} All          ${c.d}(Claude + Codex)${c.r}`,
   ];
 
   console.log(`  ╭${'─'.repeat(58)}╮`);
@@ -529,12 +528,11 @@ async function promptClient() {
   const raw = answer.toLowerCase().replace(/,/g, ' ');
   const selected = new Set();
 
-  if (raw.includes('4') || raw.includes('all')) {
-    return ['claude', 'codex', 'cursor'];
+  if (raw.includes('3') || raw.includes('all')) {
+    return ['claude', 'codex'];
   }
   if (raw.includes('1')) selected.add('claude');
   if (raw.includes('2')) selected.add('codex');
-  if (raw.includes('3')) selected.add('cursor');
 
   return selected.size > 0 ? [...selected] : ['claude'];
 }
