@@ -31,6 +31,7 @@ const app = {
   // 1000 credits = $1.00 USD. Update here whenever config.yaml changes.
   // Reasoning tokens are billed at output rate (industry standard).
   pricing: {
+    'claude-opus-4-8':  { input: 280.0, output: 560.0, cache: 28.0  },
     'claude-opus-4-7':  { input: 280.0, output: 560.0, cache: 28.0  },
     'claude-opus-4-6':  { input: 280.0, output: 560.0, cache: 28.0  },
     'claude-sonnet-4-6':{ input: 210.0, output: 420.0, cache: 21.0  },
