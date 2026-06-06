@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
