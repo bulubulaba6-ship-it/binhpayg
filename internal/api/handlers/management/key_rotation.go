@@ -233,9 +233,37 @@ func sendOTPEmail(toEmail, otp string) {
 		fromEmail = "onboarding@resend.dev"
 	}
 
-	bodyStr := fmt.Sprintf(`{"from": "FinkRouter Security <%s>", "to": ["%s"], "subject": "Your FinkRouter Rotation OTP", "html": "<p>You requested to rotate your API key.</p><p>Your verification code is: <strong style='font-size:24px;'>%s</strong></p><p>This code expires in 5 minutes.</p>"}`, fromEmail, toEmail, otp)
+	htmlTemplate := `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaec; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+  <div style="background-color: #0d0d0d; color: #eca8d6; padding: 20px; text-align: center;">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600;">FINKROUTER</h1>
+    <p style="margin: 5px 0 0; font-size: 14px; color: #888;">Private network proxy access</p>
+  </div>
+  <div style="padding: 30px; background-color: #ffffff; color: #333;">
+    <h2 style="margin-top: 0; color: #111;">Key Rotation Verification</h2>
+    <p style="font-size: 16px; line-height: 1.5;">You have requested to rotate your FinkRouter API key. Please use the verification code below to authorize this action.</p>
+    <div style="background-color: #f7f7f9; border: 1px dashed #ccc; padding: 20px; text-align: center; border-radius: 6px; margin: 25px 0;">
+      <p style="margin: 0; font-size: 14px; color: #666; margin-bottom: 8px; text-transform: uppercase;">Verification Code</p>
+      <code style="font-size: 32px; color: #000; font-weight: bold; letter-spacing: 4px;">%s</code>
+    </div>
+    <p style="font-size: 14px; line-height: 1.5; color: #d9534f; font-weight: bold;">⚠️ Warning: Rotating your key will permanently revoke your old key.</p>
+    <p style="font-size: 14px; line-height: 1.5; color: #666;">This code will expire in 5 minutes. If you did not request this, your account may be compromised. Please contact support immediately.</p>
+  </div>
+  <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #eee; color: #777; font-size: 12px;">
+    <p style="margin: 0 0 5px;">Need help? Contact our support team at <a href="mailto:support@finkrouter.com" style="color: #eca8d6; text-decoration: none;">support@finkrouter.com</a></p>
+    <p style="margin: 0;">© 2026 FinkRouter. All rights reserved.</p>
+  </div>
+</div>`
 
-	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer([]byte(bodyStr)))
+	payload := map[string]interface{}{
+		"from":    fmt.Sprintf("FinkRouter Security <%s>", fromEmail),
+		"to":      []string{toEmail},
+		"subject": "Your FinkRouter Rotation OTP",
+		"html":    fmt.Sprintf(htmlTemplate, otp),
+	}
+	bodyBytes, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Authorization", "Bearer "+resendKey)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -259,9 +287,36 @@ func sendPurchaseOTPEmail(toEmail, otp string) {
 		fromEmail = "onboarding@resend.dev"
 	}
 
-	bodyStr := fmt.Sprintf(`{"from": "FinkRouter <%s>", "to": ["%s"], "subject": "Verify your email for FinkRouter purchase", "html": "<p>You're about to purchase a FinkRouter API key.</p><p>Your verification code is: <strong style='font-size:24px;'>%s</strong></p><p>Enter this code in the checkout form. It expires in 5 minutes.</p><p>If you did not request this, you can safely ignore this email.</p>"}`, fromEmail, toEmail, otp)
+	htmlTemplate := `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaec; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+  <div style="background-color: #0d0d0d; color: #eca8d6; padding: 20px; text-align: center;">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600;">FINKROUTER</h1>
+    <p style="margin: 5px 0 0; font-size: 14px; color: #888;">Private network proxy access</p>
+  </div>
+  <div style="padding: 30px; background-color: #ffffff; color: #333;">
+    <h2 style="margin-top: 0; color: #111;">Verify Your Email</h2>
+    <p style="font-size: 16px; line-height: 1.5;">You are attempting to make a purchase on FinkRouter. Please use the verification code below to proceed.</p>
+    <div style="background-color: #f7f7f9; border: 1px dashed #ccc; padding: 20px; text-align: center; border-radius: 6px; margin: 25px 0;">
+      <p style="margin: 0; font-size: 14px; color: #666; margin-bottom: 8px; text-transform: uppercase;">Verification Code</p>
+      <code style="font-size: 32px; color: #000; font-weight: bold; letter-spacing: 4px;">%s</code>
+    </div>
+    <p style="font-size: 14px; line-height: 1.5; color: #666;">This code will expire in 5 minutes. If you did not request this, please ignore this email safely.</p>
+  </div>
+  <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #eee; color: #777; font-size: 12px;">
+    <p style="margin: 0 0 5px;">Need help? Contact our support team at <a href="mailto:support@finkrouter.com" style="color: #eca8d6; text-decoration: none;">support@finkrouter.com</a></p>
+    <p style="margin: 0;">© 2026 FinkRouter. All rights reserved.</p>
+  </div>
+</div>`
 
-	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer([]byte(bodyStr)))
+	payload := map[string]interface{}{
+		"from":    fmt.Sprintf("FinkRouter <%s>", fromEmail),
+		"to":      []string{toEmail},
+		"subject": "Verify your email for FinkRouter purchase",
+		"html":    fmt.Sprintf(htmlTemplate, otp),
+	}
+	bodyBytes, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Authorization", "Bearer "+resendKey)
 	req.Header.Set("Content-Type", "application/json")
 

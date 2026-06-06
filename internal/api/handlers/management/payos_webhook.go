@@ -299,9 +299,37 @@ func sendAPIKeyEmail(toEmail, apiKey, plan string) {
 		fromEmail = "onboarding@resend.dev"
 	}
 
-	bodyStr := fmt.Sprintf(`{"from": "FinkRouter <%s>", "to": ["%s"], "subject": "Your FinkRouter API Key", "html": "<p>Thank you for your purchase (%s)!</p><p>Your API Key is: <strong>%s</strong></p><p>Keep this key secure and do not share it.</p>"}`, fromEmail, toEmail, plan, apiKey)
+	htmlTemplate := `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaec; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+  <div style="background-color: #0d0d0d; color: #eca8d6; padding: 20px; text-align: center;">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600;">FINKROUTER</h1>
+    <p style="margin: 5px 0 0; font-size: 14px; color: #888;">Private network proxy access</p>
+  </div>
+  <div style="padding: 30px; background-color: #ffffff; color: #333;">
+    <h2 style="margin-top: 0; color: #111;">Your API Key is Ready</h2>
+    <p style="font-size: 16px; line-height: 1.5;">Thank you for your purchase (<strong>%s</strong>). Your payment has been successfully processed.</p>
+    <div style="background-color: #f7f7f9; border: 1px dashed #ccc; padding: 20px; text-align: center; border-radius: 6px; margin: 25px 0;">
+      <p style="margin: 0; font-size: 14px; color: #666; margin-bottom: 8px; text-transform: uppercase;">Your Secure API Key</p>
+      <code style="font-size: 22px; color: #000; font-weight: bold; word-break: break-all;">%s</code>
+    </div>
+    <p style="font-size: 14px; line-height: 1.5; color: #d9534f; font-weight: bold;">⚠️ Keep this key secure. Do not share it or expose it in public repositories.</p>
+    <p style="font-size: 14px; line-height: 1.5; margin-top: 20px;">You can use this key to authenticate with our proxy endpoints. For setup instructions, please refer to our documentation.</p>
+  </div>
+  <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #eee; color: #777; font-size: 12px;">
+    <p style="margin: 0 0 5px;">Need help? Contact our support team at <a href="mailto:support@finkrouter.com" style="color: #eca8d6; text-decoration: none;">support@finkrouter.com</a></p>
+    <p style="margin: 0;">© 2026 FinkRouter. All rights reserved.</p>
+  </div>
+</div>`
 
-	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer([]byte(bodyStr)))
+	payload := map[string]interface{}{
+		"from":    fmt.Sprintf("FinkRouter <%s>", fromEmail),
+		"to":      []string{toEmail},
+		"subject": "Your FinkRouter API Key",
+		"html":    fmt.Sprintf(htmlTemplate, plan, apiKey),
+	}
+	bodyBytes, _ := json.Marshal(payload)
+
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		log.Errorf("failed to create resend req: %v", err)
 		return
