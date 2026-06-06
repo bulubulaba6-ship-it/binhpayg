@@ -161,6 +161,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 
 	// Parse plan from description if possible. E.g., "PRO order", "MAX order", etc.
 	tier := "payg"
+	displayPlan := "Pay-As-You-Go"
 	credits := float64(0)
 	limit := 2000
 	isSubscription := false
@@ -168,16 +169,19 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 
 	if strings.Contains(descLower, "max_20x") || amountFloat >= 1600000 {
 		tier = "max"
+		displayPlan = "MAX 20x"
 		credits = 5600000
 		limit = 40000
 		isSubscription = true
 	} else if strings.Contains(descLower, "max") || amountFloat >= 650000 {
 		tier = "max"
+		displayPlan = "MAX 5x"
 		credits = 1315000
 		limit = 10000
 		isSubscription = true
 	} else if strings.Contains(descLower, "pro") || amountFloat >= 350000 {
 		tier = "pro"
+		displayPlan = "PRO"
 		credits = 245000
 		limit = 2000
 		isSubscription = true
@@ -186,6 +190,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		// Detected by description only — amount-based detection is deliberately omitted
 		// because a PAYG order for exactly 150,000 VND would be misclassified.
 		tier = "payg"
+		displayPlan = "7-Day Pass"
 		credits = 60000
 		limit = 2000
 		isSubscription = true
@@ -194,12 +199,14 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		// Detected by description only — amount-based detection is deliberately omitted
 		// because a PAYG order for exactly 50,000 VND would be misclassified.
 		tier = "payg"
+		displayPlan = "1-Day Pass"
 		credits = 8000
 		limit = 2000
 		isSubscription = true
 	} else {
-		// Pay-As-You-Go: dynamic credit rate from ProcessDepositVND
 		tier = "payg"
+		displayPlan = "Pay-As-You-Go"
+		credits = 0
 		limit = 2000
 		isSubscription = false
 	}
@@ -236,7 +243,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 			_, errInsert := db.Exec(`
 				INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
 				VALUES ('PayOS Key', $1, $2, $3, $4, 'active', $5, $6)
-			`, keyHash, prefix, userEmail, tier, orderCode, time.Now().Unix())
+			`, keyHash, prefix, userEmail, displayPlan, orderCode, time.Now().Unix())
 			if errInsert != nil {
 				log.Errorf("failed to insert api key to postgres: %v", errInsert)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
@@ -295,7 +302,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 
 	// 6.5 Send Email
 	if userEmail != "" {
-		go sendAPIKeyEmail(userEmail, newKey, tier)
+		go sendAPIKeyEmail(userEmail, newKey, displayPlan)
 	}
 
 	// 7. Respond OK to payOS
