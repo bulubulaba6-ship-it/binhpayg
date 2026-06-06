@@ -74,6 +74,15 @@ func getWebhookDB() *sql.DB {
 						created_at TIMESTAMPTZ DEFAULT NOW()
 					);
 				`)
+				// Auto-migrate missing columns for older deployments
+				_, _ = db.Exec(`
+					ALTER TABLE api_keys 
+					ADD COLUMN IF NOT EXISTS key_prefix VARCHAR(20) DEFAULT '',
+					ADD COLUMN IF NOT EXISTS email VARCHAR(255),
+					ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'payg',
+					ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active',
+					ADD COLUMN IF NOT EXISTS order_code VARCHAR(100);
+				`)
 				webhookDB = db
 			}
 		}
@@ -214,25 +223,31 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		row := db.QueryRow("SELECT email FROM payment_orders WHERE order_code = $1", orderCode)
 		_ = row.Scan(&userEmail)
 		
-		// 4b. Insert the API key
-		res, err := db.Exec(`
-			INSERT INTO api_keys (key_hash, key_prefix, email, plan, status, order_code)
-			VALUES ($1, $2, $3, $4, 'active', $5)
-			ON CONFLICT (order_code) DO NOTHING
-		`, keyHash, prefix, userEmail, tier, orderCode)
-		if err != nil {
-			log.Errorf("failed to insert api key to postgres: %v", err)
+		// 4b. Insert the API key (check if exists first to avoid unique constraint issues)
+		var existingID int
+		err = db.QueryRow("SELECT id FROM api_keys WHERE order_code = $1", orderCode).Scan(&existingID)
+		if err != nil && err != sql.ErrNoRows {
+			log.Errorf("failed to check existing api key: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
+		if err == sql.ErrNoRows {
+			_, err = db.Exec(`
+				INSERT INTO api_keys (key_hash, key_prefix, email, plan, status, order_code)
+				VALUES ($1, $2, $3, $4, 'active', $5)
+			`, keyHash, prefix, userEmail, tier, orderCode)
+			if err != nil {
+				log.Errorf("failed to insert api key to postgres: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+		}
 
-		rowsAffected, _ := res.RowsAffected()
-		if rowsAffected == 0 {
+		if err == nil && existingID > 0 {
 			log.Infof("payos webhook ignored duplicate order: %v", orderCode)
 			c.JSON(http.StatusOK, gin.H{"error": 0, "message": "Duplicate order ignored", "data": nil})
 			return
 		}
-		
 		// 4c. Mark order as paid
 		_, _ = db.Exec("UPDATE payment_orders SET status = 'paid' WHERE order_code = $1", orderCode)
 	}
