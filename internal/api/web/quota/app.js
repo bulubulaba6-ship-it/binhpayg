@@ -538,11 +538,11 @@ const app = {
     const customWrap = document.getElementById('customAmountWrap');
     const customInput = document.getElementById('checkoutAmount');
 
-    if (plan === 'pro') desc.textContent = 'Pro Tháng (350,000 VND) — 245,000 cr';
-    else if (plan === 'max') desc.textContent = 'Max 5x Tháng (650,000 VND) — 1,315,000 cr';
-    else if (plan === 'max_20x') desc.textContent = 'Max 20x Tháng (1,600,000 VND) — 5,600,000 cr';
-    else if (plan === 'day1') desc.textContent = '1 Ngày (50,000 VND) — 8,000 cr';
-    else if (plan === 'day7') desc.textContent = '7 Ngày (150,000 VND) — 60,000 cr';
+    if (plan === 'pro') desc.textContent = 'Pro Tháng (350,000 VND) - 50,000 cr';
+    else if (plan === 'max') desc.textContent = 'Max 5x Tháng (650,000 VND) - 250,000 cr';
+    else if (plan === 'max_20x') desc.textContent = 'Max 20x Tháng (1,800,000 VND) - 1,000,000 cr';
+    else if (plan === 'day1') desc.textContent = '1 Ngày (50,000 VND) - 4,000 cr';
+    else if (plan === 'day7') desc.textContent = '7 Ngày (150,000 VND) - 30,000 cr';
     else if (plan === 'payg') desc.textContent = 'Pay As You Go (Custom Amount)';
 
     if (plan === 'payg') {
