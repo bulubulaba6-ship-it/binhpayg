@@ -96,8 +96,8 @@ const app = {
 
   // ── Charts ───────────────────────────────────────────────────────────────
   initCharts: () => {
-    Chart.defaults.font.family = '"Inter", sans-serif';
-    Chart.defaults.color = '#6b7280';
+    Chart.defaults.font.family = '"Instrument Sans", sans-serif';
+    Chart.defaults.color = '#8e8b82'; // var(--muted-soft)
   },
 
   // Raw model → Claude alias mapping (mirrors config.yaml oauth-model-alias)
@@ -147,14 +147,14 @@ const app = {
           datasets: [{
             label: 'Requests',
             data: days.map(d => dayCounts[d] || 0),
-            borderColor: '#d97757',
-            backgroundColor: 'rgba(217,119,87,0.08)',
+            borderColor: '#eca8d6', // Brand pink
+            backgroundColor: 'rgba(236,168,214,0.1)',
             borderWidth: 2,
             fill: true,
             tension: 0.45,
             pointRadius: 2.5,
             pointHitRadius: 10,
-            pointBackgroundColor: '#d97757'
+            pointBackgroundColor: '#eca8d6'
           }]
         },
         options: {
@@ -162,8 +162,8 @@ const app = {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { grid: { display: false }, ticks: { maxTicksLimit: 7, font: { size: 11 } } },
-            y: { beginAtZero: true, border: { display: false }, ticks: { precision: 0, font: { size: 11 } } }
+            x: { grid: { display: false, color: 'rgba(255,255,255,0.05)' }, ticks: { maxTicksLimit: 7, font: { size: 11 } } },
+            y: { beginAtZero: true, border: { display: false }, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { precision: 0, font: { size: 11 } } }
           }
         }
       });
@@ -351,7 +351,9 @@ const app = {
 
       // Show dashboard, hide overlay
       document.getElementById('welcomeState').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
+      document.getElementById('overviewTab').style.display = 'block';
+      const navTabs = document.getElementById('navTabs');
+      if (navTabs) navTabs.style.display = 'flex';
 
       // Stat cards
       app.setText('valTotalReq',   app.formatNumber(data.usage.success_requests));
@@ -492,6 +494,337 @@ const app = {
         app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--error)' : 'var(--primary)');
       }
     }
+  },
+
+  // ── Storefront / Tabs ───────────────────────────────────────────────────
+  showTab: (tabId) => {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    // Remove active from all buttons
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    
+    // Show selected
+    const tabEl = document.getElementById(tabId + 'Tab');
+    if (tabEl) tabEl.style.display = 'block';
+    
+    const btnEl = document.getElementById('tab' + tabId.charAt(0).toUpperCase() + tabId.slice(1) + 'Btn');
+    if (btnEl) btnEl.classList.add('active');
+
+    if (tabId === 'keys') {
+       const key = app.loadKey();
+       if (key) {
+         const shortKey = key.length > 16 ? key.substring(0, 8) + '••••••••••••' + key.substring(key.length-4) : key;
+         app.setText('displayApiKey', shortKey);
+       }
+    }
+  },
+
+  revokeKey: () => {
+    if (confirm("Are you sure you want to revoke this key and sign out? This will clear your current session.")) {
+       app.clearKey();
+       window.location.href = '/dashboard';
+    }
+  },
+
+  checkoutPlan: '',
+  checkoutDefaultAmount: 0,
+
+  openCheckout: (plan, amount) => {
+    app.checkoutPlan = plan;
+    app.checkoutDefaultAmount = amount;
+
+    const modal = document.getElementById('checkoutModal');
+    const desc = document.getElementById('checkoutPlanDesc');
+    const customWrap = document.getElementById('customAmountWrap');
+    const customInput = document.getElementById('checkoutAmount');
+
+    if (plan === 'pro') desc.textContent = 'Pro Tháng (350,000 VND) — 245,000 cr';
+    else if (plan === 'max') desc.textContent = 'Max 5x Tháng (650,000 VND) — 1,315,000 cr';
+    else if (plan === 'max_20x') desc.textContent = 'Max 20x Tháng (1,600,000 VND) — 5,600,000 cr';
+    else if (plan === 'day1') desc.textContent = '1 Ngày (50,000 VND) — 8,000 cr';
+    else if (plan === 'day7') desc.textContent = '7 Ngày (150,000 VND) — 60,000 cr';
+    else if (plan === 'payg') desc.textContent = 'Pay As You Go (Custom Amount)';
+
+    if (plan === 'payg') {
+      customWrap.style.display = 'block';
+      customInput.value = amount || 50000;
+    } else {
+      customWrap.style.display = 'none';
+    }
+
+    // Reset form state
+    const emailEl = document.getElementById('checkoutEmail');
+    const otpWrap = document.getElementById('checkoutOtpWrap');
+    const otpInput = document.getElementById('checkoutOTP');
+    const otpHint = document.getElementById('checkoutOtpHint');
+    const sendBtn = document.getElementById('checkoutSendOtpBtn');
+    const errEl = document.getElementById('checkoutError');
+    const btn = document.getElementById('checkoutBtn');
+    
+    if (emailEl) { emailEl.value = ''; emailEl.disabled = false; }
+    if (otpWrap) otpWrap.style.display = 'none';
+    if (otpInput) otpInput.value = '';
+    if (otpHint) otpHint.textContent = '';
+    if (sendBtn) { 
+      sendBtn.disabled = true; 
+      sendBtn.style.opacity = '0.45'; 
+      sendBtn.style.cursor = 'not-allowed'; 
+      sendBtn.textContent = 'Send OTP'; 
+      if (app.otpTimerInterval) {
+        clearInterval(app.otpTimerInterval);
+        app.otpTimerInterval = null;
+      }
+    }
+    if (errEl) errEl.style.display = 'none';
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.45'; btn.style.cursor = 'not-allowed'; btn.textContent = 'Pay with VietQR'; }
+
+    modal.style.display = 'flex';
+    setTimeout(() => { if (emailEl) emailEl.focus(); }, 80);
+  },
+
+  closeCheckout: () => {
+    document.getElementById('checkoutModal').style.display = 'none';
+  },
+
+  // Validates OTP inputs and enables the relevant buttons
+  validateOTPCheckout: () => {
+    const email = (document.getElementById('checkoutEmail')?.value || '').trim();
+    const otp = (document.getElementById('checkoutOTP')?.value || '').trim();
+    const sendBtn = document.getElementById('checkoutSendOtpBtn');
+    const payBtn = document.getElementById('checkoutBtn');
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    const emailOk = re.test(email);
+    const otpOk = /^\d{6}$/.test(otp);
+
+    // Enable Send OTP button if email is valid and hasn't been locked yet
+    if (sendBtn) {
+      const emailLocked = document.getElementById('checkoutEmail')?.disabled;
+      const readyToSend = emailOk && !emailLocked;
+      sendBtn.disabled = !readyToSend;
+      sendBtn.style.opacity = readyToSend ? '1' : '0.45';
+      sendBtn.style.cursor = readyToSend ? 'pointer' : 'not-allowed';
+    }
+
+    // Enable Pay button if email and OTP are valid
+    if (payBtn) {
+      const readyToPay = emailOk && otpOk;
+      payBtn.disabled = !readyToPay;
+      payBtn.style.opacity = readyToPay ? '1' : '0.45';
+      payBtn.style.cursor = readyToPay ? 'pointer' : 'not-allowed';
+    }
+  },
+
+  sendPurchaseOTP: async () => {
+    const emailInput = document.getElementById('checkoutEmail');
+    const errDiv = document.getElementById('checkoutError');
+    const sendBtn = document.getElementById('checkoutSendOtpBtn');
+    const otpWrap = document.getElementById('checkoutOtpWrap');
+    
+    const email = emailInput.value.trim();
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!email || !re.test(email)) {
+      errDiv.textContent = 'Please enter a valid email address.';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+    errDiv.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/payment/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
+      
+      // Success: lock email, show OTP field
+      emailInput.disabled = true;
+      otpWrap.style.display = 'block';
+      
+      const otpInput = document.getElementById('checkoutOTP');
+      if (otpInput) {
+        setTimeout(() => otpInput.focus(), 100);
+      }
+
+      // Start 3-minute countdown timer
+      let timeLeft = 180;
+      sendBtn.textContent = `Sent! (${timeLeft}s)`;
+      if (app.otpTimerInterval) clearInterval(app.otpTimerInterval);
+      
+      app.otpTimerInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+          clearInterval(app.otpTimerInterval);
+          app.otpTimerInterval = null;
+          // Only re-enable if email is actually still filled (the form wasn't reset)
+          if (emailInput.value.trim() !== '') {
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '1';
+            sendBtn.style.cursor = 'pointer';
+            sendBtn.textContent = 'Resend OTP';
+          } else {
+            sendBtn.textContent = 'Send OTP';
+          }
+        } else {
+          sendBtn.textContent = `Sent! (${timeLeft}s)`;
+        }
+      }, 1000);
+
+    } catch (e) {
+      errDiv.textContent = e.message;
+      errDiv.style.display = 'block';
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send OTP';
+    }
+  },
+
+  submitOTPCheckout: async () => {
+    const emailInput  = document.getElementById('checkoutEmail');
+    const otpInput    = document.getElementById('checkoutOTP');
+    const amountInput = document.getElementById('checkoutAmount');
+    const errDiv      = document.getElementById('checkoutError');
+    const btn         = document.getElementById('checkoutBtn');
+
+    const email = emailInput.value.trim();
+    const otp   = otpInput.value.trim();
+    const re    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!email || !re.test(email)) {
+      errDiv.textContent = 'Please enter a valid email address.';
+      errDiv.style.display = 'block';
+      return;
+    }
+    if (!otp || !/^\d{6}$/.test(otp)) {
+      errDiv.textContent = 'Please enter a valid 6-digit OTP.';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    const amount = app.checkoutPlan === 'payg' ? parseInt(amountInput.value || 0) : 0;
+
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    errDiv.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/payment/create-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: app.checkoutPlan, email, otp, custom_amount: amount })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to connect to gateway');
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        throw new Error('Invalid gateway response');
+      }
+    } catch (e) {
+      errDiv.textContent = e.message;
+      errDiv.style.display = 'block';
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = 'Pay with VietQR';
+    }
+  },
+
+
+  requestRotation: async () => {
+    const key = app.loadKey();
+    if (!key) {
+      alert('Please authenticate first before requesting a key revocation.');
+      return;
+    }
+
+    const btn = document.querySelector('[onclick="app.requestRotation()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending OTP…'; }
+
+    try {
+      const res = await fetch('/api/payment/request-rotation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceKey: key })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to request key revocation');
+        return;
+      }
+      // Show email hint in modal
+      const hint = document.getElementById('rotationEmailHint');
+      if (hint && data.emailHint) hint.textContent = data.emailHint;
+      // Clear previous OTP input and error
+      document.getElementById('rotationOtpInput').value = '';
+      document.getElementById('rotationError').style.display = 'none';
+      // Show rotation modal
+      document.getElementById('rotationModal').style.display = 'flex';
+    } catch (e) {
+      alert('Error connecting to server. Please try again.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Revoke & Re-issue (Email OTP)'; }
+    }
+  },
+
+  verifyRotation: async () => {
+    const key = app.loadKey();
+    const otp = document.getElementById('rotationOtpInput').value.trim();
+    if (!otp) return;
+
+    const btn = document.getElementById('rotationBtn');
+    btn.textContent = 'Verifying...';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/payment/verify-rotation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceKey: key, otp: otp })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('rotationError').style.display = 'block';
+        app.setText('rotationError', data.error || 'Invalid OTP');
+        btn.textContent = 'Verify & Rotate Key';
+        btn.disabled = false;
+        return;
+      }
+
+      // Success — old key is now permanently revoked
+      alert(
+        `✅ Key revoked & new key issued!\n\n` +
+        `Your OLD key has been permanently disabled.\n` +
+        `Your NEW key:\n\n${data.newKey}\n\n` +
+        `📧 It has also been sent to your registered email.\n` +
+        `All credits and subscription conditions have been preserved.\n\n` +
+        `Please update any apps/tools using the old key immediately.`
+      );
+      
+      // Update session storage
+      sessionStorage.setItem(app.CACHE_KEY, JSON.stringify({
+        key: data.newKey,
+        ts: Date.now()
+      }));
+      
+      document.getElementById('rotationModal').style.display = 'none';
+      document.getElementById('apiKeyInput').value = data.newKey;
+      app.stopAutoRefresh();
+      app.fetchQuota(); // reload dashboard with new key
+      
+    } catch (e) {
+      document.getElementById('rotationError').style.display = 'block';
+      app.setText('rotationError', 'Error connecting to server');
+    }
+    
+    btn.textContent = 'Verify & Rotate Key';
+    btn.disabled = false;
   }
 };
 
@@ -519,8 +852,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Check if returning from payOS BEFORE key logic
+  const urlParams = new URLSearchParams(window.location.search);
+  const status = urlParams.get('status');
+  const isCancel = urlParams.get('cancel') === 'true';
+
+  if (status === 'PAID' || status === 'success') {
+     const m = document.getElementById('paySuccessModal');
+     if (m) m.style.display = 'flex';
+     window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (isCancel || status === 'CANCELLED') {
+     const m = document.getElementById('payCancelModal');
+     if (m) m.style.display = 'flex';
+     window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   // Check URL key first
-  const urlKey = new URLSearchParams(window.location.search).get('key');
+  const urlKey = urlParams.get('key');
   if (urlKey) {
     app.authFromOverlay();
     return;
@@ -531,6 +879,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (cachedKey) {
     const navInput2 = document.getElementById('apiKeyInput');
     if (navInput2) navInput2.value = cachedKey;
+    
+    // Un-hide the tabs
+    const tabs = document.getElementById('navTabs');
+    if (tabs) tabs.style.display = 'flex';
+    
     app.fetchData(cachedKey, false);
     app.startAutoRefresh(cachedKey);
     return;
@@ -538,5 +891,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // No key → show overlay
   document.getElementById('welcomeState').style.display = 'flex';
-  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('overviewTab').style.display = 'none';
+  document.getElementById('storeTab').style.display = 'none';
 });
+app.otpTimerInterval = null;
+

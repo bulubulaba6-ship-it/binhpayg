@@ -1,178 +1,512 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FinkRouter — Gateway Dashboard</title>
   <meta name="description" content="AI proxy gateway quota dashboard for FinkRouter">
-  <link rel="icon" type="image/png" href="/dashboard/icon.png">
-  <link rel="stylesheet" href="/dashboard/style.css?v=7">
+  <link rel="icon" type="image/png" href="/dashboard/favicon.png">
+  <link rel="stylesheet" href="/dashboard/style.css?v=9">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
-  <nav class="navbar">
-    <div class="nav-content">
+  
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="navbar-left">
       <div class="brand">
-        <svg class="logo-mark" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#cc785c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-          <path d="M8 11l3 3 5-5"></path>
-        </svg>
+        <img src="/dashboard/favicon.png" alt="FinkRouter Logo" class="logo-mark" style="width: 28px; height: 28px; border-radius: 4px;">
         <div class="brand-text">
-          <span class="brand-name"><span style="color:#141413">Fink</span><span style="color:#cc785c">Router</span></span>
+          <span class="brand-name"><span>Fink</span><span>Router</span></span>
           <span class="brand-sub">Dashboard</span>
         </div>
-        <span class="badge">PRO</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="search-box">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          <input type="password" id="apiKeyInput" placeholder="Workspace Key..." autocomplete="off">
-          <button onclick="app.fetchQuota()" id="searchBtn">Authenticate</button>
-        </div>
-        <div class="refresh-strip" id="refreshStrip">
-          <span class="refresh-dot"></span>
-          <span id="lastUpdatedText">Live</span>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <main class="container" id="dashboard" style="display: none;">
-
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-title">
-          Credits 
-          <select id="creditToggle" style="background:transparent; border:none; color:inherit; font:inherit; font-size: 0.9em; cursor:pointer; text-decoration:underline; outline:none; font-weight: 500; margin-left: 5px;">
-            <option value="5h">5H Window</option>
-            <option value="total">All-Time</option>
-          </select>
-        </div>
-        <div class="stat-value"><span id="valCredits">0.00000</span> <span id="limitSpan" class="stat-limit">/ <span id="valLimit">100</span></span></div>
-        <div class="stat-sub" id="valReset" style="display:flex; justify-content:space-between; align-items:center;">
-          <span id="valResetText">Resets in ...</span>
-          <span id="tierBadge" style="display:none; background:var(--accent-color); color:#fff; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">Tier 1</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" id="creditProgress"></div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-title">Total Requests</div>
-        <div class="stat-value" id="valTotalReq">0</div>
-        <div class="stat-sub"><span id="valSuccessReq" class="text-success">0</span> successful</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-title">Total Tokens</div>
-        <div class="stat-value" id="valTokens">0</div>
-        <div class="stat-sub">Cumulative tokens processed</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-title">Throughput</div>
-        <div class="stat-value"><span id="valRPM">0</span> <span class="stat-limit" style="font-size:1rem;">RPM</span></div>
-        <div class="stat-sub">Requests per minute (30m avg)</div>
+        <span class="badge-pro">PRO</span>
       </div>
     </div>
 
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="card-header">
-          <div>
-            <h2>Usage Trend</h2>
-            <span class="subtitle">Requests over last 30 days</span>
-          </div>
-          <div class="last-updated" id="lastUpdatedBadge" style="display:none;">
-            <span class="live-dot"></span>
-            <span id="lastUpdatedFull">just now</span>
-          </div>
-        </div>
-        <div class="chart-container">
-          <canvas id="usageChart"></canvas>
-        </div>
-      </div>
+    <nav class="nav-menu" id="navTabs" style="display:none;">
+      <button id="tabOverviewBtn" class="nav-item active" onclick="app.showTab('overview')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Manage Profile & Activity
+      </button>
+      <button id="tabStoreBtn" class="nav-item" onclick="app.showTab('store')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg>
+        Subscription & Top-Up
+      </button>
+      <button id="tabKeysBtn" class="nav-item" onclick="app.showTab('keys')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Security & Keys
+      </button>
+    </nav>
 
-      <div class="chart-card">
-        <div class="card-header">
-          <div>
-            <h2>Model Breakdown</h2>
-            <span class="subtitle">Distribution across engines</span>
-          </div>
-        </div>
-        <div class="chart-container">
-          <canvas id="modelChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="history-card">
-      <div class="card-header">
-        <div>
-          <h2>Credit Ledger</h2>
-          <span class="subtitle">Last 100 sessions · all-time count shown above</span>
-        </div>
-      </div>
-      <div class="table-container">
-        <table id="historyTable">
-          <thead>
-            <tr>
-              <th>Session ID</th>
-              <th>Model</th>
-              <th>Tokens (In/Out/Cache/Reason)</th>
-              <th>Finished At</th>
-              <th class="text-right">Cost</th>
-            </tr>
-          </thead>
-          <tbody id="historyBody">
-          </tbody>
-        </table>
-      </div>
-      <!-- Ledger pagination -->
-      <div id="ledgerPagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 2px;font-size:13px;color:var(--text-muted);">
-        <span id="ledgerPageInfo"></span>
-        <div style="display:flex;gap:6px;">
-          <button id="ledgerPrev" onclick="app.ledgerPrev()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;">← Prev</button>
-          <button id="ledgerNext" onclick="app.ledgerNext()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;">Next →</button>
-        </div>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- Auth Overlay -->
-  <div id="welcomeState" class="welcome-state">
-    <div class="welcome-card">
-      <div class="welcome-left">
-        <svg class="welcome-logo" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-          <path d="M8 11l3 3 5-5"></path>
+    <div class="navbar-right">
+      <div class="search-box">
+        <svg class="nav-icon" style="margin-left:8px; color:var(--muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
-        <h2>Secure Gateway</h2>
-        <p class="welcome-sub">Private network proxy access</p>
+        <input type="password" id="apiKeyInput" placeholder="Workspace Key..." autocomplete="off">
+        <button onclick="app.fetchQuota()" id="searchBtn">Auth</button>
+      </div>
+      <div class="refresh-strip" id="refreshStrip" style="margin-left: 12px; margin-top: 0; margin-bottom: 0;">
+        <span class="refresh-dot"></span>
+        <span id="lastUpdatedText">Live</span>
+      </div>
+    </div>
+  </header>
+
+    <!-- Main Content Area -->
+    <div class="content-area">
+
+      <!-- Overview Tab -->
+      <main class="container tab-content" id="overviewTab" style="display: none;">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-title">
+              Credits 
+              <select id="creditToggle" style="background:transparent; border:none; color:inherit; font:inherit; cursor:pointer; text-decoration:underline; outline:none; font-weight: 500; margin-left: 5px;">
+                <option value="5h" style="color:black;">5H Window</option>
+                <option value="total" style="color:black;">All-Time</option>
+              </select>
+            </div>
+            <div class="stat-value"><span id="valCredits">0.000</span> <span id="limitSpan" class="stat-limit">/ <span id="valLimit">100</span></span></div>
+            <div class="stat-sub" id="valReset" style="display:flex; justify-content:space-between; align-items:center;">
+              <span id="valResetText">Resets in ...</span>
+              <span id="tierBadge" style="display:none; background:var(--primary); color:#000; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">Tier 1</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="creditProgress"></div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-title">Total Requests</div>
+            <div class="stat-value" id="valTotalReq">0</div>
+            <div class="stat-sub"><span id="valSuccessReq" class="text-success">0</span> successful</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-title">Total Tokens</div>
+            <div class="stat-value" id="valTokens">0</div>
+            <div class="stat-sub">Cumulative tokens processed</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-title">Throughput</div>
+            <div class="stat-value"><span id="valRPM">0</span> <span class="stat-limit" style="font-size:1.2rem;">RPM</span></div>
+            <div class="stat-sub">Requests per minute (30m avg)</div>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="card-header">
+              <div>
+                <h2>Usage Trend</h2>
+                <span class="subtitle">Requests over last 30 days</span>
+              </div>
+              <div class="last-updated" id="lastUpdatedBadge" style="display:none; font-size:0.75rem; color:var(--muted); display:flex; align-items:center; gap:5px;">
+                <span class="refresh-dot"></span>
+                <span id="lastUpdatedFull">just now</span>
+              </div>
+            </div>
+            <div class="chart-container"><canvas id="usageChart"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="card-header">
+              <div>
+                <h2>Model Breakdown</h2>
+                <span class="subtitle">Distribution across engines</span>
+              </div>
+            </div>
+            <div class="chart-container"><canvas id="modelChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="history-card">
+          <div class="card-header">
+            <div>
+              <h2>Credit Ledger</h2>
+              <span class="subtitle">Last 100 sessions · all-time count shown above</span>
+            </div>
+          </div>
+          <div class="table-container">
+            <table id="historyTable">
+              <thead>
+                <tr>
+                  <th>Session ID</th>
+                  <th>Model</th>
+                  <th>Tokens (In/Out/Cache/Reason)</th>
+                  <th>Finished At</th>
+                  <th class="text-right">Cost</th>
+                </tr>
+              </thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+          <div id="ledgerPagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 2px;font-size:13px;color:var(--muted);">
+            <span id="ledgerPageInfo"></span>
+            <div style="display:flex;gap:6px;">
+              <button id="ledgerPrev" onclick="app.ledgerPrev()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--foreground);cursor:pointer;">← Prev</button>
+              <button id="ledgerNext" onclick="app.ledgerNext()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--foreground);cursor:pointer;">Next →</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Store / Top-Up Tab -->
+      <main class="container tab-content" id="storeTab" style="display: none;">
+        <div class="store-header">
+          <h1>Top-Up & Subscriptions</h1>
+          <p style="color: var(--muted);">Choose a bundle or deposit custom credits. No hidden fees.</p>
+        </div>
+
+        <!-- Subscriptions Cards -->
+        <div class="store-cards">
+          
+          <div class="store-card" onclick="app.openCheckout('day1', 50000)">
+            <h3>1 Ngày</h3>
+            <div class="subtitle">1 ngày</div>
+            <div class="price">50.000đ</div>
+            <div class="specs">
+              <div class="spec-item">
+                <span class="spec-label">RATE LIMIT</span>
+                <span class="spec-val">1.000 cr/5h</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">CREDITS NHẬN ĐƯỢC</span>
+                <span class="spec-val">4.000 cr</span>
+              </div>
+            </div>
+            <div class="desc">Tối đa 4K cr, hết ngày là hết</div>
+          </div>
+
+          <div class="store-card" onclick="app.openCheckout('day7', 150000)">
+            <h3>7 Ngày</h3>
+            <div class="subtitle">7 ngày</div>
+            <div class="price">150.000đ</div>
+            <div class="specs">
+              <div class="spec-item">
+                <span class="spec-label">RATE LIMIT</span>
+                <span class="spec-val">1.500 cr/5h</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">CREDITS NHẬN ĐƯỢC</span>
+                <span class="spec-val">30.000 cr</span>
+              </div>
+            </div>
+            <div class="desc">Tối đa 30K cr / 7 ngày</div>
+          </div>
+
+          <div class="store-card" onclick="app.openCheckout('pro', 350000)">
+            <h3>Pro Tháng</h3>
+            <div class="subtitle">30 ngày</div>
+            <div class="price">350.000đ</div>
+            <div class="specs">
+              <div class="spec-item">
+                <span class="spec-label">RATE LIMIT</span>
+                <span class="spec-val">2.000 cr/5h</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">CREDITS NHẬN ĐƯỢC</span>
+                <span class="spec-val">50.000 cr</span>
+              </div>
+            </div>
+            <div class="desc">Trần 50K cr / tháng, không stack</div>
+          </div>
+
+          <div class="store-card popular" onclick="app.openCheckout('max', 650000)">
+            <div class="popular-badge">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              MOST POPULAR
+            </div>
+            <h3>Max 5x</h3>
+            <div class="subtitle">30 ngày</div>
+            <div style="margin-bottom: 24px;">
+              <div class="price">650.000đ <span class="discount">-35%</span></div>
+              <div class="strike">1.000.000đ</div>
+            </div>
+            <div class="specs">
+              <div class="spec-item">
+                <span class="spec-label">RATE LIMIT</span>
+                <span class="spec-val">10.000 cr/5h</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">CREDITS NHẬN ĐƯỢC</span>
+                <span class="spec-val">250.000 cr</span>
+              </div>
+            </div>
+            <div class="desc">Trần 250K cr / tháng</div>
+          </div>
+
+          <div class="store-card" onclick="app.openCheckout('max_20x', 1800000)">
+            <h3>Max 20x</h3>
+            <div class="subtitle">30 ngày</div>
+            <div style="margin-bottom: 24px;">
+              <div class="price">1.800.000đ <span class="discount">-12%</span></div>
+              <div class="strike">2.050.000đ</div>
+            </div>
+            <div class="specs">
+              <div class="spec-item">
+                <span class="spec-label">RATE LIMIT</span>
+                <span class="spec-val">40.000 cr/5h</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">CREDITS NHẬN ĐƯỢC</span>
+                <span class="spec-val">1.000.000 cr</span>
+              </div>
+            </div>
+            <div class="desc">Trần 1M cr / tháng</div>
+          </div>
+        </div>
+
+        <!-- Pay As You Go Tables -->
+        <div class="history-card" style="margin-bottom: var(--sp-xl);">
+          <div class="card-header">
+            <div>
+              <h2 style="font-family:var(--font-display); font-size: 1.6rem;">Pay-As-You-Go Tiers</h2>
+              <span class="subtitle">Volume-based discount schedule</span>
+            </div>
+            <button class="auth-btn" style="width:auto; padding: 8px 16px; font-family:var(--font-sans);" onclick="app.openCheckout('payg', 0)">Custom Top-Up</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Bậc</th>
+                  <th>Mức nạp (VND)</th>
+                  <th>Tỷ lệ (cr/VND)</th>
+                  <th>Giá / 1.000 cr</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>1</td><td>Dưới 50.000đ</td><td>0.067</td><td>15.000đ (Đắt nhất)</td></tr>
+                <tr><td>2</td><td>50.000 – dưới 150.000đ</td><td>0.083</td><td>12.000đ</td></tr>
+                <tr><td>3</td><td>150.000 – dưới 300.000đ</td><td>0.100</td><td>10.000đ</td></tr>
+                <tr><td>4</td><td>300.000 – dưới 600.000đ</td><td>0.125</td><td>8.000đ</td></tr>
+                <tr><td>5</td><td>600.000 – dưới 2.000.000đ</td><td>0.286</td><td>3.500đ (Bảo vệ Max 5x)</td></tr>
+                <tr><td>6</td><td>Từ 2.000.000đ trở lên <span style="background:rgba(236,168,214,0.1); color:var(--primary); font-family:var(--font-mono); font-size:0.7rem; padding: 2px 6px; border-radius:10px; margin-left: 8px;">✨ Siêu Rẻ</span></td><td>0.588</td><td>1.700đ (Vượt Max 20x)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <!-- Security & Keys Tab -->
+      <main class="container tab-content" id="keysTab" style="display: none;">
+        <div class="store-header" style="text-align: left; margin-bottom: var(--sp-xl);">
+          <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin-bottom: 8px;">Security & Keys</h1>
+          <p style="color: var(--muted);">Manage your workspace key and security preferences.</p>
+        </div>
+
+        <div class="history-card" style="margin-bottom: var(--sp-xl);">
+          <div class="card-header">
+            <div>
+              <h2 style="font-family:var(--font-display); font-size: 1.6rem;">Active Workspace Key</h2>
+              <span class="subtitle">Your currently authenticated API key</span>
+            </div>
+          </div>
+          <div style="background: rgba(0,0,0,0.4); padding: 16px; border-radius: var(--r-md); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+            <code id="displayApiKey" style="font-family: var(--font-mono); font-size: 1rem; color: var(--foreground); letter-spacing: 0.1em;">Loading...</code>
+            <button class="auth-btn" style="width: auto; padding: 6px 12px; font-size: 0.8rem;" onclick="navigator.clipboard.writeText(app.loadKey() || '').then(()=>this.textContent='Copied!').catch(()=>alert('Copy failed'))">Copy</button>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--muted); margin-top: 12px;">Keep this key secure. Do not share it in public repositories.</p>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card">
+            <h2 style="font-family:var(--font-display); font-size: 1.4rem; margin-bottom: 8px;">Revoke & Re-issue Key</h2>
+            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 8px;">
+              Key compromised or need a replacement? We'll verify your identity via email OTP,
+              then permanently revoke the old key and send a brand-new key with 
+              <strong>all your credits and subscription conditions preserved</strong>.
+            </p>
+            <p style="font-size: 0.78rem; color: var(--muted); margin-bottom: 16px;">
+              ⚠️ The old key will stop working immediately after verification.
+            </p>
+            <button class="auth-btn" style="background: var(--error); color: #fff; width: auto; padding: 8px 16px;" onclick="app.requestRotation()">
+              Revoke &amp; Re-issue (Email OTP)
+            </button>
+            <button class="auth-btn" style="background: transparent; color: var(--muted); width: auto; padding: 8px 16px; margin-top: 12px; border: 1px solid var(--border);" onclick="app.revokeKey()">
+              Sign Out (This Device Only)
+            </button>
+          </div>
+          <div class="chart-card">
+            <h2 style="font-family:var(--font-display); font-size: 1.4rem; margin-bottom: 8px;">Contact Support</h2>
+            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 16px;">Need help with credits, billing, or have an issue? Reach us directly.</p>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <a href="mailto:support@finkrouter.com" class="auth-btn" style="background: rgba(255,255,255,0.1); color: var(--foreground); width: auto; padding: 8px 16px; text-decoration: none; display: inline-block; text-align: center; border: 1px solid var(--border);">Email Support</a>
+              <div style="font-size: 0.85rem; color: var(--foreground); display: flex; flex-direction: column; gap: 4px;">
+                <span><strong>Zalo:</strong> 0778535017</span>
+                <span><strong>Telegram:</strong> @phulinh1912</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div> <!-- /content-area -->
+
+  <!-- Welcome / Auth Overlay -->
+  <div id="welcomeState" class="welcome-state">
+    <div class="welcome-card welcome-card--wide">
+      <!-- LEFT: Hero / Branding Panel -->
+      <div class="welcome-left welcome-left--hero">
+        <img src="/dashboard/favicon.png" alt="FinkRouter" style="width:52px;height:52px;border-radius:12px;margin-bottom:var(--sp-md);display:block;">
+        <h2 style="font-size:2.2rem;margin-bottom:6px;">FinkRouter</h2>
+        <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;margin-bottom:var(--sp-lg);">Gateway AI t&#7889;c &#273;&#7897; cao, t&#432;&#417;ng th&#237;ch OpenAI &amp; Anthropic. Ch&#7915;y claude-opus-4-8, gpt-5.5 v&#224; h&#417;n n&#7919;a.</p>
+        <div class="welcome-pills">
+          <span class="welcome-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Th&#7901;i gian th&#7921;c
+          </span>
+          <span class="welcome-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            B&#7843;o m&#7853;t
+          </span>
+          <span class="welcome-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            No timeout
+          </span>
+        </div>
+        <div class="welcome-stat-row">
+          <div class="welcome-stat">
+            <span class="welcome-stat-val">6</span>
+            <span class="welcome-stat-label">Models</span>
+          </div>
+          <div class="welcome-stat-divider"></div>
+          <div class="welcome-stat">
+            <span class="welcome-stat-val">99.9%</span>
+            <span class="welcome-stat-label">Uptime</span>
+          </div>
+          <div class="welcome-stat-divider"></div>
+          <div class="welcome-stat">
+            <span class="welcome-stat-val">&lt;80ms</span>
+            <span class="welcome-stat-label">Latency</span>
+          </div>
+        </div>
+      </div>
+      <!-- RIGHT: Auth Panel -->
+      <div class="welcome-right welcome-right--auth">
+        <div style="margin-bottom:var(--sp-lg);">
+          <h3 style="font-family:var(--font-display);font-size:1.4rem;margin-bottom:4px;">&#272;&#259;ng nh&#7853;p</h3>
+          <p style="font-size:0.8rem;color:var(--muted);">Nh&#7853;p API key &#273;&#7875; truy c&#7853;p dashboard</p>
+        </div>
+        <div style="position:relative;margin-bottom:var(--sp-sm);">
+          <input type="password" id="welcomeApiKeyInput" placeholder="fink_pro_..." autocomplete="off" onkeypress="if(event.key==='Enter') app.authFromOverlay()" style="padding-left:40px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted);pointer-events:none;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        </div>
+        <button class="auth-btn" onclick="app.authFromOverlay()" style="margin-bottom:var(--sp-md);">Authenticate Session</button>
+        <p style="font-size:0.72rem;color:var(--muted);text-align:center;margin-bottom:var(--sp-lg);">Key c&#7911;a b&#7841;n kh&#244;ng bao gi&#7901; l&#432;u trong URL</p>
+
+        <div class="welcome-divider">
+          <span>Ch&#432;a c&#243; key?</span>
+        </div>
+
+        <button
+          class="auth-btn welcome-buy-btn"
+          onclick="app.showTab('store'); document.getElementById('welcomeState').style.display='none'; document.getElementById('navTabs').style.display='flex';"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+          Mua key ngay — t&#7915; 50.000&#273;
+        </button>
+        <p style="font-size:0.72rem;color:var(--muted);text-align:center;margin-top:10px;">G&#7917;i API key qua email ngay sau thanh to&#225;n</p>
+      </div>
+    </div>
+  </div>
+  <!-- Rotation / Revoke OTP Modal -->
+  <div id="rotationModal" class="welcome-state" style="display:none;">
+    <div class="welcome-card" style="margin: auto;">
+      <div class="welcome-left">
+        <h2>Verify Identity</h2>
+        <p style="color:var(--muted); font-size:0.85rem;">A 6-digit code was sent to <strong id="rotationEmailHint">your registered email</strong>. Enter it below to confirm the revocation and receive your new key.</p>
+        <p style="color:var(--muted); font-size:0.75rem; margin-top:8px;">Code expires in 5 minutes. Max 3 attempts per hour.</p>
       </div>
       <div class="welcome-right">
-        <div class="welcome-input-wrap">
-          <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          <input type="password" id="welcomeApiKeyInput" placeholder="Workspace Key..." autocomplete="off" onkeypress="if(event.key==='Enter') app.authFromOverlay()">
+        <div style="margin-bottom: 20px;">
+           <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">6-Digit OTP Code</label>
+           <input type="text" id="rotationOtpInput" placeholder="123456" maxlength="6" inputmode="numeric" style="text-align:center; font-size: 1.5rem; letter-spacing: 4px;" onkeypress="if(event.key==='Enter') app.verifyRotation()">
         </div>
-        <button class="auth-btn" onclick="app.authFromOverlay()">Authenticate Session</button>
-        <p class="welcome-hint">Your key is never stored in the URL</p>
+        <div id="rotationError" style="display:none; color: var(--error); font-size: 0.8rem; margin-bottom: 12px; text-align:center;"></div>
+        <button id="rotationBtn" class="auth-btn" onclick="app.verifyRotation()">Verify &amp; Get New Key</button>
+        <button class="auth-btn" style="background:transparent; color:var(--muted); box-shadow:none; margin-top:10px; border:1px solid var(--border);" onclick="document.getElementById('rotationModal').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <!-- Checkout Modal Overlay -->
+  <div id="checkoutModal" class="welcome-state" style="display:none;">
+    <div class="welcome-card" style="margin: auto;">
+      <div class="welcome-left">
+        <h2>Complete Purchase</h2>
+        <p style="color:var(--muted); font-size:0.85rem;" id="checkoutPlanDesc">Loading...</p>
+      </div>
+      <div class="welcome-right">
+        <div id="customAmountWrap" style="display:none; margin-bottom: 15px;">
+           <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">Deposit Amount (VND)</label>
+           <input type="number" id="checkoutAmount" min="50000" step="1000" placeholder="50000">
+        </div>
+        <div style="margin-bottom: 12px; display: flex; align-items: flex-end; gap: 8px;">
+           <div style="flex: 1;">
+               <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">Email Address</label>
+               <input type="email" id="checkoutEmail" style="margin-bottom: 0; height: 42px;" placeholder="you@example.com" oninput="app.validateOTPCheckout()" onblur="this.value = this.value.trim(); app.validateOTPCheckout()" autocomplete="email">
+           </div>
+           <button id="checkoutSendOtpBtn" class="auth-btn" style="width: auto; padding: 0 16px; height: 42px; margin-bottom: 0;" onclick="app.sendPurchaseOTP()">Send OTP</button>
+        </div>
+        <p style="font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-top: -6px; margin-bottom: 16px;">Your API key will be sent here securely.</p>
+        
+        <div id="checkoutOtpWrap" style="margin-bottom: 20px; display: none;">
+           <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">OTP Verification Code</label>
+           <input type="text" id="checkoutOTP" placeholder="6-digit code" maxlength="6" oninput="app.validateOTPCheckout()" autocomplete="off">
+           <p id="checkoutOtpHint" style="font-size: 0.72rem; margin-top: 5px; min-height: 1em;"></p>
+        </div>
+        <div id="checkoutError" style="display:none; color: var(--error); font-size: 0.8rem; margin-bottom: 12px; text-align:center;"></div>
+        <button id="checkoutBtn" class="auth-btn" disabled onclick="app.submitOTPCheckout()">Pay with VietQR</button>
+        <button class="auth-btn" style="background:transparent; color:var(--muted); box-shadow:none; margin-top:10px; border:1px solid var(--border);" onclick="app.closeCheckout()">Cancel</button>
       </div>
     </div>
   </div>
 
-  <script src="/dashboard/app.js?v=8"></script>
-</body>
 
+  <!-- Payment Success Modal -->
+  <div id="paySuccessModal" class="welcome-state" style="display:none; z-index:9999;">
+    <div class="welcome-card" style="margin:auto; max-width:460px; text-align:center;">
+      <div style="padding: 12px 0 8px;">
+        <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,rgba(46,204,113,0.18),rgba(46,204,113,0.06));border:2px solid rgba(46,204,113,0.35);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:34px;height:34px;">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.5 12.4 19.79 19.79 0 0 1 1.07 3.9 2 2 0 0 1 3.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.92z"/>
+          </svg>
+        </div>
+        <h2 style="font-family:var(--font-display);font-size:1.8rem;margin-bottom:10px;color:var(--foreground);">Thanh to&#225;n th&#224;nh c&#244;ng!</h2>
+        <p style="color:var(--muted);font-size:0.95rem;line-height:1.6;margin-bottom:8px;">API key c&#7911;a b&#7841;n &#273;&#227; &#273;&#432;&#7907;c t&#7841;o v&#224; s&#7869; &#273;&#432;&#7907;c g&#7917;i v&#224;o email trong v&#224;i gi&#226;y.</p>
+        <div style="background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.2);border-radius:10px;padding:16px 20px;margin:18px 0 22px;">
+          <div style="display:flex;align-items:center;gap:10px;justify-content:center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;flex-shrink:0;">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <span style="font-size:0.9rem;color:var(--foreground);">Ki&#7875;m tra <strong>Inbox</strong> (v&#224; c&#7843; <em>Spam</em>) &#273;&#7875; nh&#7853;n API key.</span>
+          </div>
+        </div>
+        <p style="font-size:0.78rem;color:rgba(255,255,255,0.3);margin-bottom:22px;">Key c&#7911;a b&#7841;n b&#7843;o m&#7853;t — kh&#244;ng chia s&#7867; cho b&#7845;t k&#7923; ai.</p>
+        <button class="auth-btn" style="width:100%;" onclick="document.getElementById('paySuccessModal').style.display='none';">&#272;&#227; hi&#7875;u, &#273;&#243;ng l&#7841;i</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Cancelled Modal -->
+  <div id="payCancelModal" class="welcome-state" style="display:none; z-index:9999;">
+    <div class="welcome-card" style="margin:auto; max-width:400px; text-align:center;">
+      <div style="padding: 12px 0 8px;">
+        <div style="width:64px;height:64px;border-radius:50%;background:rgba(231,76,60,0.1);border:2px solid rgba(231,76,60,0.25);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;">
+            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <h2 style="font-family:var(--font-display);font-size:1.6rem;margin-bottom:10px;">&#272;&#227; h&#7911;y thanh to&#225;n</h2>
+        <p style="color:var(--muted);font-size:0.9rem;line-height:1.6;margin-bottom:22px;">Giao d&#7883;ch &#273;&#227; b&#7883; h&#7911;y. B&#7841;n kh&#244;ng b&#7883; tr&#7915; ti&#7873;n.</p>
+        <button class="auth-btn" style="width:100%;background:transparent;border:1px solid var(--border);color:var(--muted);" onclick="document.getElementById('payCancelModal').style.display='none';">&#272;&#243;ng</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/dashboard/app.js?v=16"></script>
+</body>
 </html>

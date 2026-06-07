@@ -28,12 +28,12 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/modules"
 	ampmodule "github.com/router-for-me/CLIProxyAPI/v7/internal/api/modules/amp"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/web/quota"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/web/quota"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/redisqueue"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v7/sdk/access"
@@ -385,7 +385,7 @@ func (s *Server) setupRoutes() {
 	}
 	s.engine.GET("/healthz", healthzHandler)
 	s.engine.HEAD("/healthz", healthzHandler)
-	
+
 	// Legacy dashboard web portal (embedded for reliability)
 	s.engine.GET("/quota-check", func(c *gin.Context) {
 		data, err := quota.FS.ReadFile("index.html")
@@ -398,6 +398,18 @@ func (s *Server) setupRoutes() {
 	s.engine.StaticFS("/dashboard", http.FS(quota.FS))
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
+
+	// FinkRouter Storefront & Webhook
+	// Note: Storefront UI is now embedded in /dashboard
+	if s.mgmt != nil {
+		s.engine.POST("/payos-webhook", s.mgmt.PostPayOSWebhook)
+		s.engine.POST("/api/payment/send-otp", s.mgmt.PostSendPurchaseOTP)
+		s.engine.POST("/api/payment/create-link", s.mgmt.PostCreatePaymentLink)
+		s.engine.POST("/api/payment/request-rotation", s.mgmt.PostRequestRotation)
+		s.engine.POST("/api/payment/verify-rotation", s.mgmt.PostVerifyRotation)
+	}
+
+	// Register core API routes
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)
 	geminiHandlers := gemini.NewGeminiAPIHandler(s.handlers)
 	geminiCLIHandlers := gemini.NewGeminiCLIAPIHandler(s.handlers)
@@ -442,6 +454,7 @@ func (s *Server) setupRoutes() {
 	billingMgmt := s.engine.Group("/v1/billing")
 	{
 		billingMgmt.POST("/deposit", s.handlers.PostDeposit)
+		billingMgmt.POST("/provision", s.mgmt.PostProvisionKey)
 	}
 
 	// Gemini compatible API routes

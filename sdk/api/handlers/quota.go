@@ -42,7 +42,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	}
 
 	snapshot := middleware.GetPostPaySnapshot()
-	var totalCredits float64  // all-time cumulative (from ledger)
+	var totalCredits float64 // all-time cumulative (from ledger)
 	var creditsPurchased float64
 	var successCount int64
 	var failedCount int64
@@ -79,7 +79,6 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			}
 		}
 	}
-	
 
 	// 5h window credits: sum credits only from sessions within the last 5 hours.
 	// The ledger keeps the last 100 sessions with timestamps, so we can compute this.
@@ -140,8 +139,8 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"daily_requests":   dailyRequests,
 		},
 		"quota": gin.H{
-			"credits_used":       fiveHCredits,   // 5-hour rolling window
-			"total_credits_used": totalCredits,   // all-time cumulative
+			"credits_used":       fiveHCredits, // 5-hour rolling window
+			"total_credits_used": totalCredits, // all-time cumulative
 			"credits_purchased":  creditsPurchased,
 			"tier":               tier,
 			"credit_limit":       creditLimit,
@@ -154,7 +153,6 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		"debug_info": "finkrouter-postpay-isolated",
 	})
 }
-
 
 // TrendPoint is a single data point for time-series charts.
 type TrendPoint struct {
@@ -194,13 +192,13 @@ func quotaPrincipalFromContext(c *gin.Context) string {
 	if c == nil {
 		return ""
 	}
-	
+
 	// AuthMiddleware in server.go sets "userApiKey"
 	val, exists := c.Get("userApiKey")
 	if !exists {
 		val, exists = c.Get("apiKey") // Fallback
 	}
-	
+
 	if exists {
 		switch typed := val.(type) {
 		case string:
@@ -216,7 +214,8 @@ func quotaPrincipalFromContext(c *gin.Context) string {
 
 type DepositRequest struct {
 	APIKey    string  `json:"api_key" binding:"required"`
-	USDAmount float64 `json:"usd_amount" binding:"required,gt=0"`
+	USDAmount float64 `json:"usd_amount"` // legacy: USD-based deposit (ProcessDeposit)
+	VNDAmount float64 `json:"vnd_amount"` // preferred: VND-native deposit (ProcessDepositVND)
 	TxnID     string  `json:"txn_id,omitempty"`
 }
 
@@ -228,7 +227,7 @@ func (h *BaseAPIHandler) PostDeposit(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "post-pay billing not enabled"})
 		return
 	}
-	
+
 	secret := liveCfg.PostPayBilling.WebhookSecret
 	if secret == "" {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "webhook secret not configured"})
@@ -248,10 +247,33 @@ func (h *BaseAPIHandler) PostDeposit(c *gin.Context) {
 		return
 	}
 
-	// 3. Process deposit
-	added, newTotal, tier, isDuplicate := middleware.ProcessDeposit(req.APIKey, req.USDAmount, req.TxnID)
+	// 3. Validate: at least one of vnd_amount or usd_amount must be > 0
+	if req.VNDAmount <= 0 && req.USDAmount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "vnd_amount or usd_amount must be > 0"})
+		return
+	}
 
-	// 4. Force immediate disk save for ledger
+	// 4. Process deposit using the correct function:
+	//    - vnd_amount (preferred): use ProcessDepositVND with VND-native tier rates
+	//    - usd_amount (legacy): use ProcessDeposit with USD-based tier rates
+	var added, newTotal float64
+	var tier int
+	var isDuplicate bool
+	var amountLabel string
+	var amountValue float64
+	if req.VNDAmount > 0 {
+		// payOS native: VND amount → VND-tier cr/VND rates
+		added, newTotal, tier, isDuplicate = middleware.ProcessDepositVND(req.APIKey, req.VNDAmount, req.TxnID)
+		amountLabel = "vnd_deposited"
+		amountValue = req.VNDAmount
+	} else {
+		// Legacy: USD amount → USD-tier cr/USD rates
+		added, newTotal, tier, isDuplicate = middleware.ProcessDeposit(req.APIKey, req.USDAmount, req.TxnID)
+		amountLabel = "usd_deposited"
+		amountValue = req.USDAmount
+	}
+
+	// 5. Force immediate disk save for ledger
 	fullLedgerPath := filepath.Join(liveCfg.AuthDir, liveCfg.PostPayBilling.LedgerFile)
 	_ = middleware.SavePostPayUsage(fullLedgerPath)
 
@@ -259,7 +281,7 @@ func (h *BaseAPIHandler) PostDeposit(c *gin.Context) {
 		"status": "success",
 		"data": gin.H{
 			"api_key":          redactKey(req.APIKey),
-			"usd_deposited":    req.USDAmount,
+			amountLabel:        amountValue,
 			"credits_added":    added,
 			"new_total_bought": newTotal,
 			"new_tier":         tier,

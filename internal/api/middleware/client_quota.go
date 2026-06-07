@@ -245,6 +245,27 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					})
 					return
 				}
+
+				// 2. 5-Hour Rate Limit Check
+				limit := liveCfg.DefaultAPIKeyLimit
+				if liveCfg.APIKeyLimits != nil {
+					if customLimit, ok := liveCfg.APIKeyLimits[apiKey]; ok {
+						limit = customLimit
+					}
+				}
+				if limit > 0 {
+					if fiveHCredits >= float64(limit) {
+						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+							"error": gin.H{
+								"message": "insufficient_quota: You exceeded your 5-hour rate limit. Please wait before continuing.",
+								"type":    "insufficient_quota",
+								"code":    "insufficient_quota",
+							},
+						})
+						return
+					}
+				}
+
 				c.Next()
 				return // Skip standard volatile kill switch
 			}
@@ -522,4 +543,163 @@ func ProcessDeposit(apiKey string, usdAmount float64, txnID string) (addedCredit
 	}
 
 	return addedCredits, newTotalPurchased, tier, false
+}
+
+// vndTierEntry describes one PAYG credit conversion tier based on VND amount.
+type vndTierEntry struct {
+	maxVND float64 // exclusive upper bound (0 = no upper bound)
+	rate   float64 // credits per VND
+	tier   int
+}
+
+// vndTiers defines the Pay-As-You-Go credit conversion tiers based on VND amount.
+// Strategic Decoy Pricing: Tier 6 (>2M) is cheaper than Max 20x to act as the ultimate trap.
+//
+//	Tier 1  < 50,000 VND    → 0.0667 cr/VND (15,000đ/1000cr)
+//	Tier 2  < 150,000 VND   → 0.0833 cr/VND (12,000đ/1000cr)
+//	Tier 3  < 300,000 VND   → 0.1000 cr/VND (10,000đ/1000cr)
+//	Tier 4  < 600,000 VND   → 0.1250 cr/VND (8,000đ/1000cr)
+//	Tier 5  < 2,000,000 VND → 0.2857 cr/VND (3,500đ/1000cr)
+//	Tier 6  ≥ 2,000,000 VND → 0.5882 cr/VND (1,700đ/1000cr) - ULTIMATE DECOY
+var vndTiers = []vndTierEntry{
+	{maxVND: 50_000, rate: 0.0667, tier: 1},
+	{maxVND: 150_000, rate: 0.0833, tier: 2},
+	{maxVND: 300_000, rate: 0.1000, tier: 3},
+	{maxVND: 600_000, rate: 0.1250, tier: 4},
+	{maxVND: 2_000_000, rate: 0.2857, tier: 5},
+	{maxVND: 0, rate: 0.5882, tier: 6}, // 0 = no upper bound
+}
+
+// vndTierForAmount returns the rate (cr/VND) and tier number for a given VND amount.
+func vndTierForAmount(vndAmount float64) (rate float64, tier int) {
+	for _, t := range vndTiers {
+		if t.maxVND == 0 || vndAmount < t.maxVND {
+			return t.rate, t.tier
+		}
+	}
+	// Fallback to best tier
+	last := vndTiers[len(vndTiers)-1]
+	return last.rate, last.tier
+}
+
+// ProcessDepositVND adds VND funds to an API key, converting them to credits
+// using the FinkRouter VND-native pricing tiers. It is idempotent if txnID is provided.
+// This is the preferred deposit function for payOS webhook integrations.
+//
+// Returns: (creditsAdded, newTotalPurchased, tierApplied, isDuplicate).
+func ProcessDepositVND(apiKey string, vndAmount float64, txnID string) (addedCredits float64, newTotalPurchased float64, tier int, isDuplicate bool) {
+	postPayUsageMu.Lock()
+	defer postPayUsageMu.Unlock()
+
+	entry, exists := postPayUsage[apiKey]
+	if !exists {
+		entry = &PostPayUsageEntry{Timestamp: time.Now()}
+		postPayUsage[apiKey] = entry
+	}
+
+	// Idempotency check — same txnID from a retried payOS webhook does nothing
+	if txnID != "" {
+		for _, id := range entry.ProcessedTxns {
+			if id == txnID {
+				_, t := vndTierForAmount(vndAmount)
+				return 0, entry.CreditsPurchased, t, true
+			}
+		}
+	}
+
+	// Apply VND-based tier rate to compute credits
+	rate, tier := vndTierForAmount(vndAmount)
+	addedCredits = vndAmount * rate
+	entry.CreditsPurchased += addedCredits
+	newTotalPurchased = entry.CreditsPurchased
+
+	if txnID != "" {
+		entry.ProcessedTxns = append(entry.ProcessedTxns, txnID)
+		if len(entry.ProcessedTxns) > 100 {
+			entry.ProcessedTxns = entry.ProcessedTxns[1:]
+		}
+	}
+
+	return addedCredits, newTotalPurchased, tier, false
+}
+
+// ProcessDepositCredits adds an exact credit amount directly to an API key's
+// creditsPurchased balance — no USD/VND conversion involved.
+// Use this for subscription plans where the credit amount is fixed by the plan,
+// not derived from a currency amount.
+// It is idempotent if txnID is provided.
+func ProcessDepositCredits(apiKey string, credits float64, txnID string) (addedCredits float64, newTotalPurchased float64, isDuplicate bool) {
+	postPayUsageMu.Lock()
+	defer postPayUsageMu.Unlock()
+
+	entry, exists := postPayUsage[apiKey]
+	if !exists {
+		entry = &PostPayUsageEntry{Timestamp: time.Now()}
+		postPayUsage[apiKey] = entry
+	}
+
+	// Idempotency check — same txnID from a retried webhook does nothing
+	if txnID != "" {
+		for _, id := range entry.ProcessedTxns {
+			if id == txnID {
+				return 0, entry.CreditsPurchased, true
+			}
+		}
+	}
+
+	entry.CreditsPurchased += credits
+	newTotalPurchased = entry.CreditsPurchased
+
+	if txnID != "" {
+		entry.ProcessedTxns = append(entry.ProcessedTxns, txnID)
+		if len(entry.ProcessedTxns) > 100 {
+			entry.ProcessedTxns = entry.ProcessedTxns[1:]
+		}
+	}
+
+	return credits, newTotalPurchased, false
+}
+
+// SwapKeyInPostPayMemory transfers post-pay balances and history from an old key to a new key.
+func SwapKeyInPostPayMemory(oldKey, newKey string) {
+	postPayUsageMu.Lock()
+	defer postPayUsageMu.Unlock()
+	
+	if entry, exists := postPayUsage[oldKey]; exists {
+		postPayUsage[newKey] = entry
+		delete(postPayUsage, oldKey)
+	}
+}
+
+// SwapKeyInConfigMemory replaces the oldKey with the newKey in the live config memory.
+func SwapKeyInConfigMemory(oldKey, newKey string) {
+	liveCfgMu.Lock()
+	defer liveCfgMu.Unlock()
+	
+	if globalConfig == nil {
+		return
+	}
+	
+	// Swap in API keys list
+	for i, k := range globalConfig.APIKeys {
+		if k == oldKey {
+			globalConfig.APIKeys[i] = newKey
+		}
+	}
+	
+	// Swap in Model Pricing/Limits map if custom limits exist
+	if globalConfig.APIKeyLimits != nil {
+		if limit, ok := globalConfig.APIKeyLimits[oldKey]; ok {
+			globalConfig.APIKeyLimits[newKey] = limit
+			delete(globalConfig.APIKeyLimits, oldKey)
+		}
+	}
+	
+	// Swap in post-pay clients map
+	if globalConfig.PostPayBilling.Clients != nil {
+		if client, ok := globalConfig.PostPayBilling.Clients[oldKey]; ok {
+			globalConfig.PostPayBilling.Clients[newKey] = client
+			delete(globalConfig.PostPayBilling.Clients, oldKey)
+		}
+	}
 }
