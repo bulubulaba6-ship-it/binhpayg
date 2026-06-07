@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -148,9 +149,9 @@ func (h *Handler) PostVerifyRotation(c *gin.Context) {
 	// Generate a unique rotation order code so it doesn't conflict with the original order_code UNIQUE constraint
 	rotationID := fmt.Sprintf("ROTATE-%x", randomBytes)
 
-	// Insert new key
-	_, err = db.Exec("INSERT INTO api_keys (key_hash, key_prefix, email, plan, order_code) VALUES ($1, $2, $3, $4, $5)",
-		newHash, newPrefix, email, plan, rotationID)
+	// Insert new key — include "name" to satisfy the legacy NOT NULL constraint on the production DB
+	_, err = db.Exec("INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, order_code) VALUES ($1, $2, $3, $4, $5, $6)",
+		plan, newHash, newPrefix, email, plan, rotationID)
 	if err != nil {
 		log.Errorf("failed to insert new key: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -264,14 +265,26 @@ func sendOTPEmail(toEmail, otp string) {
 	}
 	bodyBytes, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		log.Errorf("sendOTPEmail: failed to create request: %v", err)
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+resendKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
-	if err == nil {
-		defer resp.Body.Close()
+	if err != nil {
+		log.Errorf("sendOTPEmail: failed to send: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		log.Errorf("sendOTPEmail: resend returned status %d for %s: %s", resp.StatusCode, toEmail, string(respBody))
+	} else {
+		log.Infof("sendOTPEmail: OTP sent to %s", toEmail)
 	}
 }
 
@@ -317,14 +330,26 @@ func sendPurchaseOTPEmail(toEmail, otp string) {
 	}
 	bodyBytes, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		log.Errorf("sendPurchaseOTPEmail: failed to create request: %v", err)
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+resendKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
-	if err == nil {
-		defer resp.Body.Close()
+	if err != nil {
+		log.Errorf("sendPurchaseOTPEmail: failed to send: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		log.Errorf("sendPurchaseOTPEmail: resend returned status %d for %s: %s", resp.StatusCode, toEmail, string(respBody))
+	} else {
+		log.Infof("sendPurchaseOTPEmail: OTP sent to %s", toEmail)
 	}
 }
 
