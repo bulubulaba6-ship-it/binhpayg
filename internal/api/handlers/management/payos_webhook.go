@@ -76,9 +76,14 @@ func getWebhookDB() *sql.DB {
 						created_at TIMESTAMPTZ DEFAULT NOW()
 					);
 				`)
-				// Auto-migrate missing columns for older deployments
+				// Auto-migrate missing columns for older deployments.
+				// The production DB was created before this code existed and may have extra
+				// NOT NULL columns (e.g. "name") not in our CREATE TABLE above.
+				// We handle both directions: add columns we expect, and backfill columns the
+				// legacy DB requires.
 				_, _ = db.Exec(`
 					ALTER TABLE api_keys 
+					ADD COLUMN IF NOT EXISTS name VARCHAR(255) DEFAULT '',
 					ADD COLUMN IF NOT EXISTS key_prefix VARCHAR(20) DEFAULT '',
 					ADD COLUMN IF NOT EXISTS email VARCHAR(255),
 					ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'payg',
@@ -277,10 +282,11 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		// This avoids a type mismatch: production DB may have created_at as BIGINT (from an older
 		// deployment that used time.Now().Unix()), while our schema declares it as TIMESTAMPTZ.
 		// Letting the DB default avoids the column type entirely.
+		// We pass "name" = displayPlan to satisfy the legacy NOT NULL constraint on the production DB.
 		_, errInsert := db.Exec(`
-			INSERT INTO api_keys (key_hash, key_prefix, email, plan, status, order_code)
-			VALUES ($1, $2, $3, $4, 'active', $5)
-		`, keyHash, prefix, userEmail, displayPlan, orderCode)
+			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code)
+			VALUES ($1, $2, $3, $4, $5, 'active', $6)
+		`, displayPlan, keyHash, prefix, userEmail, displayPlan, orderCode)
 		if errInsert != nil {
 			log.Errorf("failed to insert api key to postgres: %v", errInsert)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
