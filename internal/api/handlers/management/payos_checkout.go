@@ -187,17 +187,15 @@ func (h *Handler) PostCreatePaymentLink(c *gin.Context) {
 	returnUrl := fmt.Sprintf("%s://%s/dashboard?status=PAID", protocol, host)
 	cancelUrl := fmt.Sprintf("%s://%s/dashboard?cancel=true", protocol, host)
 
-	emailPrefix := strings.Split(req.Email, "@")[0]
-	if len(emailPrefix) > 8 {
-		emailPrefix = emailPrefix[:8]
-	}
+	// Description format: "plan lastDigits" e.g. "day1 496240"
+	// Do NOT include email prefix — it leaks user info and clutters the bank statement.
 	orderStr := fmt.Sprintf("%d", orderCode)
 	if len(orderStr) > 6 {
 		orderStr = orderStr[len(orderStr)-6:]
 	}
-	desc := fmt.Sprintf("%s %s %s", emailPrefix, plan, orderStr)
+	desc := fmt.Sprintf("%s %s", plan, orderStr)
 	if plan == "payg" {
-		desc = fmt.Sprintf("%s %dk %s", emailPrefix, amount/1000, orderStr)
+		desc = fmt.Sprintf("%dk %s", amount/1000, orderStr)
 	}
 	if len(desc) > 25 {
 		desc = desc[:25]

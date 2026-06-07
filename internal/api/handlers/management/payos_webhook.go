@@ -90,6 +90,9 @@ func getWebhookDB() *sql.DB {
 					ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active',
 					ADD COLUMN IF NOT EXISTS order_code VARCHAR(100);
 				`)
+				// Ensure created_at has a DEFAULT so inserts that omit it still succeed.
+				// The production column may have been created as NOT NULL without DEFAULT.
+				_, _ = db.Exec(`ALTER TABLE api_keys ALTER COLUMN created_at SET DEFAULT NOW()`)
 				webhookDB = db
 			}
 		}
@@ -278,14 +281,13 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 			return
 		}
 
-		// 4c. Insert the new API key. Do NOT pass created_at — let the DB DEFAULT NOW() handle it.
-		// This avoids a type mismatch: production DB may have created_at as BIGINT (from an older
-		// deployment that used time.Now().Unix()), while our schema declares it as TIMESTAMPTZ.
-		// Letting the DB default avoids the column type entirely.
-		// We pass "name" = displayPlan to satisfy the legacy NOT NULL constraint on the production DB.
+		// 4c. Insert the new API key.
+		// - Do NOT pass created_at as a Go time.Time (causes BIGINT type mismatch on production DB).
+		// - Use SQL NOW() directly in the query string so the DB computes the timestamp itself.
+		// - Pass "name" = displayPlan to satisfy the legacy NOT NULL constraint on the production DB.
 		_, errInsert := db.Exec(`
-			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code)
-			VALUES ($1, $2, $3, $4, $5, 'active', $6)
+			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
+			VALUES ($1, $2, $3, $4, $5, 'active', $6, NOW())
 		`, displayPlan, keyHash, prefix, userEmail, displayPlan, orderCode)
 		if errInsert != nil {
 			log.Errorf("failed to insert api key to postgres: %v", errInsert)
