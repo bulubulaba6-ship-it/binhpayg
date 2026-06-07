@@ -348,21 +348,68 @@
 
   <!-- Welcome / Auth Overlay -->
   <div id="welcomeState" class="welcome-state">
-    <div class="welcome-card">
-      <div class="welcome-left">
-        <img src="/dashboard/favicon.png" alt="FinkRouter Logo" style="width: 48px; height: 48px; margin: 0 auto var(--sp-sm); display: block; border-radius: 8px;">
-        <h2>FINKROUTER</h2>
-        <p style="color:var(--muted); font-size:0.85rem;">Private network proxy access</p>
+    <div class="welcome-card welcome-card--wide">
+      <!-- LEFT: Hero / Branding Panel -->
+      <div class="welcome-left welcome-left--hero">
+        <img src="/dashboard/favicon.png" alt="FinkRouter" style="width:52px;height:52px;border-radius:12px;margin-bottom:var(--sp-md);display:block;">
+        <h2 style="font-size:2.2rem;margin-bottom:6px;">FinkRouter</h2>
+        <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;margin-bottom:var(--sp-lg);">Gateway AI t&#7889;c &#273;&#7897; cao, t&#432;&#417;ng th&#237;ch OpenAI &amp; Anthropic. Ch&#7915;y claude-opus-4-8, gpt-5.5 v&#224; h&#417;n n&#7919;a.</p>
+        <div class="welcome-pills">
+          <span class="welcome-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Th&#7901;i gian th&#7921;c
+          </span>
+          <span class="welcome-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            B&#7843;o m&#7853;t
+          </span>
+          <span class="welcome-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            No timeout
+          </span>
+        </div>
+        <div class="welcome-stat-row">
+          <div class="welcome-stat">
+            <span class="welcome-stat-val">6</span>
+            <span class="welcome-stat-label">Models</span>
+          </div>
+          <div class="welcome-stat-divider"></div>
+          <div class="welcome-stat">
+            <span class="welcome-stat-val">99.9%</span>
+            <span class="welcome-stat-label">Uptime</span>
+          </div>
+          <div class="welcome-stat-divider"></div>
+          <div class="welcome-stat">
+            <span class="welcome-stat-val">&lt;80ms</span>
+            <span class="welcome-stat-label">Latency</span>
+          </div>
+        </div>
       </div>
-      <div class="welcome-right">
-        <div style="position:relative;">
-          <input type="password" id="welcomeApiKeyInput" placeholder="Workspace Key..." autocomplete="off" onkeypress="if(event.key==='Enter') app.authFromOverlay()">
+      <!-- RIGHT: Auth Panel -->
+      <div class="welcome-right welcome-right--auth">
+        <div style="margin-bottom:var(--sp-lg);">
+          <h3 style="font-family:var(--font-display);font-size:1.4rem;margin-bottom:4px;">&#272;&#259;ng nh&#7853;p</h3>
+          <p style="font-size:0.8rem;color:var(--muted);">Nh&#7853;p API key &#273;&#7875; truy c&#7853;p dashboard</p>
         </div>
-        <button class="auth-btn" onclick="app.authFromOverlay()">Authenticate Session</button>
-        <p style="font-size:0.75rem; color:var(--muted); margin-top:12px; text-align:center;">Your key is never stored in the URL</p>
-        <div style="margin-top: 15px; text-align: center;">
-          <a href="#" onclick="app.showTab('store'); document.getElementById('welcomeState').style.display='none'; document.getElementById('navTabs').style.display='flex';" style="color: var(--primary); font-size: 0.85rem; text-decoration: underline; font-weight: 500;">Don't have a key? Buy one here</a>
+        <div style="position:relative;margin-bottom:var(--sp-sm);">
+          <input type="password" id="welcomeApiKeyInput" placeholder="fink_pro_..." autocomplete="off" onkeypress="if(event.key==='Enter') app.authFromOverlay()" style="padding-left:40px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted);pointer-events:none;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
         </div>
+        <button class="auth-btn" onclick="app.authFromOverlay()" style="margin-bottom:var(--sp-md);">Authenticate Session</button>
+        <p style="font-size:0.72rem;color:var(--muted);text-align:center;margin-bottom:var(--sp-lg);">Key c&#7911;a b&#7841;n kh&#244;ng bao gi&#7901; l&#432;u trong URL</p>
+
+        <div class="welcome-divider">
+          <span>Ch&#432;a c&#243; key?</span>
+        </div>
+
+        <button
+          class="auth-btn welcome-buy-btn"
+          onclick="app.showTab('store'); document.getElementById('welcomeState').style.display='none'; document.getElementById('navTabs').style.display='flex';"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+          Mua key ngay — t&#7915; 50.000&#273;
+        </button>
+        <p style="font-size:0.72rem;color:var(--muted);text-align:center;margin-top:10px;">G&#7917;i API key qua email ngay sau thanh to&#225;n</p>
       </div>
     </div>
   </div>

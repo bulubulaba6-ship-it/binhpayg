@@ -501,6 +501,158 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 }
 .auth-btn:hover { opacity: 0.9; transform: scale(1.02); }
 
+/* ── Welcome overlay — wide two-column layout ─────────────────── */
+.welcome-card--wide {
+  max-width: 840px;
+  width: 94%;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  border-radius: var(--r-xl);
+}
+
+.welcome-left--hero {
+  flex: 0 0 46%;
+  background: linear-gradient(160deg, oklch(0.11 0.014 290), oklch(0.07 0.010 270));
+  border-right: 1px solid var(--border);
+  padding: var(--sp-xl) var(--sp-lg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-bottom: none;
+  text-align: left;
+}
+
+.welcome-right--auth {
+  flex: 1;
+  padding: var(--sp-xl) var(--sp-lg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Feature pills */
+.welcome-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--sp-xl);
+}
+
+.welcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(236,168,214,0.08);
+  border: 1px solid rgba(236,168,214,0.18);
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  letter-spacing: 0.02em;
+}
+
+/* Stats row */
+.welcome-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 0;
+  margin-top: auto;
+}
+
+.welcome-stat {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.welcome-stat-val {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--foreground);
+  line-height: 1;
+}
+
+.welcome-stat-label {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.welcome-stat-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* Section divider with label */
+.welcome-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--sp-md);
+}
+
+.welcome-divider::before,
+.welcome-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.welcome-divider span {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* Buy CTA button */
+.welcome-buy-btn {
+  background: transparent !important;
+  color: var(--primary) !important;
+  border: 1.5px solid rgba(236,168,214,0.4) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s !important;
+}
+
+.welcome-buy-btn:hover {
+  background: rgba(236,168,214,0.08) !important;
+  border-color: var(--primary) !important;
+  opacity: 1 !important;
+  transform: scale(1.015) !important;
+}
+
+/* Responsive: stack on mobile */
+@media (max-width: 640px) {
+  .welcome-card--wide {
+    flex-direction: column;
+    max-width: 95%;
+  }
+  .welcome-left--hero {
+    flex: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: var(--sp-lg);
+  }
+  .welcome-stat-row { display: none; }
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .navbar { flex-direction: column; padding: var(--sp-md); gap: var(--sp-md); }
