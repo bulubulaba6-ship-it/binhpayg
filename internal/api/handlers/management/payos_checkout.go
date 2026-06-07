@@ -110,7 +110,7 @@ func (h *Handler) PostCreatePaymentLink(c *gin.Context) {
 
 	switch plan {
 	case "max_20x":
-		amount = 1600000
+		amount = 1800000
 	case "max":
 		amount = 650000
 	case "pro":

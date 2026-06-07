@@ -201,41 +201,41 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	isSubscription := false
 	descLower := strings.ToLower(description)
 
-	if strings.Contains(descLower, "max_20x") || amountFloat >= 1600000 {
+	if strings.Contains(descLower, "max_20x") || amountFloat >= 1800000 {
 		tier = "max"
 		displayPlan = "MAX 20x"
-		credits = 5600000
+		credits = 1000000
 		limit = 40000
 		isSubscription = true
 	} else if strings.Contains(descLower, "max") || amountFloat >= 650000 {
 		tier = "max"
 		displayPlan = "MAX 5x"
-		credits = 1315000
+		credits = 250000
 		limit = 10000
 		isSubscription = true
 	} else if strings.Contains(descLower, "pro") || amountFloat >= 350000 {
 		tier = "pro"
 		displayPlan = "PRO"
-		credits = 245000
+		credits = 50000
 		limit = 2000
 		isSubscription = true
 	} else if strings.Contains(descLower, "day7") {
-		// 7-day short-term subscription: 60,000 fixed credits.
+		// 7-day short-term subscription: 30,000 fixed credits.
 		// Detected by description only — amount-based detection is deliberately omitted
 		// because a PAYG order for exactly 150,000 VND would be misclassified.
 		tier = "payg"
 		displayPlan = "7-Day Pass"
-		credits = 60000
-		limit = 2000
+		credits = 30000
+		limit = 1500
 		isSubscription = true
 	} else if strings.Contains(descLower, "day1") {
-		// 1-day short-term subscription: 8,000 fixed credits.
+		// 1-day short-term subscription: 4,000 fixed credits.
 		// Detected by description only — amount-based detection is deliberately omitted
 		// because a PAYG order for exactly 50,000 VND would be misclassified.
 		tier = "payg"
 		displayPlan = "1-Day Pass"
-		credits = 8000
-		limit = 2000
+		credits = 4000
+		limit = 1000
 		isSubscription = true
 	} else {
 		tier = "payg"

@@ -21,7 +21,7 @@ import (
 //
 // Credits is the EXACT number of credits to add to the key's balance.
 // This is the plan's credit allowance, NOT derived from the USD price paid.
-// Example: 1-day plan = 8000, 7-day plan = 60000, Pro = 245000.
+// Example: 1-day plan = 4000, 7-day plan = 30000, Pro = 50000.
 //
 // FiveHLimit is the per-5-hour rolling-window credit rate limit (api-key-limits).
 // The standard volatile kill-switch; resets after 5h.

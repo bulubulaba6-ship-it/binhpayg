@@ -553,21 +553,21 @@ type vndTierEntry struct {
 }
 
 // vndTiers defines the Pay-As-You-Go credit conversion tiers based on VND amount.
-// Rates from the FinkRouter pricing table (cr/VND).
+// Strategic Decoy Pricing: Tier 6 (>2M) is cheaper than Max 20x to act as the ultimate trap.
 //
-//	Tier 1  < 50,000 VND    → 0.333 cr/VND  (3,000đ/1000cr)
-//	Tier 2  < 150,000 VND   → 0.40  cr/VND  (2,500đ/1000cr)
-//	Tier 3  < 300,000 VND   → 0.50  cr/VND  (2,000đ/1000cr)
-//	Tier 4  < 600,000 VND   → 0.667 cr/VND  (1,500đ/1000cr)
-//	Tier 5  < 2,000,000 VND → 1.00  cr/VND  (1,000đ/1000cr)
-//	Tier 6  ≥ 2,000,000 VND → 1.25  cr/VND  (800đ/1000cr)
+//	Tier 1  < 50,000 VND    → 0.0667 cr/VND (15,000đ/1000cr)
+//	Tier 2  < 150,000 VND   → 0.0833 cr/VND (12,000đ/1000cr)
+//	Tier 3  < 300,000 VND   → 0.1000 cr/VND (10,000đ/1000cr)
+//	Tier 4  < 600,000 VND   → 0.1250 cr/VND (8,000đ/1000cr)
+//	Tier 5  < 2,000,000 VND → 0.2857 cr/VND (3,500đ/1000cr)
+//	Tier 6  ≥ 2,000,000 VND → 0.5882 cr/VND (1,700đ/1000cr) - ULTIMATE DECOY
 var vndTiers = []vndTierEntry{
-	{maxVND: 50_000, rate: 0.333, tier: 1},
-	{maxVND: 150_000, rate: 0.40, tier: 2},
-	{maxVND: 300_000, rate: 0.50, tier: 3},
-	{maxVND: 600_000, rate: 0.667, tier: 4},
-	{maxVND: 2_000_000, rate: 1.00, tier: 5},
-	{maxVND: 0, rate: 1.25, tier: 6}, // 0 = no upper bound
+	{maxVND: 50_000, rate: 0.0667, tier: 1},
+	{maxVND: 150_000, rate: 0.0833, tier: 2},
+	{maxVND: 300_000, rate: 0.1000, tier: 3},
+	{maxVND: 600_000, rate: 0.1250, tier: 4},
+	{maxVND: 2_000_000, rate: 0.2857, tier: 5},
+	{maxVND: 0, rate: 0.5882, tier: 6}, // 0 = no upper bound
 }
 
 // vndTierForAmount returns the rate (cr/VND) and tier number for a given VND amount.
