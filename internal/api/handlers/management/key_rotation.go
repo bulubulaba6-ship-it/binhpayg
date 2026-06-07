@@ -231,7 +231,7 @@ func sendOTPEmail(toEmail, otp string) {
 
 	fromEmail := os.Getenv("RESEND_FROM_EMAIL")
 	if fromEmail == "" {
-		fromEmail = "onboarding@resend.dev"
+		fromEmail = "send@finkrouter.io.vn"
 	}
 
 	htmlTemplate := `
@@ -285,7 +285,7 @@ func sendPurchaseOTPEmail(toEmail, otp string) {
 
 	fromEmail := os.Getenv("RESEND_FROM_EMAIL")
 	if fromEmail == "" {
-		fromEmail = "onboarding@resend.dev"
+		fromEmail = "send@finkrouter.io.vn"
 	}
 
 	htmlTemplate := `
