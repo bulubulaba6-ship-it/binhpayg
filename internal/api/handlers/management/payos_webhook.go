@@ -241,7 +241,18 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		tier = "payg"
 		displayPlan = "Pay-As-You-Go"
 		credits = 0
-		limit = 2000
+		
+		// Scale PAYG rate limits based on deposit amount to match subscription tiers.
+		// Without this, enterprise users depositing >2M for the Decoy Pricing 
+		// would be unfairly throttled at the default 2000 cr/5h limit.
+		if amountFloat >= 2000000 {
+			limit = 40000
+		} else if amountFloat >= 600000 {
+			limit = 10000
+		} else {
+			limit = 2000
+		}
+		
 		isSubscription = false
 	}
 
