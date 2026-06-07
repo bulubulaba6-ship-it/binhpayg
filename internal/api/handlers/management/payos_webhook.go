@@ -93,7 +93,10 @@ func getWebhookDB() *sql.DB {
 }
 
 // verifyPayOSSignature validates the HMAC-SHA256 signature from payOS.
-func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey string) bool {
+// PayOS spec: sort all keys alphabetically, concatenate as key=value&key=value,
+// HMAC-SHA256 with checksum key. Null/object/array values are excluded.
+// Empty strings ARE included (unlike earlier versions of this code).
+func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey string) (bool, string) {
 	keys := make([]string, 0, len(data))
 	for k := range data {
 		keys = append(keys, k)
@@ -118,10 +121,7 @@ func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey st
 			// Ignore arrays and objects per payOS specification
 			continue
 		}
-
-		if strVal == "null" || strVal == "undefined" || strVal == "" {
-			continue
-		}
+		// Note: do NOT skip empty strings — payOS includes them in their hash
 		parts = append(parts, fmt.Sprintf("%s=%s", k, strVal))
 	}
 
@@ -130,7 +130,7 @@ func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey st
 	mac.Write([]byte(queryString))
 	expected := hex.EncodeToString(mac.Sum(nil))
 
-	return expected == signature
+	return expected == signature, queryString
 }
 
 // PostPayOSWebhook handles the server-to-server callback from payOS.
@@ -151,8 +151,10 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	}
 
 	// 1. Verify Signature
-	if !verifyPayOSSignature(req.Data, req.Signature, checksumKey) {
-		log.Warnf("payos webhook signature verification failed for order %v", req.Data["orderCode"])
+	ok, queryStr := verifyPayOSSignature(req.Data, req.Signature, checksumKey)
+	if !ok {
+		log.Warnf("payos webhook signature mismatch for order %v | query_string=%q | received_sig=%s",
+			req.Data["orderCode"], queryStr, req.Signature)
 		c.JSON(http.StatusOK, gin.H{"error": "invalid signature"}) // Return 200 so payOS doesn't retry invalid sigs
 		return
 	}
@@ -325,7 +327,7 @@ func sendAPIKeyEmail(toEmail, apiKey, plan string) {
 
 	fromEmail := os.Getenv("RESEND_FROM_EMAIL")
 	if fromEmail == "" {
-		fromEmail = "onboarding@resend.dev"
+		fromEmail = "noreply@finkrouter.io.vn"
 	}
 
 	htmlTemplate := `
