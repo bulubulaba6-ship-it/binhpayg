@@ -252,37 +252,42 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	userEmail := ""
 	if db != nil {
 		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))
-		
+
 		// 4a. Retrieve the email from payment_orders
 		row := db.QueryRow("SELECT email FROM payment_orders WHERE order_code = $1", orderCode)
 		_ = row.Scan(&userEmail)
-		
-		// 4b. Insert the API key (check if exists first to avoid unique constraint issues)
+
+		// 4b. Idempotency check — if we already provisioned a key for this order, return OK immediately.
+		// This handles payOS retries (it retries on any non-2xx response, up to 3 times at 60s intervals).
+		// Returning 200 here prevents the retry loop and avoids duplicate key creation.
 		var existingID int
 		errCheck := db.QueryRow("SELECT id FROM api_keys WHERE order_code = $1", orderCode).Scan(&existingID)
-		if errCheck != nil && errCheck != sql.ErrNoRows {
-			log.Errorf("failed to check existing api key: %v", errCheck)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-		if errCheck == sql.ErrNoRows {
-			_, errInsert := db.Exec(`
-				INSERT INTO api_keys (key_hash, key_prefix, email, plan, status, order_code, created_at)
-				VALUES ($1, $2, $3, $4, 'active', $5, $6)
-			`, keyHash, prefix, userEmail, displayPlan, orderCode, time.Now())
-			if errInsert != nil {
-				log.Errorf("failed to insert api key to postgres: %v", errInsert)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-				return
-			}
-		}
-
 		if errCheck == nil && existingID > 0 {
 			log.Infof("payos webhook ignored duplicate order: %v", orderCode)
 			c.JSON(http.StatusOK, gin.H{"error": 0, "message": "Duplicate order ignored", "data": nil})
 			return
 		}
-		// 4c. Mark order as paid
+		if errCheck != nil && errCheck != sql.ErrNoRows {
+			log.Errorf("failed to check existing api key: %v", errCheck)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		// 4c. Insert the new API key. Do NOT pass created_at — let the DB DEFAULT NOW() handle it.
+		// This avoids a type mismatch: production DB may have created_at as BIGINT (from an older
+		// deployment that used time.Now().Unix()), while our schema declares it as TIMESTAMPTZ.
+		// Letting the DB default avoids the column type entirely.
+		_, errInsert := db.Exec(`
+			INSERT INTO api_keys (key_hash, key_prefix, email, plan, status, order_code)
+			VALUES ($1, $2, $3, $4, 'active', $5)
+		`, keyHash, prefix, userEmail, displayPlan, orderCode)
+		if errInsert != nil {
+			log.Errorf("failed to insert api key to postgres: %v", errInsert)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		// 4d. Mark order as paid
 		_, _ = db.Exec("UPDATE payment_orders SET status = 'paid' WHERE order_code = $1", orderCode)
 	}
 
