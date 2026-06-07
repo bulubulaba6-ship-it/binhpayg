@@ -149,9 +149,9 @@ func (h *Handler) PostVerifyRotation(c *gin.Context) {
 	// Generate a unique rotation order code so it doesn't conflict with the original order_code UNIQUE constraint
 	rotationID := fmt.Sprintf("ROTATE-%x", randomBytes)
 
-	// Insert new key — include "name" and created_at=NOW() to satisfy legacy NOT NULL constraints
-	_, err = db.Exec("INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, order_code, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())",
-		plan, newHash, newPrefix, email, plan, rotationID)
+	// Insert new key — include "name" and pass created_at as int64 to satisfy legacy NOT NULL/BIGINT constraints
+	_, err = db.Exec("INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, order_code, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		plan, newHash, newPrefix, email, plan, rotationID, time.Now().Unix())
 	if err != nil {
 		log.Errorf("failed to insert new key: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

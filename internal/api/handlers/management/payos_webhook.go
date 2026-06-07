@@ -282,13 +282,13 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		}
 
 		// 4c. Insert the new API key.
-		// - Do NOT pass created_at as a Go time.Time (causes BIGINT type mismatch on production DB).
-		// - Use SQL NOW() directly in the query string so the DB computes the timestamp itself.
+		// - Pass created_at as time.Now().Unix() (int64) because the production DB column
+		//   is actually a BIGINT, not a TIMESTAMPTZ.
 		// - Pass "name" = displayPlan to satisfy the legacy NOT NULL constraint on the production DB.
 		_, errInsert := db.Exec(`
 			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
-			VALUES ($1, $2, $3, $4, $5, 'active', $6, NOW())
-		`, displayPlan, keyHash, prefix, userEmail, displayPlan, orderCode)
+			VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+		`, displayPlan, keyHash, prefix, userEmail, displayPlan, orderCode, time.Now().Unix())
 		if errInsert != nil {
 			log.Errorf("failed to insert api key to postgres: %v", errInsert)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
