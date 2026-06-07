@@ -93,9 +93,14 @@ func getWebhookDB() *sql.DB {
 }
 
 // verifyPayOSSignature validates the HMAC-SHA256 signature from payOS.
-// PayOS spec: sort all keys alphabetically, concatenate as key=value&key=value,
-// HMAC-SHA256 with checksum key. Null/object/array values are excluded.
-// Empty strings ARE included (unlike earlier versions of this code).
+// PayOS official spec (PHP/JS reference):
+//   - Sort all data keys alphabetically
+//   - For each key in sorted order: append key=value
+//   - null/"null"/"undefined" values → treat as empty string "", still include the key
+//   - Arrays → JSON-encode them (sorted), still include the key
+//   - Objects → skip per spec (we don't receive nested objects in payment webhooks)
+//   - All other scalars (string, float64 bool) → normal string representation
+// Join with "&", then HMAC-SHA256 with checksumKey.
 func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey string) (bool, string) {
 	keys := make([]string, 0, len(data))
 	for k := range data {
@@ -106,22 +111,26 @@ func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey st
 	var parts []string
 	for _, k := range keys {
 		v := data[k]
-		if v == nil {
-			continue
-		}
-		strVal := ""
+		var strVal string
 		switch val := v.(type) {
+		case nil:
+			// JSON null → empty string per payOS PHP/JS reference
+			strVal = ""
+		case string:
+			// "null" and "undefined" string literals → also empty string
+			if val == "null" || val == "undefined" {
+				strVal = ""
+			} else {
+				strVal = val
+			}
 		case float64:
 			strVal = strconv.FormatFloat(val, 'f', -1, 64)
-		case string:
-			strVal = val
 		case bool:
 			strVal = strconv.FormatBool(val)
 		default:
-			// Ignore arrays and objects per payOS specification
+			// Arrays and nested objects: skip (not present in payment webhook data)
 			continue
 		}
-		// Note: do NOT skip empty strings — payOS includes them in their hash
 		parts = append(parts, fmt.Sprintf("%s=%s", k, strVal))
 	}
 
@@ -156,6 +165,15 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		log.Warnf("payos webhook signature mismatch for order %v | query_string=%q | received_sig=%s",
 			req.Data["orderCode"], queryStr, req.Signature)
 		c.JSON(http.StatusOK, gin.H{"error": "invalid signature"}) // Return 200 so payOS doesn't retry invalid sigs
+		return
+	}
+
+	// 2. Gate on success — payOS also sends webhooks for cancellations (code != "00").
+	// A cancelled order must NOT create an API key.
+	if req.Code != "00" || !req.Success {
+		log.Infof("payos webhook non-success event ignored: code=%s success=%v order=%v",
+			req.Code, req.Success, req.Data["orderCode"])
+		c.JSON(http.StatusOK, gin.H{"error": 0, "message": "Non-success event acknowledged", "data": nil})
 		return
 	}
 
