@@ -858,10 +858,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const isCancel = urlParams.get('cancel') === 'true';
 
   if (status === 'PAID' || status === 'success') {
-     alert("Payment successful! Your new API key will be generated and emailed to you shortly. Check your inbox!");
+     const m = document.getElementById('paySuccessModal');
+     if (m) m.style.display = 'flex';
      window.history.replaceState({}, document.title, window.location.pathname);
   } else if (isCancel || status === 'CANCELLED') {
-     alert("Payment cancelled. You have not been charged.");
+     const m = document.getElementById('payCancelModal');
+     if (m) m.style.display = 'flex';
      window.history.replaceState({}, document.title, window.location.pathname);
   }
 
