@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -373,8 +374,9 @@ func sendAPIKeyEmail(toEmail, apiKey, plan string) {
 		return
 	}
 	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
-		log.Errorf("resend returned status: %d", resp.StatusCode)
+		log.Errorf("resend returned status %d for %s: %s", resp.StatusCode, toEmail, string(respBody))
 	} else {
 		log.Infof("Successfully sent API key to %s", toEmail)
 	}
