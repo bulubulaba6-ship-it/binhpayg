@@ -345,7 +345,7 @@ func sendAPIKeyEmail(toEmail, apiKey, plan string) {
 
 	fromEmail := os.Getenv("RESEND_FROM_EMAIL")
 	if fromEmail == "" {
-		fromEmail = "noreply@finkrouter.io.vn"
+		fromEmail = "send@finkrouter.io.vn"
 	}
 
 	htmlTemplate := `
