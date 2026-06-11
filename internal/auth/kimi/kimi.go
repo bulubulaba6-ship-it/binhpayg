@@ -18,6 +18,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -38,6 +39,10 @@ const (
 	// refreshThresholdSeconds is when to refresh token before expiry (5 minutes).
 	refreshThresholdSeconds = 300
 )
+
+// kimiRefreshGroup deduplicates concurrent token refresh requests for Kimi.
+// Only one upstream call is made per unique refresh token; all callers share the result.
+var kimiRefreshGroup singleflight.Group
 
 // KimiAuth handles Kimi authentication flow.
 type KimiAuth struct {
@@ -340,15 +345,33 @@ func (c *DeviceFlowClient) exchangeDeviceCode(ctx context.Context, deviceCode st
 }
 
 // RefreshToken exchanges a refresh token for a new access token.
+// Concurrent calls with the same refresh token are deduplicated via singleflight.
 func (c *DeviceFlowClient) RefreshToken(ctx context.Context, refreshToken string) (*KimiTokenData, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	result, err, _ := kimiRefreshGroup.Do(refreshToken, func() (interface{}, error) {
+		return c.refreshTokenSingleFlight(context.WithoutCancel(ctx), refreshToken)
+	})
+	if err != nil {
+		return nil, err
+	}
+	tokenData, ok := result.(*KimiTokenData)
+	if !ok || tokenData == nil {
+		return nil, fmt.Errorf("kimi: token refresh failed: invalid singleflight result")
+	}
+	return tokenData, nil
+}
+
+func (c *DeviceFlowClient) refreshTokenSingleFlight(ctx context.Context, refreshToken string) (*KimiTokenData, error) {
 	data := url.Values{}
 	data.Set("client_id", kimiClientID)
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", refreshToken)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, kimiTokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("kimi: failed to create refresh request: %w", err)
+	req, errReq := http.NewRequestWithContext(ctx, http.MethodPost, kimiTokenURL, strings.NewReader(data.Encode()))
+	if errReq != nil {
+		return nil, fmt.Errorf("kimi: failed to create refresh request: %w", errReq)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -356,9 +379,9 @@ func (c *DeviceFlowClient) RefreshToken(ctx context.Context, refreshToken string
 		req.Header.Set(k, v)
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("kimi: refresh request failed: %w", err)
+	resp, errDo := c.httpClient.Do(req)
+	if errDo != nil {
+		return nil, fmt.Errorf("kimi: refresh request failed: %w", errDo)
 	}
 	defer func() {
 		if errClose := resp.Body.Close(); errClose != nil {
@@ -366,9 +389,9 @@ func (c *DeviceFlowClient) RefreshToken(ctx context.Context, refreshToken string
 		}
 	}()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("kimi: failed to read refresh response: %w", err)
+	bodyBytes, errRead := io.ReadAll(resp.Body)
+	if errRead != nil {
+		return nil, fmt.Errorf("kimi: failed to read refresh response: %w", errRead)
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
@@ -387,8 +410,8 @@ func (c *DeviceFlowClient) RefreshToken(ctx context.Context, refreshToken string
 		Scope        string  `json:"scope"`
 	}
 
-	if err = json.Unmarshal(bodyBytes, &tokenResp); err != nil {
-		return nil, fmt.Errorf("kimi: failed to parse refresh response: %w", err)
+	if errUnmarshal := json.Unmarshal(bodyBytes, &tokenResp); errUnmarshal != nil {
+		return nil, fmt.Errorf("kimi: failed to parse refresh response: %w", errUnmarshal)
 	}
 
 	if tokenResp.AccessToken == "" {

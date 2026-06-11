@@ -14,7 +14,12 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 )
+
+// xaiRefreshGroup deduplicates concurrent token refresh requests for xAI.
+// Only one upstream call is made per unique refresh token; all callers share the result.
+var xaiRefreshGroup singleflight.Group
 
 // XAIAuth performs xAI OAuth discovery, token exchange, and refresh.
 type XAIAuth struct {
@@ -176,9 +181,13 @@ func (a *XAIAuth) ExchangeCodeForTokens(ctx context.Context, code, redirectURI s
 }
 
 // RefreshTokens refreshes an xAI access token.
+// Concurrent calls with the same refresh token are deduplicated via singleflight.
 func (a *XAIAuth) RefreshTokens(ctx context.Context, refreshToken, tokenEndpoint string) (*TokenData, error) {
 	if strings.TrimSpace(refreshToken) == "" {
 		return nil, fmt.Errorf("xai token refresh: refresh token is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	if strings.TrimSpace(tokenEndpoint) == "" {
 		discovery, errDiscover := a.Discover(ctx)
@@ -187,10 +196,26 @@ func (a *XAIAuth) RefreshTokens(ctx context.Context, refreshToken, tokenEndpoint
 		}
 		tokenEndpoint = discovery.TokenEndpoint
 	}
+
+	dedupeKey := refreshToken + "|" + tokenEndpoint
+	result, err, _ := xaiRefreshGroup.Do(dedupeKey, func() (interface{}, error) {
+		return a.refreshTokensSingleFlight(context.WithoutCancel(ctx), strings.TrimSpace(refreshToken), tokenEndpoint)
+	})
+	if err != nil {
+		return nil, err
+	}
+	tokenData, ok := result.(*TokenData)
+	if !ok || tokenData == nil {
+		return nil, fmt.Errorf("xai: token refresh failed: invalid singleflight result")
+	}
+	return tokenData, nil
+}
+
+func (a *XAIAuth) refreshTokensSingleFlight(ctx context.Context, refreshToken, tokenEndpoint string) (*TokenData, error) {
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {ClientID},
-		"refresh_token": {strings.TrimSpace(refreshToken)},
+		"refresh_token": {refreshToken},
 	}
 	return a.postTokenForm(ctx, tokenEndpoint, form)
 }

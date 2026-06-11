@@ -38,6 +38,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -96,6 +97,12 @@ var (
 		"quota_exhausted",
 		"quota exhausted",
 	}
+	// antigravityRefreshGroup deduplicates concurrent Google OAuth2 token refresh calls.
+	// Key is auth.ID (stable per credential file). When multiple goroutines try to refresh
+	// the same credential simultaneously, only one upstream call is made to Google;
+	// all other callers block and share the result. This prevents thundering herd against
+	// the Google OAuth2 token endpoint under high concurrent load.
+	antigravityRefreshGroup singleflight.Group
 )
 
 type antigravityCreditsBalance struct {
@@ -1713,6 +1720,28 @@ func (e *AntigravityExecutor) refreshToken(ctx context.Context, auth *cliproxyau
 	if auth == nil {
 		return nil, statusErr{code: http.StatusUnauthorized, msg: "missing auth"}
 	}
+	authID := strings.TrimSpace(auth.ID)
+	if authID == "" {
+		authID = "unknown"
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	result, err, _ := antigravityRefreshGroup.Do(authID, func() (interface{}, error) {
+		return e.refreshTokenSingleFlight(context.WithoutCancel(ctx), auth.Clone())
+	})
+	if err != nil {
+		return auth, err
+	}
+	updated, ok := result.(*cliproxyauth.Auth)
+	if !ok || updated == nil {
+		return auth, statusErr{code: http.StatusUnauthorized, msg: "antigravity: token refresh failed: invalid singleflight result"}
+	}
+	return updated, nil
+}
+
+func (e *AntigravityExecutor) refreshTokenSingleFlight(ctx context.Context, auth *cliproxyauth.Auth) (*cliproxyauth.Auth, error) {
 	refreshToken := metaStringValue(auth.Metadata, "refresh_token")
 	if refreshToken == "" {
 		return auth, statusErr{code: http.StatusUnauthorized, msg: "missing refresh token"}
