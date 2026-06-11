@@ -256,7 +256,7 @@ post-pay-billing:
       input: 280
       output: 560
       cache: 28
-    # claude-sonnet-4-6 served by mimo-v2.5-pro
+    # claude-sonnet-4-6 served by mimo-v2.5
     "claude-sonnet-4-6":
       input: 210
       output: 420
@@ -284,9 +284,9 @@ post-pay-billing:
       cache: 15
 
 # ==============================================================================
-# DEEPSEEK V4 FLASH — OPENAI-COMPATIBLE BACKEND (Opus / GPT tier)
-# Routes Opus and GPT models to deepseek-v4-flash via DeepSeek API.
-# NOTE: gpt-5.2 and gpt-5.3-codex removed — deprecated models.
+# DEEPSEEK V4 FLASH — OPENAI-COMPATIBLE BACKEND (Opus / GPT-5.4/5.5 tier)
+# Routes Opus, Fable, GPT-5.4, GPT-5.5 to deepseek-v4-flash via DeepSeek API.
+# NOTE: gpt-5.4-mini and gpt-5.3-codex-spark moved to Mimo backend.
 # ==============================================================================
 openai-compatibility:
   - name: Anthropic
@@ -308,36 +308,39 @@ openai-compatibility:
         alias: gpt-5.5
       - name: deepseek-v4-flash
         alias: gpt-5.4
-      - name: deepseek-v4-flash
-        alias: gpt-5.4-mini
-      - name: deepseek-v4-flash
-        alias: gpt-5.3-codex-spark
 
-# ==============================================================================
-# MIMO — OPENAI-COMPATIBLE BACKEND (Haiku / Sonnet tier)
-# mimo-v2.5     → claude-haiku-4-5  (fast, cost-efficient)
-# mimo-v2.5-pro → claude-sonnet-4-6 (balanced, higher quality)
-# ==============================================================================
+  # ==============================================================================
+  # MIMO — OPENAI-COMPATIBLE BACKEND (Haiku / Sonnet / Mini / Spark tier)
+  # All models use mimo-v2.5.
+  # mimo-v2.5 → claude-haiku-4-5   (fast, cost-efficient)
+  # mimo-v2.5 → claude-sonnet-4-6  (balanced, higher quality)
+  # mimo-v2.5 → gpt-5.4-mini       (fast GPT tier)
+  # mimo-v2.5 → gpt-5.3-codex-spark (ultra-fast coding)
+  # ==============================================================================
   - name: Mimo
     priority: 2
     base-url: https://api.mimo.ai/v1
     api-key-entries:
-      - api-key: YOUR_MIMO_API_KEY
+      - api-key: sk-sapn4jzrh3sgwq6jd9bjt7zu8x45tpojkyzry2hb93hxxifu
     models:
       - name: mimo-v2.5
         alias: claude-haiku-4-5
-      - name: mimo-v2.5-pro
+      - name: mimo-v2.5
         alias: claude-sonnet-4-6
+      - name: mimo-v2.5
+        alias: gpt-5.4-mini
+      - name: mimo-v2.5
+        alias: gpt-5.3-codex-spark
 
 default-api-key-limit: 2000
 api-key-limits:
   # Post-pay clients — mirrors post-pay-billing.clients (REQUIRED for rate limiting)
-  "fink_max_d41d8cd98f00b204e9800998ecf8427e": 10000  # Max 5x:    10,000 cr/5h
-  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8": 2000   # Pro:        2,000 cr/5h
-  "fink_max_ad0234829205b9033196ba818f7a872b": 10000   # Max legacy: 10,000 cr/5h
-  "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000   # Pro:        2,000 cr/5h
-  "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000   # Pro:        2,000 cr/5h
-  fink_pro_e65b9d6c7d02b2939e64ff192520484a: 2000     # Pro:        2,000 cr/5h
+  "fink_max_d41d8cd98f00b204e9800998ecf8427e": 10000 # Max 5x:    10,000 cr/5h
+  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8": 2000 # Pro:        2,000 cr/5h
+  "fink_max_ad0234829205b9033196ba818f7a872b": 10000 # Max legacy: 10,000 cr/5h
+  "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000 # Pro:        2,000 cr/5h
+  "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000 # Pro:        2,000 cr/5h
+  fink_pro_e65b9d6c7d02b2939e64ff192520484a: 2000 # Pro:        2,000 cr/5h
   # Keys below use default-api-key-limit: 2000
   # fink_max_1c96b7142d18844ce19e9e2c88bab154 → 2,000 cr/5h (default)
   # fink_ff8026cf7d8ec408e966dd410eb62b94     → 2,000 cr/5h (default)
