@@ -1201,12 +1201,19 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 					isCompatAuth = true
 				}
 			}
+			var attrBase string
+			if a.Attributes != nil {
+				attrBase = strings.TrimSpace(a.Attributes["base_url"])
+			}
 			for i := range s.cfg.OpenAICompatibility {
 				compat := &s.cfg.OpenAICompatibility[i]
 				if compat.Disabled {
 					continue
 				}
 				if strings.EqualFold(compat.Name, compatName) {
+					if attrBase != "" && !strings.EqualFold(strings.TrimSpace(compat.BaseURL), attrBase) {
+						continue
+					}
 					isCompatAuth = true
 					ms := buildOpenAICompatibilityConfigModels(compat)
 					// Register and return

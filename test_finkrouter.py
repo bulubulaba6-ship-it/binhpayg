@@ -6,7 +6,7 @@ Run: python test_finkrouter.py
 import sys, json, time, urllib.request, urllib.error
 sys.stdout.reconfigure(encoding="utf-8")
 
-BASE_URL = "http://localhost:8317"
+BASE_URL = "https://api.finkrouter.io.vn"
 PROMPT   = "Reply with exactly one word: OK"
 
 # key -> list of models to test for that key
@@ -38,23 +38,6 @@ KEYS = {
         "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
         "openai": ["gpt-5.5", "gpt-5.4-mini"],
     },
-    # free keys (claude + openai)
-    "fink_ff8026cf7d8ec408e966dd410eb62b94": {
-        "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
-        "openai": ["gpt-5.5", "gpt-5.4-mini"],
-    },
-    "fink_dbcee1dc7de12d7e5f4d17553e4ebae1": {
-        "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
-        "openai": ["gpt-5.5", "gpt-5.4-mini"],
-    },
-    "fink_31301ffbb3aaa9b57af03fc66a8257ef": {
-        "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
-        "openai": ["gpt-5.5", "gpt-5.4-mini"],
-    },
-    "fink_5e379cb58156bc6a27e4705cfab34608": {
-        "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
-        "openai": ["gpt-5.5", "gpt-5.4-mini"],
-    },
 }
 
 GREEN  = "\033[92m"
@@ -78,6 +61,7 @@ def chat(api_key: str, model: str) -> dict:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
         method="POST",
     )
@@ -101,7 +85,10 @@ def chat(api_key: str, model: str) -> dict:
 def list_models(api_key: str) -> list:
     req = urllib.request.Request(
         f"{BASE_URL}/v1/models",
-        headers={"Authorization": f"Bearer {api_key}"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -127,7 +114,7 @@ results = {"pass": 0, "fail": 0, "skip": 0}
 
 for api_key, model_groups in KEYS.items():
     key_label = short_key(api_key)
-    print(f"{CYAN}{BOLD}▶ {key_label}{RESET}")
+    print(f"{CYAN}{BOLD}>> {key_label}{RESET}")
 
     # Verify models endpoint
     available = list_models(api_key)

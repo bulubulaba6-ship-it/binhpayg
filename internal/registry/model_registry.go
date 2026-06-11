@@ -1113,12 +1113,20 @@ func (r *ModelRegistry) convertModelToMap(model *ModelInfo, handlerType string) 
 		return nil
 	}
 
+	ownedBy := model.OwnedBy
+	if idx := strings.Index(ownedBy, "-"); idx != -1 {
+		lower := strings.ToLower(ownedBy)
+		if strings.HasPrefix(lower, "anthropic-") || strings.HasPrefix(lower, "openai-") {
+			ownedBy = ownedBy[:idx]
+		}
+	}
+
 	switch handlerType {
 	case "openai":
 		result := map[string]any{
 			"id":       model.ID,
 			"object":   "model",
-			"owned_by": model.OwnedBy,
+			"owned_by": ownedBy,
 		}
 		if model.Created > 0 {
 			result["created"] = model.Created
@@ -1150,7 +1158,7 @@ func (r *ModelRegistry) convertModelToMap(model *ModelInfo, handlerType string) 
 		result := map[string]any{
 			"id":       model.ID,
 			"object":   "model",
-			"owned_by": model.OwnedBy,
+			"owned_by": ownedBy,
 		}
 		if model.Created > 0 {
 			result["created_at"] = model.Created

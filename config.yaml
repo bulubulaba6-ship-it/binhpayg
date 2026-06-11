@@ -182,7 +182,7 @@ post-pay-billing:
       cache: 15
 
 openai-compatibility:
-  - name: Anthropic
+  - name: Anthropic-DeepSeek
     priority: 1
     base-url: https://api.deepseek.com/v1
     api-key-entries:
@@ -197,7 +197,7 @@ openai-compatibility:
       - name: deepseek-v4-flash
         alias: claude-fable-5
 
-  - name: Anthropic
+  - name: Anthropic-Mimo
     priority: 2
     base-url: https://api.mimo.ai/v1
     api-key-entries:
@@ -208,7 +208,7 @@ openai-compatibility:
       - name: mimo-v2.5
         alias: claude-sonnet-4-6
 
-  - name: OpenAI
+  - name: OpenAI-DeepSeek
     priority: 1
     base-url: https://api.deepseek.com/v1
     api-key-entries:
@@ -219,7 +219,7 @@ openai-compatibility:
       - name: deepseek-v4-flash
         alias: gpt-5.4
 
-  - name: OpenAI
+  - name: OpenAI-Mimo
     priority: 2
     base-url: https://api.mimo.ai/v1
     api-key-entries:
