@@ -461,7 +461,7 @@ const app = {
       }
       if (valResetText) valResetText.textContent = 'Resets in 5h window';
 
-      const limit = quota.credit_limit;
+      const limit = quota.rate_limit_5h;
       if (!limit || limit === -1 || limit === 0) {
         app.setText('valLimit', 'Unlimited');
         app.setStyle('creditProgress', 'width', '0%');

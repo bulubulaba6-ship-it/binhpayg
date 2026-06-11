@@ -218,7 +218,7 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					fiveHCutoff := time.Now().Add(-5 * time.Hour)
 					for _, s := range entry.Sessions {
 						if s.Timestamp.After(fiveHCutoff) {
-							if pricing, ok := liveCfg.ModelPricing[s.Model]; ok {
+							if pricing, ok := liveCfg.PostPayBilling.MarkupRates[s.Model]; ok {
 								fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
 								fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
 								fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0

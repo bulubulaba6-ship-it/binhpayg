@@ -129,6 +129,16 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		tier = 2
 	}
 
+	rateLimit5h := 0
+	if liveCfg != nil {
+		rateLimit5h = liveCfg.DefaultAPIKeyLimit
+		if liveCfg.APIKeyLimits != nil {
+			if customLimit, ok := liveCfg.APIKeyLimits[principal]; ok {
+				rateLimit5h = customLimit
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"usage": gin.H{
 			"success_requests": successCount,
@@ -144,6 +154,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"credits_purchased":  creditsPurchased,
 			"tier":               tier,
 			"credit_limit":       creditLimit,
+			"rate_limit_5h":      rateLimit5h,
 			"window_expires_at":  "0001-01-01T00:00:00Z",
 			"recent_sessions":    sessions,
 		},

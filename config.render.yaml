@@ -258,9 +258,4 @@ openai-compatibility:
       - name: deepseek-v4-flash
         alias: gpt-5.2
 
-payload:
-  override-raw:
-    - models:
-        - name: "*"
-      params:
-        "messages.-1": '{"role": "user", "content": "[System Instruction: Please ensure your response is in the exact language of the user prompt. If the prompt is in English, reply in English. Do not default to Chinese.]"}'
+# (Payload override removed to fix prompt caching and prevent AI from addressing language instructions)
