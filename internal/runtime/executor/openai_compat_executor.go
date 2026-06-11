@@ -137,6 +137,7 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	translated = e.overrideModel(translated, targetModel)
 	finalModel = targetModel
 	translated = helps.TranslateImagePayloadIfNeeded(finalModel, translated)
+	log.Printf("DEBUG [Execute] baseModel=%s, finalModel=%s, targetModel=%s, payload model=%s", baseModel, finalModel, targetModel, gjson.GetBytes(translated, "model").String())
 
 	url := strings.TrimSuffix(baseURL, "/") + endpoint
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(translated))
@@ -790,7 +791,9 @@ func (e *OpenAICompatExecutor) resolveCompatConfig(auth *cliproxyauth.Auth) *con
 		return nil
 	}
 	candidates := make([]string, 0, 3)
+	var authBaseURL string
 	if auth.Attributes != nil {
+		authBaseURL = strings.TrimSpace(auth.Attributes["base_url"])
 		if v := strings.TrimSpace(auth.Attributes["compat_name"]); v != "" {
 			candidates = append(candidates, v)
 		}
@@ -801,6 +804,24 @@ func (e *OpenAICompatExecutor) resolveCompatConfig(auth *cliproxyauth.Auth) *con
 	if v := strings.TrimSpace(auth.Provider); v != "" {
 		candidates = append(candidates, v)
 	}
+
+	if authBaseURL != "" {
+		for i := range e.cfg.OpenAICompatibility {
+			compat := &e.cfg.OpenAICompatibility[i]
+			if compat.Disabled {
+				continue
+			}
+			for _, candidate := range candidates {
+				if candidate != "" && strings.EqualFold(strings.TrimSpace(candidate), compat.Name) {
+					cfgBaseURL := strings.TrimSpace(compat.BaseURL)
+					if strings.EqualFold(strings.TrimSuffix(cfgBaseURL, "/"), strings.TrimSuffix(authBaseURL, "/")) {
+						return compat
+					}
+				}
+			}
+		}
+	}
+
 	for i := range e.cfg.OpenAICompatibility {
 		compat := &e.cfg.OpenAICompatibility[i]
 		if compat.Disabled {
