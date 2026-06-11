@@ -1,31 +1,14 @@
-# ==============================================================================
-# FinkRouter — config.yaml (Render deployment)
-# Backends: DeepSeek V4 Flash (primary) + Mimo V2.5 (haiku/sonnet)
-# Billing: Post-Pay (1000 credits = $1.00 USD)
-# ==============================================================================
-
-# Bind all interfaces so Render can route traffic in.
 host: ""
-# Render injects a PORT env variable; set this to match your Render service
-# "Port" setting (default 10000 on Render, or whatever you configured).
 port: 8317
 
-# Management API
 remote-management:
   allow-remote: true
-  # Set a strong secret key — change this before deploying!
   secret-key: "$2a$10$krTTgB/OXAj1kewsqH7yPe9qpdwCl1Dm/sCudemC4PdYdKQyB87zy"
   disable-control-panel: false
   panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
 
-# Auth directory — persistent path mounted on Render.
 auth-dir: "/CLIProxyAPI/pgstore/auths"
 
-# ==============================================================================
-# CLIENT API KEYS
-# Each paying user gets one key. The quota dashboard reads from this list.
-# Format: fink_<tier>_<random hex>
-# ==============================================================================
 api-keys:
   - fink_max_d41d8cd98f00b204e9800998ecf8427e
   - fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8
@@ -33,14 +16,8 @@ api-keys:
   - fink_pro_5d41402abc4b2a76b9719d911017c592
   - fink_pro_e2fc714c4727ee9395f324cd2e7f331f
   - fink_max_1c96b7142d18844ce19e9e2c88bab154
-  - fink_ff8026cf7d8ec408e966dd410eb62b94
-  - fink_dbcee1dc7de12d7e5f4d17553e4ebae1
-  - fink_31301ffbb3aaa9b57af03fc66a8257ef
-  - fink_5e379cb58156bc6a27e4705cfab34608
   - fink_pro_e65b9d6c7d02b2939e64ff192520484a
 
-# Restrict each key to exactly the models it should see.
-# NOTE: gpt-5.2 and gpt-5.3-codex removed — no longer available via DeepSeek backend.
 api-key-models:
   "fink_max_d41d8cd98f00b204e9800998ecf8427e":
     claude:
@@ -100,58 +77,6 @@ api-key-models:
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
-  fink_ff8026cf7d8ec408e966dd410eb62b94:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-      - claude-fable-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  fink_dbcee1dc7de12d7e5f4d17553e4ebae1:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-      - claude-fable-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  fink_31301ffbb3aaa9b57af03fc66a8257ef:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-      - claude-fable-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  fink_5e379cb58156bc6a27e4705cfab34608:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-      - claude-fable-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
   fink_pro_e65b9d6c7d02b2939e64ff192520484a:
     claude:
       - claude-opus-4-8
@@ -166,30 +91,22 @@ api-key-models:
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
 
-# ==============================================================================
-# GENERAL SETTINGS
-# ==============================================================================
 debug: false
 pprof:
   enable: false
   addr: "127.0.0.1:8316"
-# On Render, stdout is streamed to the log dashboard — keep logging-to-file off.
 logging-to-file: false
 logs-max-total-size-mb: 0
 error-logs-max-files: 10
-# Enable usage stats so the quota dashboard charts work.
 usage-statistics-enabled: true
-# Keep 30 min of sessions in memory for RPM calculation (1800s).
 redis-usage-queue-retention-seconds: 1800
 proxy-url: ""
 force-model-prefix: false
 passthrough-headers: false
-# Retry on transient upstream errors (5xx / timeouts).
 request-retry: 3
 max-retry-credentials: 0
 max-retry-interval: 30
 disable-cooling: false
-# Disable image generation (text-only backends).
 disable-image-generation: true
 commercial-mode: false
 
@@ -198,36 +115,21 @@ quota-exceeded:
   switch-preview-model: false
   antigravity-credits: false
 
-# ==============================================================================
-# ROUTING
-# ==============================================================================
 routing:
   strategy: "round-robin"
-  # Enable session affinity so one user always hits the same backend key
-  # (important for consistent context and billing accuracy).
   session-affinity: true
   session-affinity-ttl: "5h"
 ws-auth: true
 enable-gemini-cli-endpoint: false
-# Send SSE keep-alive pings every 20s to prevent Render from closing long-poll
-# connections during slow streaming responses.
 nonstream-keepalive-interval: 0
 streaming:
   keepalive-seconds: 20
 
-# ==============================================================================
-# POST-PAY BILLING
-# ==============================================================================
 post-pay-billing:
   enabled: true
-  # NOTE: On Render free tier this file resets on sleep/restart (ephemeral FS).
-  # For persistent billing, mount a disk (paid plan) or export to Postgres.
   ledger-file: "finkrouter_ledger.json"
-  # webhook-secret: "your_deposit_webhook_secret_here"
-
   clients:
     "fink_max_d41d8cd98f00b204e9800998ecf8427e":
-      # $20 hard cap. 20000 credits = $20.
       credit-limit: 20000
     "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
       credit-limit: 2000
@@ -237,9 +139,7 @@ post-pay-billing:
       credit-limit: 2000
     "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
       credit-limit: 2000
-
   markup-rates:
-    # Fable 5 — premium tier, same as Opus pricing
     "claude-fable-5":
       input: 350
       output: 700
@@ -256,12 +156,10 @@ post-pay-billing:
       input: 280
       output: 560
       cache: 28
-    # claude-sonnet-4-6 served by mimo-v2.5
     "claude-sonnet-4-6":
       input: 210
       output: 420
       cache: 21
-    # claude-haiku-4-5 served by mimo-v2.5
     "claude-haiku-4-5":
       input: 175
       output: 350
@@ -283,18 +181,12 @@ post-pay-billing:
       output: 300
       cache: 15
 
-# ==============================================================================
-# DEEPSEEK V4 FLASH — OPENAI-COMPATIBLE BACKEND (Opus / GPT-5.4/5.5 tier)
-# Routes Opus, Fable, GPT-5.4, GPT-5.5 to deepseek-v4-flash via DeepSeek API.
-# NOTE: gpt-5.4-mini and gpt-5.3-codex-spark moved to Mimo backend.
-# ==============================================================================
 openai-compatibility:
   - name: Anthropic
     priority: 1
     base-url: https://api.deepseek.com/v1
     api-key-entries:
       - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
-    # DeepSeek supports thinking/extended reasoning on v4-flash.
     models:
       - name: deepseek-v4-flash
         alias: claude-opus-4-8
@@ -304,20 +196,8 @@ openai-compatibility:
         alias: claude-opus-4-6
       - name: deepseek-v4-flash
         alias: claude-fable-5
-      - name: deepseek-v4-flash
-        alias: gpt-5.5
-      - name: deepseek-v4-flash
-        alias: gpt-5.4
 
-  # ==============================================================================
-  # MIMO — OPENAI-COMPATIBLE BACKEND (Haiku / Sonnet / Mini / Spark tier)
-  # All models use mimo-v2.5.
-  # mimo-v2.5 → claude-haiku-4-5   (fast, cost-efficient)
-  # mimo-v2.5 → claude-sonnet-4-6  (balanced, higher quality)
-  # mimo-v2.5 → gpt-5.4-mini       (fast GPT tier)
-  # mimo-v2.5 → gpt-5.3-codex-spark (ultra-fast coding)
-  # ==============================================================================
-  - name: Mimo
+  - name: Anthropic
     priority: 2
     base-url: https://api.mimo.ai/v1
     api-key-entries:
@@ -327,6 +207,24 @@ openai-compatibility:
         alias: claude-haiku-4-5
       - name: mimo-v2.5
         alias: claude-sonnet-4-6
+
+  - name: OpenAI
+    priority: 1
+    base-url: https://api.deepseek.com/v1
+    api-key-entries:
+      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
+    models:
+      - name: deepseek-v4-flash
+        alias: gpt-5.5
+      - name: deepseek-v4-flash
+        alias: gpt-5.4
+
+  - name: OpenAI
+    priority: 2
+    base-url: https://api.mimo.ai/v1
+    api-key-entries:
+      - api-key: sk-sapn4jzrh3sgwq6jd9bjt7zu8x45tpojkyzry2hb93hxxifu
+    models:
       - name: mimo-v2.5
         alias: gpt-5.4-mini
       - name: mimo-v2.5
@@ -334,16 +232,9 @@ openai-compatibility:
 
 default-api-key-limit: 2000
 api-key-limits:
-  # Post-pay clients — mirrors post-pay-billing.clients (REQUIRED for rate limiting)
-  "fink_max_d41d8cd98f00b204e9800998ecf8427e": 10000 # Max 5x:    10,000 cr/5h
-  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8": 2000 # Pro:        2,000 cr/5h
-  "fink_max_ad0234829205b9033196ba818f7a872b": 10000 # Max legacy: 10,000 cr/5h
-  "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000 # Pro:        2,000 cr/5h
-  "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000 # Pro:        2,000 cr/5h
-  fink_pro_e65b9d6c7d02b2939e64ff192520484a: 2000 # Pro:        2,000 cr/5h
-  # Keys below use default-api-key-limit: 2000
-  # fink_max_1c96b7142d18844ce19e9e2c88bab154 → 2,000 cr/5h (default)
-  # fink_ff8026cf7d8ec408e966dd410eb62b94     → 2,000 cr/5h (default)
-  # fink_dbcee1dc7de12d7e5f4d17553e4ebae1     → 2,000 cr/5h (default)
-  # fink_31301ffbb3aaa9b57af03fc66a8257ef     → 2,000 cr/5h (default)
-  # fink_5e379cb58156bc6a27e4705cfab34608     → 2,000 cr/5h (default)
+  "fink_max_d41d8cd98f00b204e9800998ecf8427e": 10000
+  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8": 2000
+  "fink_max_ad0234829205b9033196ba818f7a872b": 10000
+  "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000
+  "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000
+  fink_pro_e65b9d6c7d02b2939e64ff192520484a: 2000
