@@ -133,6 +133,9 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	if finalModel == "" {
 		finalModel = baseModel
 	}
+	targetModel := e.mapModelToName(auth, finalModel)
+	translated = e.overrideModel(translated, targetModel)
+	finalModel = targetModel
 	translated = helps.TranslateImagePayloadIfNeeded(finalModel, translated)
 
 	url := strings.TrimSuffix(baseURL, "/") + endpoint
@@ -226,7 +229,9 @@ func (e *OpenAICompatExecutor) executeImages(ctx context.Context, auth *cliproxy
 		return resp, err
 	}
 
-	payload, contentType, errPrepare := prepareOpenAICompatImagesPayload(req.Payload, baseModel, opts.Headers.Get("Content-Type"), false)
+	targetModel := e.mapModelToName(auth, baseModel)
+
+	payload, contentType, errPrepare := prepareOpenAICompatImagesPayload(req.Payload, targetModel, opts.Headers.Get("Content-Type"), false)
 	if errPrepare != nil {
 		err = errPrepare
 		return resp, err
@@ -342,6 +347,9 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 	if finalModel == "" {
 		finalModel = baseModel
 	}
+	targetModel := e.mapModelToName(auth, finalModel)
+	translated = e.overrideModel(translated, targetModel)
+	finalModel = targetModel
 	translated = helps.TranslateImagePayloadIfNeeded(finalModel, translated)
 
 	// Request usage data in the final streaming chunk so that token statistics
@@ -503,7 +511,9 @@ func (e *OpenAICompatExecutor) executeImagesStream(ctx context.Context, auth *cl
 		return nil, err
 	}
 
-	payload, contentType, errPrepare := prepareOpenAICompatImagesPayload(req.Payload, baseModel, opts.Headers.Get("Content-Type"), true)
+	targetModel := e.mapModelToName(auth, baseModel)
+
+	payload, contentType, errPrepare := prepareOpenAICompatImagesPayload(req.Payload, targetModel, opts.Headers.Get("Content-Type"), true)
 	if errPrepare != nil {
 		err = errPrepare
 		return nil, err
@@ -803,6 +813,24 @@ func (e *OpenAICompatExecutor) resolveCompatConfig(auth *cliproxyauth.Auth) *con
 		}
 	}
 	return nil
+}
+
+func (e *OpenAICompatExecutor) mapModelToName(auth *cliproxyauth.Auth, reqModel string) string {
+	compat := e.resolveCompatConfig(auth)
+	if compat == nil {
+		return reqModel
+	}
+	for _, m := range compat.Models {
+		if strings.EqualFold(m.Alias, reqModel) {
+			if m.Name != "" {
+				return m.Name
+			}
+		}
+		if strings.EqualFold(m.Name, reqModel) {
+			return m.Name
+		}
+	}
+	return reqModel
 }
 
 func (e *OpenAICompatExecutor) overrideModel(payload []byte, model string) []byte {
