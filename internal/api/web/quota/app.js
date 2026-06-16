@@ -30,24 +30,67 @@ const app = {
   // Mirrors config.yaml markup-rates exactly (credits per 1M tokens).
   // 1000 credits = $1.00 USD. Update here whenever config.yaml changes.
   // Reasoning tokens are billed at output rate (industry standard).
+  // Mirrors config.yaml markup-rates — 10x upstream margin strategy.
+  // Cache = 10% of input rate (industry standard, Anthropic ratio).
+  // 1000 credits = $1.00 USD. Update here whenever config.yaml changes.
   pricing: {
-    'claude-opus-4-8':  { input: 280.0, output: 560.0, cache: 28.0  },
-    'claude-opus-4-7':  { input: 280.0, output: 560.0, cache: 28.0  },
-    'claude-opus-4-6':  { input: 280.0, output: 560.0, cache: 28.0  },
-    'claude-sonnet-4-6':{ input: 210.0, output: 420.0, cache: 21.0  },
-    'claude-haiku-4-5': { input: 175.0, output: 350.0, cache: 17.5  },
+    // DeepSeek-V4 Flash backend: upstream $0.14/$0.28/1M → 10x
+    'claude-opus-4-8':    { input: 1400, output: 2800, cache: 140 },
+    'claude-opus-4-7':    { input: 1400, output: 2800, cache: 140 },
+    'claude-opus-4-6':    { input: 1400, output: 2800, cache: 140 },
+    // Mimo-v2.5 backend: upstream ~$0.12/$0.40/1M → 10x
+    'claude-sonnet-4-6':  { input: 1200, output: 4000, cache: 120 },
+    'claude-haiku-4-5':   { input: 1000, output: 3500, cache: 100 },
+    // GPT aliases — same backends as Claude counterparts
+    'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
+    'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },
+    'gpt-5.4-mini':       { input: 1000, output: 3500, cache: 100 },
+    'gpt-5.3-codex-spark':{ input: 700,  output: 2100, cache:  70 },
   },
 
   // Compute virtual credits for a single session.
-  // reasoningTok billed at output rate (same as Anthropic billing).
+  // Mirrors client_quota.go exactly:
+  //   billableInput = inputTok - cacheTok  (cached tokens are re-billed at cache rate, not input rate)
+  //   reasoningTok billed at output rate (Anthropic standard)
   computeCredits: (alias, inputTok, outputTok, cacheTok, reasoningTok) => {
     const p = app.pricing[alias] || { input: 0.3, output: 1.0, cache: 0.03 };
+    const billableInput = Math.max(0, inputTok - cacheTok); // subtract cached from raw input
     return (
-      (inputTok       * p.input  ) +
-      (outputTok      * p.output ) +
-      (cacheTok       * p.cache  ) +
-      ((reasoningTok || 0) * p.output)   // reasoning billed at output rate
+      (billableInput              * p.input  ) +
+      (outputTok                  * p.output ) +
+      (cacheTok                   * p.cache  ) +
+      ((reasoningTok || 0)        * p.output )  // reasoning billed at output rate
     ) / 1_000_000;
+  },
+
+  // ── Plan Badge ───────────────────────────────────────────────────────────
+  // Determine plan tier from key prefix + 5h rate limit.
+  determinePlan: (key, rateLimit5h) => {
+    const k = (key || '').toLowerCase();
+    if (k.includes('fink_max_')) {
+      return rateLimit5h >= 20000 ? 'MAX x20' : 'MAX x5';
+    }
+    if (k.includes('fink_pro_')) return 'PRO';
+    if (k.startsWith('fink_')) return 'PAYG';
+    return 'PRO';
+  },
+
+  updatePlanBadge: (key, rateLimit5h) => {
+    const badge = document.getElementById('planBadge');
+    if (!badge) return;
+    const plan = app.determinePlan(key, rateLimit5h);
+    badge.textContent = plan;
+    if (plan.startsWith('MAX')) {
+      badge.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+      badge.style.color = '#000';
+    } else if (plan === 'PRO') {
+      badge.style.background = 'var(--primary)';
+      badge.style.color = '#000';
+    } else {
+      // PAYG
+      badge.style.background = '#6366f1';
+      badge.style.color = '#fff';
+    }
   },
 
   // ── Key Cache (sessionStorage + 5-min TTL) ───────────────────────────────
@@ -362,9 +405,11 @@ const app = {
       app.setText('valTokens',  app.formatNumber(totalTokens));
       app.setText('valRPM',     (data.usage.rpm || 0).toFixed(1));
       
-      // Store for toggle
+      // Store for toggle and plan detection
+      app.currentKey = key;
       app.lastQuotaData = data.quota;
       app.updateCreditDisplay();
+      app.updatePlanBadge(key, (data.quota && data.quota.rate_limit_5h) || 0);
 
       // Reset timer
       const exp = data.quota.window_expires_at;
@@ -437,61 +482,67 @@ const app = {
     const tierBadge = document.getElementById('tierBadge');
     const valResetText = document.getElementById('valResetText');
 
-    const getEstCost = (val) => {
-      let rate = 6000;
-      if (val >= 500000) rate = 10500;
-      else if (val >= 300000) rate = 9000;
-      else if (val >= 200000) rate = 8000;
-      else if (val >= 100000) rate = 7200;
-      else if (val >= 50000) rate = 6500;
-      return { cost: val / rate, rate: rate };
-    };
-
     if (mode === '5h') {
-      const val = quota.credits_used || 0;
+      // ── 5H Window mode ──────────────────────────────────────────────────
+      const val   = quota.credits_used || 0;
+      const limit = quota.rate_limit_5h || 0;
       app.setText('valCredits', val.toFixed(5));
-      const est = getEstCost(val);
-      
-      if (limitSpan) limitSpan.style.display = 'inline';
-      if (tierBadge) {
-        tierBadge.style.display = 'inline-block';
-        tierBadge.innerHTML = `~$${est.cost.toFixed(3)}`;
-        tierBadge.title = `Estimated cost ($1 = ${app.formatNumber(est.rate)} cr)`;
-        tierBadge.style.background = 'var(--primary)';
+
+      if (!limit || limit === -1) {
+        // Unlimited
+        if (limitSpan) limitSpan.style.display = 'none';
+        if (tierBadge) tierBadge.style.display = 'none';
+        app.setStyle('creditProgress', 'width', '0%');
+      } else {
+        if (limitSpan) limitSpan.style.display = 'inline';
+        app.setText('valLimit', app.formatNumber(limit));
+        const remaining5h = Math.max(0, limit - val);
+        const pct = Math.min(100, (val / limit) * 100);
+        if (tierBadge) {
+          tierBadge.style.display = 'inline-block';
+          tierBadge.innerHTML = `${app.formatNumber(Math.floor(remaining5h))} cr left`;
+          tierBadge.title    = `Credits remaining in this 5h window (limit: ${app.formatNumber(limit)} cr)`;
+          tierBadge.style.background = pct >= 90 ? 'var(--error)' : 'rgba(255,255,255,0.10)';
+          tierBadge.style.color      = '#fff';
+          tierBadge.style.border     = '1px solid rgba(255,255,255,0.15)';
+        }
+        app.setStyle('creditProgress', 'width', pct + '%');
+        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--error)' : 'var(--primary)');
       }
       if (valResetText) valResetText.textContent = 'Resets in 5h window';
 
-      const limit = quota.rate_limit_5h;
-      if (!limit || limit === -1 || limit === 0) {
-        app.setText('valLimit', 'Unlimited');
-        app.setStyle('creditProgress', 'width', '0%');
-      } else {
-        app.setText('valLimit', app.formatNumber(limit));
-        let pct = Math.min(100, (val / limit) * 100);
-        app.setStyle('creditProgress', 'width', pct + '%');
-        app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--error)' : 'var(--primary)');
-      }
     } else {
-      const val = quota.total_credits_used || 0;
+      // ── All-Time mode ────────────────────────────────────────────────────
+      const val       = quota.total_credits_used || 0;
+      const purchased = quota.credits_purchased   || 0;
+      const ceiling   = (quota.credit_limit       || 0) + purchased; // hard cap
+      const remaining = Math.max(0, ceiling - val);
       app.setText('valCredits', val.toFixed(5));
-      const est = getEstCost(val);
-      
-      if (limitSpan) limitSpan.style.display = 'none';
-      if (tierBadge) {
-        tierBadge.style.display = 'inline-block';
-        tierBadge.innerHTML = `~$${est.cost.toFixed(3)}`;
-        tierBadge.title = `Estimated cost ($1 = ${app.formatNumber(est.rate)} cr)`;
-        tierBadge.style.background = 'var(--primary)';
-      }
-      if (valResetText) valResetText.textContent = 'All-time usage';
 
-      const purchased = quota.credits_purchased || 0;
-      if (purchased === 0) {
-        app.setStyle('creditProgress', 'width', '0%');
-      } else {
-        let pct = Math.min(100, (val / purchased) * 100);
+      if (limitSpan) limitSpan.style.display = 'none';
+      if (valResetText) valResetText.textContent = 'Cumulative all-time usage';
+
+      if (tierBadge) {
+        tierBadge.style.display    = 'inline-block';
+        tierBadge.innerHTML        = `${app.formatNumber(Math.floor(remaining))} cr left`;
+        tierBadge.title            = `Remaining credits — ceiling: ${app.formatNumber(Math.floor(ceiling))} cr`;
+        tierBadge.style.color      = '#fff';
+        tierBadge.style.border     = '1px solid rgba(255,255,255,0.15)';
+        if (remaining < 10000) {
+          tierBadge.style.background = 'var(--error)';     // critical: < 10K
+        } else if (remaining < 50000) {
+          tierBadge.style.background = 'rgba(245,158,11,0.75)'; // warning: < 50K
+        } else {
+          tierBadge.style.background = 'rgba(255,255,255,0.10)'; // healthy
+        }
+      }
+
+      if (ceiling > 0) {
+        const pct = Math.min(100, (val / ceiling) * 100);
         app.setStyle('creditProgress', 'width', pct + '%');
         app.setStyle('creditProgress', 'backgroundColor', pct >= 90 ? 'var(--error)' : 'var(--primary)');
+      } else {
+        app.setStyle('creditProgress', 'width', '0%');
       }
     }
   },

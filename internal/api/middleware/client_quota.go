@@ -94,6 +94,8 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				credits += float64(billableInput) * pricing.Input / 1_000_000.0
 				credits += float64(record.Detail.OutputTokens) * pricing.Output / 1_000_000.0
 				credits += float64(record.Detail.CachedTokens) * pricing.Cache / 1_000_000.0
+				// Reasoning tokens billed at output rate (industry standard, same as Anthropic).
+				credits += float64(record.Detail.ReasoningTokens) * pricing.Output / 1_000_000.0
 			}
 
 			postPayUsageMu.Lock()
@@ -222,6 +224,8 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 								fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
 								fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
 								fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
+								// Reasoning tokens billed at output rate.
+								fiveHCredits += float64(s.ReasoningTokens) * pricing.Output / 1_000_000.0
 							}
 						}
 					}

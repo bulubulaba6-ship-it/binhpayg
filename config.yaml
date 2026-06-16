@@ -10,34 +10,19 @@ remote-management:
 auth-dir: "/CLIProxyAPI/pgstore/auths"
 
 api-keys:
-  - fink_max_d41d8cd98f00b204e9800998ecf8427e
-  - fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8
   - fink_max_ad0234829205b9033196ba818f7a872b
   - fink_pro_5d41402abc4b2a76b9719d911017c592
   - fink_pro_e2fc714c4727ee9395f324cd2e7f331f
-  - fink_max_1c96b7142d18844ce19e9e2c88bab154
-  - fink_pro_e65b9d6c7d02b2939e64ff192520484a
+  - fink_max_cfacc7472333305910a0176c82e951d8
+  - fink_pro_0e6f8568c58418d2569b5879fb4d9c72
+  - fink_pro_gagsgas8c58418d2569b5879fdgagsat
 
 api-key-models:
-  "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+  "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
     claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-fable-5
-  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-      - claude-fable-5
     openai:
-      - gpt-5.5
-      - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
   "fink_max_ad0234829205b9033196ba818f7a872b":
@@ -47,7 +32,6 @@ api-key-models:
       - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-fable-5
   "fink_pro_5d41402abc4b2a76b9719d911017c592":
     claude:
       - claude-opus-4-8
@@ -55,7 +39,6 @@ api-key-models:
       - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-fable-5
   "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
     claude:
       - claude-opus-4-8
@@ -63,28 +46,25 @@ api-key-models:
       - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-fable-5
-  fink_max_1c96b7142d18844ce19e9e2c88bab154:
+  "fink_max_cfacc7472333305910a0176c82e951d8":
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-fable-5
     openai:
       - gpt-5.5
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
-  fink_pro_e65b9d6c7d02b2939e64ff192520484a:
+  "fink_pro_0e6f8568c58418d2569b5879fb4d9c72":
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - claude-fable-5
     openai:
       - gpt-5.5
       - gpt-5.4
@@ -95,7 +75,7 @@ debug: false
 pprof:
   enable: false
   addr: "127.0.0.1:8316"
-logging-to-file: false
+logging-to-file: true
 logs-max-total-size-mb: 0
 error-logs-max-files: 10
 usage-statistics-enabled: true
@@ -108,7 +88,7 @@ max-retry-credentials: 0
 max-retry-interval: 30
 disable-cooling: false
 disable-image-generation: true
-commercial-mode: false
+commercial-mode: true
 
 quota-exceeded:
   switch-project: false
@@ -128,58 +108,61 @@ streaming:
 post-pay-billing:
   enabled: true
   ledger-file: "finkrouter_ledger.json"
+  webhook-secret: "finkrouter_webhook_2026"
   clients:
-    "fink_max_d41d8cd98f00b204e9800998ecf8427e":
-      credit-limit: 20000
-    "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
-      credit-limit: 2000
     "fink_max_ad0234829205b9033196ba818f7a872b":
-      credit-limit: 10000
+      credit-limit: 500000
     "fink_pro_5d41402abc4b2a76b9719d911017c592":
-      credit-limit: 2000
+      credit-limit: 100000
     "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
-      credit-limit: 2000
+      credit-limit: 100000
+    "fink_max_cfacc7472333305910a0176c82e951d8":
+      credit-limit: 500000
+    "fink_pro_0e6f8568c58418d2569b5879fb4d9c72":
+      credit-limit: 100000
+    "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
+      credit-limit: 50000
   markup-rates:
-    "claude-fable-5":
-      input: 350
-      output: 700
-      cache: 35
+    # DeepSeek-V4 Flash backend: upstream $0.14/$0.28/$0.0028 per 1M → 10x margin
+    # cache = 10% of input (industry standard, Anthropic ratio)
     "claude-opus-4-8":
-      input: 280
-      output: 560
-      cache: 28
+      input: 1400
+      output: 2800
+      cache: 140
     "claude-opus-4-7":
-      input: 280
-      output: 560
-      cache: 28
+      input: 1400
+      output: 2800
+      cache: 140
     "claude-opus-4-6":
-      input: 280
-      output: 560
-      cache: 28
+      input: 1400
+      output: 2800
+      cache: 140
+    # Mimo-v2.5 backend: upstream ~$0.12/$0.40 per 1M → 10x margin
     "claude-sonnet-4-6":
-      input: 210
-      output: 420
-      cache: 21
+      input: 1200
+      output: 4000
+      cache: 120
     "claude-haiku-4-5":
-      input: 175
-      output: 350
-      cache: 17.5
+      input: 1000
+      output: 3500
+      cache: 100
+    # GPT aliases → same backends as Claude
     "gpt-5.5":
-      input: 300
-      output: 600
-      cache: 30
+      input: 1400
+      output: 2800
+      cache: 140
     "gpt-5.4":
-      input: 200
-      output: 400
-      cache: 20
+      input: 1400
+      output: 2800
+      cache: 140
     "gpt-5.4-mini":
-      input: 150
-      output: 300
-      cache: 15
+      input: 1000
+      output: 3500
+      cache: 100
     "gpt-5.3-codex-spark":
-      input: 150
-      output: 300
-      cache: 15
+      input: 700
+      output: 2100
+      cache: 70
 
 openai-compatibility:
   - name: Anthropic-DeepSeek
@@ -194,12 +177,10 @@ openai-compatibility:
         alias: claude-opus-4-7
       - name: deepseek-v4-flash
         alias: claude-opus-4-6
-      - name: deepseek-v4-flash
-        alias: claude-fable-5
 
   - name: Anthropic-Mimo
     priority: 2
-    base-url: https://api.mimo.ai/v1
+    base-url: https://api.xiaomimimo.com/v1
     api-key-entries:
       - api-key: sk-sapn4jzrh3sgwq6jd9bjt7zu8x45tpojkyzry2hb93hxxifu
     models:
@@ -221,7 +202,7 @@ openai-compatibility:
 
   - name: OpenAI-Mimo
     priority: 2
-    base-url: https://api.mimo.ai/v1
+    base-url: https://api.xiaomimimo.com/v1
     api-key-entries:
       - api-key: sk-sapn4jzrh3sgwq6jd9bjt7zu8x45tpojkyzry2hb93hxxifu
     models:
@@ -232,9 +213,9 @@ openai-compatibility:
 
 default-api-key-limit: 2000
 api-key-limits:
-  "fink_max_d41d8cd98f00b204e9800998ecf8427e": 10000
-  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8": 2000
   "fink_max_ad0234829205b9033196ba818f7a872b": 10000
   "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000
   "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000
-  fink_pro_e65b9d6c7d02b2939e64ff192520484a: 2000
+  "fink_max_cfacc7472333305910a0176c82e951d8": 10000
+  "fink_pro_0e6f8568c58418d2569b5879fb4d9c72": 2000
+  "fink_pro_gagsgas8c58418d2569b5879fdgagsat": 2000

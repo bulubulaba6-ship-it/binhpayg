@@ -93,6 +93,8 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 					fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
 					fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
 					fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
+					// Reasoning tokens billed at output rate (mirrors client_quota.go).
+					fiveHCredits += float64(s.ReasoningTokens) * pricing.Output / 1_000_000.0
 				}
 			}
 		}
