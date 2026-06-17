@@ -139,8 +139,10 @@ const app = {
 
   // ── Charts ───────────────────────────────────────────────────────────────
   initCharts: () => {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
     Chart.defaults.font.family = '"Instrument Sans", sans-serif';
-    Chart.defaults.color = '#8e8b82'; // var(--muted-soft)
+    Chart.defaults.font.weight = '600';
+    Chart.defaults.color = isLight ? '#62677e' : '#8e8b82';
   },
 
   // Raw model → Claude alias mapping (mirrors config.yaml oauth-model-alias)
@@ -887,11 +889,46 @@ const app = {
     
     btn.textContent = 'Verify & Rotate Key';
     btn.disabled = false;
-  }
+  },
+
+  // ── Theme Management ──────────────────────────────────────────────────────
+  // Sun icon = currently dark → click switches to light.
+  // Moon icon = currently light → click switches to dark.
+  _sunSVG: `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`,
+  _moonSVG: `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`,
+
+  _updateThemeIcon: (theme) => {
+    const icon = document.getElementById('themeIcon');
+    if (!icon) return;
+    icon.innerHTML = theme === 'light' ? app._moonSVG : app._sunSVG;
+  },
+
+  initTheme: () => {
+    const saved = localStorage.getItem('fink_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    app._updateThemeIcon(saved);
+  },
+
+  toggleTheme: () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('fink_theme', next);
+    app._updateThemeIcon(next);
+    // Re-draw charts so grid/text colours match new theme
+    if (app.usageChartInstance) { app.usageChartInstance.destroy(); app.usageChartInstance = null; }
+    if (app.modelChartInstance) { app.modelChartInstance.destroy(); app.modelChartInstance = null; }
+    app.initCharts();
+    // Re-render data if available
+    const key = app.loadKey();
+    if (key) app.fetchData(key, false);
+  },
 };
+
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  app.initTheme();   // apply saved theme before any render
   app.initCharts();
   const authBtn = document.getElementById('btnAuth');
   if (authBtn) {

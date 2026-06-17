@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FinkRouter — Gateway Dashboard</title>
   <meta name="description" content="AI proxy gateway quota dashboard for FinkRouter">
   <link rel="icon" type="image/png" href="/dashboard/favicon.png">
-  <link rel="stylesheet" href="/dashboard/style.css?v=9">
+  <link rel="stylesheet" href="/dashboard/style.css?v=10">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -38,6 +38,13 @@
         Security & Keys
       </button>
     </nav>
+
+      <!-- Theme toggle: sun = currently dark → click to light; moon = currently light → click to dark -->
+      <button id="themeToggle" class="theme-toggle" onclick="app.toggleTheme()" title="Switch light / dark theme">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;">
+          <!-- default icon (sun) rendered by JS on load -->
+        </svg>
+      </button>
 
     <div class="navbar-right">
       <div class="search-box">
@@ -507,6 +514,6 @@
     </div>
   </div>
 
-  <script src="/dashboard/app.js?v=16"></script>
+  <script src="/dashboard/app.js?v=17"></script>
 </body>
 </html>

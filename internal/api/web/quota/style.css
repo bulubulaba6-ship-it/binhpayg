@@ -662,3 +662,139 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   .store-cards { flex-direction: column; }
   .store-card.popular { transform: none; }
 }
+
+/* ── Typography Improvements ─────────────────────────────────── */
+.stat-value      { font-weight: 600; }
+.stat-title      { font-weight: 600; }
+.stat-sub        { font-weight: 500; }
+.badge-cost      { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.01em; }
+.spec-val        { font-weight: 700; }
+.brand-name      { font-weight: 700; }
+.nav-item        { font-weight: 600; }
+th               { font-weight: 700; }
+td               { font-weight: 500; font-size: 0.93rem; }
+.card-header h2  { font-weight: 700; }
+
+/* ── Theme Toggle Button ─────────────────────────────────────── */
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.theme-toggle:hover {
+  background: rgba(236,168,214,0.12);
+  color: var(--primary);
+  border-color: rgba(236,168,214,0.35);
+}
+
+/* ── Light Theme ─────────────────────────────────────────────── */
+[data-theme="light"] {
+  --background:    #f0f2f7;
+  --foreground:    #12132a;
+  --surface-card:  #ffffff;
+  --primary:       #b040a0;
+  --primary-hover: #c050b0;
+  --muted:         #62677e;
+  --border:        #dde0ea;
+  --border-light:  rgba(0,0,0,0.07);
+  --success:       #0d9488;
+  --error:         #dc2626;
+}
+
+[data-theme="light"] body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Navbar */
+[data-theme="light"] .navbar {
+  background: rgba(255,255,255,0.92);
+  border-bottom-color: var(--border);
+}
+[data-theme="light"] .search-box {
+  background: rgba(0,0,0,0.04);
+  border-color: var(--border);
+}
+[data-theme="light"] .search-box input { color: var(--foreground); }
+[data-theme="light"] .nav-item:hover   { background: rgba(0,0,0,0.04); color: var(--foreground); }
+[data-theme="light"] .nav-item.active  {
+  background: rgba(176,64,160,0.1);
+  border-color: rgba(176,64,160,0.2);
+}
+[data-theme="light"] .theme-toggle:hover {
+  background: rgba(176,64,160,0.1);
+  border-color: rgba(176,64,160,0.3);
+}
+
+/* Cards */
+[data-theme="light"] .stat-card,
+[data-theme="light"] .chart-card,
+[data-theme="light"] .history-card,
+[data-theme="light"] .store-card {
+  background: #ffffff;
+  border-color: var(--border);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+[data-theme="light"] .stat-card:hover  { border-color: rgba(176,64,160,0.3); }
+[data-theme="light"] .store-card:hover { border-color: rgba(176,64,160,0.3); }
+[data-theme="light"] .store-card.popular {
+  border-color: var(--primary);
+  box-shadow: 0 0 28px rgba(176,64,160,0.15);
+}
+
+/* Table */
+[data-theme="light"] td               { border-bottom-color: rgba(0,0,0,0.055); }
+[data-theme="light"] tbody tr:hover   { background: rgba(0,0,0,0.025); }
+[data-theme="light"] .badge-cost      { background: rgba(176,64,160,0.1); color: var(--primary); }
+[data-theme="light"] .progress-track  { background: #e4e7f0; }
+
+/* Store */
+[data-theme="light"] .spec-label             { color: rgba(0,0,0,0.38); }
+[data-theme="light"] .store-card .strike     { color: rgba(0,0,0,0.28); }
+[data-theme="light"] .store-card .desc       { border-top-color: var(--border); }
+[data-theme="light"] .popular-badge          { background: var(--primary); color: #fff; }
+
+/* Welcome overlay pills/dividers */
+[data-theme="light"] .welcome-pill {
+  background: rgba(176,64,160,0.07);
+  border-color: rgba(176,64,160,0.2);
+}
+[data-theme="light"] .welcome-divider::before,
+[data-theme="light"] .welcome-divider::after { background: var(--border); }
+[data-theme="light"] .welcome-buy-btn { border-color: rgba(176,64,160,0.4) !important; }
+[data-theme="light"] .welcome-buy-btn:hover {
+  background: rgba(176,64,160,0.08) !important;
+  border-color: var(--primary) !important;
+}
+
+/* Modals */
+[data-theme="light"] .welcome-state     { background: rgba(10,10,30,0.52); }
+[data-theme="light"] .welcome-card      { background: #ffffff; border-color: var(--border); }
+[data-theme="light"] .welcome-left      { border-bottom-color: var(--border); }
+[data-theme="light"] .welcome-left--hero {
+  background: linear-gradient(160deg, #f4e8fa, #ead4f4);
+  border-right-color: var(--border);
+}
+[data-theme="light"] .welcome-stat-row  {
+  background: rgba(0,0,0,0.03);
+  border-color: var(--border);
+}
+[data-theme="light"] .welcome-stat-divider { background: var(--border); }
+[data-theme="light"] .welcome-right input {
+  background: rgba(0,0,0,0.04);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+[data-theme="light"] .welcome-right input::placeholder { color: var(--muted); }
+[data-theme="light"] .welcome-right input:focus        { border-color: var(--primary); }
+[data-theme="light"] .auth-btn  { color: #000; }
+[data-theme="light"] .refresh-dot { background: var(--success); }
