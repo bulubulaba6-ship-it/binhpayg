@@ -335,20 +335,17 @@ const app = {
         const tr = document.createElement('tr');
         const shortId = r.id.length > 12 ? r.id.substring(0, 8) + '…' : r.id;
         const reTokPart = r.reasoningTokens > 0 ? ` / ${r.reasoningTokens}` : '';
-        // Server-billed: exact. Estimated: JS-computed for legacy sessions.
-        const costBadge = r.estimated
-          ? `<span class="badge-cost" title="Estimated at current rates — session predates server-side cost tracking">${r.credits.toFixed(5)} CR <span style="font-size:0.7em;opacity:0.55;">(est.)</span></span>`
-          : `<span class="badge-cost">${r.credits.toFixed(5)} CR</span>`;
         tr.innerHTML = `
           <td class="mono" title="${r.id}">${shortId}</td>
           <td>${r.model}</td>
           <td style="color:var(--text-muted);">${r.inputTokens} / ${r.outputTokens} / ${r.cachedTokens}${reTokPart}</td>
           <td>${app.formatDate(r.timestamp)}</td>
-          <td class="text-right">${costBadge}</td>
+          <td class="text-right"><span class="badge-cost">${r.credits.toFixed(5)} CR</span></td>
         `;
         tbody.appendChild(tr);
       });
     }
+
 
 
     // Update pagination controls
