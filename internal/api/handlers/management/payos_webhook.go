@@ -55,6 +55,7 @@ func getWebhookDB() *sql.DB {
 						email VARCHAR(255) NOT NULL,
 						plan VARCHAR(50) NOT NULL,
 						amount BIGINT NOT NULL,
+						phone VARCHAR(50) DEFAULT '',
 						status VARCHAR(20) DEFAULT 'pending',
 						created_at TIMESTAMPTZ DEFAULT NOW()
 					);
@@ -90,6 +91,8 @@ func getWebhookDB() *sql.DB {
 					ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active',
 					ADD COLUMN IF NOT EXISTS order_code VARCHAR(100);
 				`)
+				// Migrate payment_orders: add phone column for existing production tables.
+				_, _ = db.Exec(`ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS phone VARCHAR(50) DEFAULT ''`)
 				// Ensure created_at has a DEFAULT so inserts that omit it still succeed.
 				// The production column may have been created as NOT NULL without DEFAULT.
 				_, _ = db.Exec(`ALTER TABLE api_keys ALTER COLUMN created_at SET DEFAULT NOW()`)

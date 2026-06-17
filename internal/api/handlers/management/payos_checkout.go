@@ -20,6 +20,7 @@ import (
 type CreatePaymentLinkRequest struct {
 	Plan         string `json:"plan"`
 	Email        string `json:"email"`
+	Phone        string `json:"phone"`
 	CustomAmount int64  `json:"custom_amount"`
 	OTP          string `json:"otp"`
 }
@@ -168,11 +169,14 @@ func (h *Handler) PostCreatePaymentLink(c *gin.Context) {
 	// UnixNano is 19 digits. We can use UnixMicro which is 16 digits, then truncate or take modulo.
 	orderCode := time.Now().UnixMicro() % 900000000000000
 
+	// Sanitize optional phone
+	req.Phone = strings.TrimSpace(req.Phone)
+
 	// Store in Postgres
 	_, err = db.Exec(`
-		INSERT INTO payment_orders (order_code, email, plan, amount)
-		VALUES ($1, $2, $3, $4)
-	`, orderCode, req.Email, plan, amount)
+		INSERT INTO payment_orders (order_code, email, plan, amount, phone)
+		VALUES ($1, $2, $3, $4, $5)
+	`, orderCode, req.Email, plan, amount, req.Phone)
 	if err != nil {
 		log.Errorf("Failed to insert payment order: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal database error"})
