@@ -23,13 +23,14 @@ type ClientUsageEntry struct {
 }
 
 type SessionSummary struct {
-	SessionID       string    `json:"SessionID"`
-	Model           string    `json:"Model"`
-	InputTokens     int64     `json:"InputTokens"`
-	OutputTokens    int64     `json:"OutputTokens"`
-	CachedTokens    int64     `json:"CachedTokens"`
-	ReasoningTokens int64     `json:"ReasoningTokens"`
-	Timestamp       time.Time `json:"StartedAt"`
+	SessionID        string    `json:"SessionID"`
+	Model            string    `json:"Model"`
+	InputTokens      int64     `json:"InputTokens"`
+	OutputTokens     int64     `json:"OutputTokens"`
+	CachedTokens     int64     `json:"CachedTokens"`
+	ReasoningTokens  int64     `json:"ReasoningTokens"`
+	Timestamp        time.Time `json:"StartedAt"`
+	CreditsConsumed  float64   `json:"CreditsConsumed"` // server-billed amount at time of request
 }
 
 type PostPayUsageEntry struct {
@@ -124,6 +125,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					CachedTokens:    record.Detail.CachedTokens,
 					ReasoningTokens: record.Detail.ReasoningTokens,
 					Timestamp:       time.Now(),
+					CreditsConsumed: credits, // store server-billed amount for dashboard
 				}}, entry.Sessions...)
 				if len(entry.Sessions) > 100 {
 					entry.Sessions = entry.Sessions[:100]

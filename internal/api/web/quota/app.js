@@ -269,12 +269,20 @@ const app = {
         const outTok = s.OutputTokens    || 0;
         const caTok  = s.CachedTokens    || 0;
         const reTok  = s.ReasoningTokens || 0;
+        // Prefer server-billed amount (CreditsConsumed stored at billing time).
+        // Fall back to JS estimate for legacy sessions recorded before this field existed.
+        const serverBilled = s.CreditsConsumed || 0;
+        const estimated    = serverBilled <= 0;
+        const credits      = estimated
+          ? app.computeCredits(alias, inTok, outTok, caTok, reTok)
+          : serverBilled;
         return {
           id: s.SessionID || '-',
           model: alias,
           inputTokens: inTok, outputTokens: outTok, cachedTokens: caTok, reasoningTokens: reTok,
           timestamp: s.UpdatedAt || s.StartedAt,
-          credits: app.computeCredits(alias, inTok, outTok, caTok, reTok)
+          credits,
+          estimated,  // true = JS-computed (old session), false = server-billed (accurate)
         };
       });
     } else if (usageModels && Object.keys(usageModels).length > 0) {
@@ -291,7 +299,8 @@ const app = {
             model: alias,
             inputTokens: inTok, outputTokens: outTok, cachedTokens: caTok, reasoningTokens: reTok,
             timestamp: d.timestamp,
-            credits: app.computeCredits(alias, inTok, outTok, caTok, reTok)
+            credits: app.computeCredits(alias, inTok, outTok, caTok, reTok),
+            estimated: true,
           });
         });
       });
@@ -326,16 +335,21 @@ const app = {
         const tr = document.createElement('tr');
         const shortId = r.id.length > 12 ? r.id.substring(0, 8) + '…' : r.id;
         const reTokPart = r.reasoningTokens > 0 ? ` / ${r.reasoningTokens}` : '';
+        // Server-billed: exact. Estimated: JS-computed for legacy sessions.
+        const costBadge = r.estimated
+          ? `<span class="badge-cost" title="Estimated at current rates — session predates server-side cost tracking">${r.credits.toFixed(5)} CR <span style="font-size:0.7em;opacity:0.55;">(est.)</span></span>`
+          : `<span class="badge-cost">${r.credits.toFixed(5)} CR</span>`;
         tr.innerHTML = `
           <td class="mono" title="${r.id}">${shortId}</td>
           <td>${r.model}</td>
           <td style="color:var(--text-muted);">${r.inputTokens} / ${r.outputTokens} / ${r.cachedTokens}${reTokPart}</td>
           <td>${app.formatDate(r.timestamp)}</td>
-          <td class="text-right"><span class="badge-cost">${r.credits.toFixed(5)} CR</span></td>
+          <td class="text-right">${costBadge}</td>
         `;
         tbody.appendChild(tr);
       });
     }
+
 
     // Update pagination controls
     const info = document.getElementById('ledgerPageInfo');
