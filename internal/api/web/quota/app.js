@@ -649,6 +649,8 @@ const app = {
 
   closeCheckout: () => {
     document.getElementById('checkoutModal').style.display = 'none';
+    const phone = document.getElementById('checkoutPhone');
+    if (phone) phone.value = '';
   },
 
   // Validates OTP inputs and enables the relevant buttons
@@ -700,10 +702,11 @@ const app = {
     errDiv.style.display = 'none';
 
     try {
+      const phone = (document.getElementById('checkoutPhone')?.value || '').trim();
       const res = await fetch('/api/payment/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, ...(phone ? { phone } : {}) })
       });
 
       const data = await res.json();
@@ -779,10 +782,11 @@ const app = {
     errDiv.style.display = 'none';
 
     try {
+      const phone = (document.getElementById('checkoutPhone')?.value || '').trim();
       const res = await fetch('/api/payment/create-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: app.checkoutPlan, email, otp, custom_amount: amount })
+        body: JSON.stringify({ plan: app.checkoutPlan, email, otp, custom_amount: amount, ...(phone ? { phone } : {}) })
       });
 
       const data = await res.json();
@@ -905,13 +909,24 @@ const app = {
   },
 
   initTheme: () => {
-    const saved = localStorage.getItem('fink_theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-    app._updateThemeIcon(saved);
+    // Priority: 1) user's explicit localStorage choice
+    //           2) OS/browser prefers-color-scheme
+    //           3) default: light
+    const saved = localStorage.getItem('fink_theme');
+    let theme;
+    if (saved === 'dark' || saved === 'light') {
+      theme = saved;
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      theme = 'dark';
+    } else {
+      theme = 'light'; // default
+    }
+    document.documentElement.setAttribute('data-theme', theme);
+    app._updateThemeIcon(theme);
   },
 
   toggleTheme: () => {
-    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
     const next = current === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('fink_theme', next);

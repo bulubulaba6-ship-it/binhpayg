@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FinkRouter — Gateway Dashboard</title>
   <meta name="description" content="AI proxy gateway quota dashboard for FinkRouter">
   <link rel="icon" type="image/png" href="/dashboard/favicon.png">
-  <link rel="stylesheet" href="/dashboard/style.css?v=13">
+  <link rel="stylesheet" href="/dashboard/style.css?v=14">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -458,8 +458,15 @@
            </div>
            <button id="checkoutSendOtpBtn" class="auth-btn" style="width: auto; padding: 0 16px; height: 42px; margin-bottom: 0;" onclick="app.sendPurchaseOTP()">Send OTP</button>
         </div>
-        <p style="font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-top: -6px; margin-bottom: 16px;">Your API key will be sent here securely.</p>
-        
+        <p style="font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-top: -6px; margin-bottom: 12px;">Your API key will be sent here securely.</p>
+
+        <div style="margin-bottom: 16px;">
+           <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">
+             Phone Number <span style="opacity:0.55; font-size:0.68rem;">(optional — for fast support)</span>
+           </label>
+           <input type="tel" id="checkoutPhone" style="margin-bottom:0; height:42px;" placeholder="0912 345 678" autocomplete="tel" inputmode="tel">
+        </div>
+
         <div id="checkoutOtpWrap" style="margin-bottom: 20px; display: none;">
            <label style="font-size:0.75rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; display:block; margin-bottom:6px;">OTP Verification Code</label>
            <input type="text" id="checkoutOTP" placeholder="6-digit code" maxlength="6" oninput="app.validateOTPCheckout()" autocomplete="off">
@@ -514,6 +521,6 @@
     </div>
   </div>
 
-  <script src="/dashboard/app.js?v=17"></script>
+  <script src="/dashboard/app.js?v=18"></script>
 </body>
 </html>
