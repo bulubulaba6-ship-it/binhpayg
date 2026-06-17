@@ -81,7 +81,8 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	}
 
 	// 5h window credits: sum credits only from sessions within the last 5 hours.
-	// The ledger keeps the last 100 sessions with timestamps, so we can compute this.
+	// Uses billableInput (input - cache) to match the actual billing formula,
+	// so the 5H gauge burns at the same rate as the user's credit balance.
 	fiveHCutoff := time.Now().Add(-5 * time.Hour)
 	var fiveHCredits float64
 	// We use the per-session markup rates from live config for accuracy.
@@ -90,7 +91,11 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		if s.Timestamp.After(fiveHCutoff) {
 			if liveCfg != nil {
 				if pricing, ok := liveCfg.PostPayBilling.MarkupRates[s.Model]; ok {
-					fiveHCredits += float64(s.InputTokens) * pricing.Input / 1_000_000.0
+					billableInput := s.InputTokens - s.CachedTokens
+					if billableInput < 0 {
+						billableInput = 0
+					}
+					fiveHCredits += float64(billableInput) * pricing.Input / 1_000_000.0
 					fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
 					fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
 					// Reasoning tokens billed at output rate (mirrors client_quota.go).
