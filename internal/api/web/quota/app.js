@@ -140,10 +140,11 @@ const app = {
   // ── Charts ───────────────────────────────────────────────────────────────
   initCharts: () => {
     const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    Chart.defaults.font.family = '"Instrument Sans", sans-serif';
+    Chart.defaults.font.family = '"Be Vietnam Pro", system-ui, sans-serif';
     Chart.defaults.font.weight = '600';
     Chart.defaults.color = isLight ? '#62677e' : '#8e8b82';
   },
+
 
   // Raw model → Claude alias mapping (mirrors config.yaml oauth-model-alias)
   resolveAlias: (rawModel) => {
