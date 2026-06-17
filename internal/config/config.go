@@ -1419,17 +1419,23 @@ func appendPath(path []string, key string) []string {
 // represents a known default value that should not be written to the config file.
 // This prevents non-zero defaults from polluting the config.
 func isKnownDefaultValue(path []string, node *yaml.Node) bool {
+	if len(path) == 0 {
+		return false
+	}
+
+	fullPath := strings.Join(path, ".")
+
+	// NEVER prune post-pay billing clients or their fields, even if they are zero (e.g. credit-limit: 0)
+	if strings.HasPrefix(fullPath, "post-pay-billing.clients.") {
+		return false
+	}
+
 	// First check if it's a zero value
 	if isZeroValueNode(node) {
 		return true
 	}
 
 	// Match known non-zero defaults by exact dotted path.
-	if len(path) == 0 {
-		return false
-	}
-
-	fullPath := strings.Join(path, ".")
 
 	// Check string defaults
 	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
