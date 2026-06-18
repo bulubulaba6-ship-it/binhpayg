@@ -218,9 +218,9 @@ openai-compatibility:
 
   - name: Anthropic-BR
     priority: 2
-    base-url: https://api.xiaomimimo.com/v1
+    base-url: https://token-plan-sgp.xiaomimimo.com/v1
     api-key-entries:
-      - api-key: sk-sapn4jzrh3sgwq6jd9bjt7zu8x45tpojkyzry2hb93hxxifu
+      - api-key: tp-saxaqmvwi329f93oetfhc3pjinyzsc1zhcnh74pebylmvins
     models:
       - name: mimo-v2.5
         alias: claude-haiku-4-5
@@ -240,9 +240,9 @@ openai-compatibility:
 
   - name: OpenAI-Mimo
     priority: 2
-    base-url: https://api.xiaomimimo.com/v1
+    base-url: https://token-plan-sgp.xiaomimimo.com/v1
     api-key-entries:
-      - api-key: sk-sapn4jzrh3sgwq6jd9bjt7zu8x45tpojkyzry2hb93hxxifu
+      - api-key: tp-saxaqmvwi329f93oetfhc3pjinyzsc1zhcnh74pebylmvins
     models:
       - name: mimo-v2.5
         alias: gpt-5.4-mini
