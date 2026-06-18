@@ -19,6 +19,7 @@ api-keys:
   - fink_pro_b54e2ebaca28b22e32345a2872f6be9d
   - fink_pro_f64fb207b1d18ee4af8d6316f3375c37
   - fink_pro_e65b9d6c7d02b2939e64ff192520484a
+  - fink_pro_e436e43187e4d84beba1517af14ffbf4
 
 api-key-models:
   "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
@@ -109,6 +110,18 @@ api-key-models:
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
+  "fink_pro_e436e43187e4d84beba1517af14ffbf4":
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex-spark
 
 debug: false
 pprof:
@@ -166,6 +179,8 @@ post-pay-billing:
     "fink_pro_f64fb207b1d18ee4af8d6316f3375c37":
       credit-limit: 0
     "fink_pro_e65b9d6c7d02b2939e64ff192520484a":
+      credit-limit: 100000
+    "fink_pro_e436e43187e4d84beba1517af14ffbf4":
       credit-limit: 100000
   markup-rates:
     # DeepSeek-V4 Flash backend: upstream $0.14/$0.28/$0.0028 per 1M → 10x margin
@@ -271,3 +286,4 @@ api-key-limits:
   "fink_pro_b54e2ebaca28b22e32345a2872f6be9d": 2000
   "fink_pro_f64fb207b1d18ee4af8d6316f3375c37": 2000
   "fink_pro_e65b9d6c7d02b2939e64ff192520484a": 2000
+  "fink_pro_e436e43187e4d84beba1517af14ffbf4": 2000
