@@ -16,6 +16,8 @@ api-keys:
   - fink_max_cfacc7472333305910a0176c82e951d8
   - fink_pro_0e6f8568c58418d2569b5879fb4d9c72
   - fink_pro_gagsgas8c58418d2569b5879fdgagsat
+  - fink_pro_b54e2ebaca28b22e32345a2872f6be9d
+  - fink_pro_f64fb207b1d18ee4af8d6316f3375c37
 
 api-key-models:
   "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
@@ -70,6 +72,34 @@ api-key-models:
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
+  fink_pro_b54e2ebaca28b22e32345a2872f6be9d:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_pro_f64fb207b1d18ee4af8d6316f3375c37:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
 
 debug: false
 pprof:
@@ -117,11 +147,15 @@ post-pay-billing:
     "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
       credit-limit: 100000
     "fink_max_cfacc7472333305910a0176c82e951d8":
-      credit-limit: 500000
+      credit-limit: 250000
     "fink_pro_0e6f8568c58418d2569b5879fb4d9c72":
-      credit-limit: 100000
+      credit-limit: 50000
     "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
       credit-limit: 50000
+    "fink_pro_b54e2ebaca28b22e32345a2872f6be9d":
+      credit-limit: 0
+    "fink_pro_f64fb207b1d18ee4af8d6316f3375c37":
+      credit-limit: 0
   markup-rates:
     # DeepSeek-V4 Flash backend: upstream $0.14/$0.28/$0.0028 per 1M → 10x margin
     # cache = 10% of input (industry standard, Anthropic ratio)
@@ -146,6 +180,10 @@ post-pay-billing:
       input: 1000
       output: 3500
       cache: 100
+    "claude-fable-5":
+      input: 1200
+      output: 4000
+      cache: 120
     # GPT aliases → same backends as Claude
     "gpt-5.5":
       input: 1400
@@ -165,7 +203,7 @@ post-pay-billing:
       cache: 70
 
 openai-compatibility:
-  - name: Anthropic-DeepSeek
+  - name: Anthropic
     priority: 1
     base-url: https://api.deepseek.com/v1
     api-key-entries:
@@ -178,7 +216,7 @@ openai-compatibility:
       - name: deepseek-v4-flash
         alias: claude-opus-4-6
 
-  - name: Anthropic-Mimo
+  - name: Anthropic-BR
     priority: 2
     base-url: https://api.xiaomimimo.com/v1
     api-key-entries:
@@ -189,7 +227,7 @@ openai-compatibility:
       - name: mimo-v2.5
         alias: claude-sonnet-4-6
 
-  - name: OpenAI-DeepSeek
+  - name: OpenAI
     priority: 1
     base-url: https://api.deepseek.com/v1
     api-key-entries:
@@ -219,3 +257,5 @@ api-key-limits:
   "fink_max_cfacc7472333305910a0176c82e951d8": 10000
   "fink_pro_0e6f8568c58418d2569b5879fb4d9c72": 2000
   "fink_pro_gagsgas8c58418d2569b5879fdgagsat": 2000
+  "fink_pro_b54e2ebaca28b22e32345a2872f6be9d": 2000
+  "fink_pro_f64fb207b1d18ee4af8d6316f3375c37": 2000

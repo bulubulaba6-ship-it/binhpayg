@@ -41,6 +41,7 @@ const app = {
     // Mimo-v2.5 backend: upstream ~$0.12/$0.40/1M → 10x
     'claude-sonnet-4-6':  { input: 1200, output: 4000, cache: 120 },
     'claude-haiku-4-5':   { input: 1000, output: 3500, cache: 100 },
+    'claude-fable-5':     { input: 1200, output: 4000, cache: 120 },
     // GPT aliases — same backends as Claude counterparts
     'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
     'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },
