@@ -84,9 +84,7 @@ api-key-models:
       - gpt-5.5
       - gpt-5.4
       - gpt-5.4-mini
-      - gpt-5.3-codex
       - gpt-5.3-codex-spark
-      - gpt-5.2
   fink_pro_f64fb207b1d18ee4af8d6316f3375c37:
     claude:
       - claude-opus-4-8
@@ -98,9 +96,7 @@ api-key-models:
       - gpt-5.5
       - gpt-5.4
       - gpt-5.4-mini
-      - gpt-5.3-codex
       - gpt-5.3-codex-spark
-      - gpt-5.2
   "fink_pro_e65b9d6c7d02b2939e64ff192520484a":
     claude:
       - claude-opus-4-8
