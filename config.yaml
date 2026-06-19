@@ -179,9 +179,9 @@ post-pay-billing:
     "fink_pro_f64fb207b1d18ee4af8d6316f3375c37":
       credit-limit: 0
     "fink_pro_e65b9d6c7d02b2939e64ff192520484a":
-      credit-limit: 100000
+      credit-limit: 50000
     "fink_pro_e436e43187e4d84beba1517af14ffbf4":
-      credit-limit: 100000
+      credit-limit: 50000
   markup-rates:
     # DeepSeek-V4 Flash backend: upstream $0.14/$0.28/$0.0028 per 1M → 10x margin
     # cache = 10% of input (industry standard, Anthropic ratio)
@@ -199,17 +199,17 @@ post-pay-billing:
       cache: 140
     # Mimo-v2.5 backend: upstream ~$0.12/$0.40 per 1M → 10x margin
     "claude-sonnet-4-6":
-      input: 1200
-      output: 4000
-      cache: 120
-    "claude-haiku-4-5":
       input: 1000
-      output: 3500
+      output: 2000
       cache: 100
+    "claude-haiku-4-5":
+      input: 800
+      output: 1600
+      cache: 80
     "claude-fable-5":
-      input: 1200
+      input: 2000
       output: 4000
-      cache: 120
+      cache: 200
     # GPT aliases → same backends as Claude
     "gpt-5.5":
       input: 1400
@@ -220,9 +220,9 @@ post-pay-billing:
       output: 2800
       cache: 140
     "gpt-5.4-mini":
-      input: 1000
-      output: 3500
-      cache: 100
+      input: 800
+      output: 2000
+      cache: 80
     "gpt-5.3-codex-spark":
       input: 700
       output: 2100
@@ -282,7 +282,7 @@ api-key-limits:
   "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000
   "fink_max_cfacc7472333305910a0176c82e951d8": 10000
   "fink_pro_0e6f8568c58418d2569b5879fb4d9c72": 2000
-  "fink_pro_gagsgas8c58418d2569b5879fdgagsat": 2000
+  "fink_pro_gagsgas8c58418d2569b5879fdgagsat": 20000
   "fink_pro_b54e2ebaca28b22e32345a2872f6be9d": 2000
   "fink_pro_f64fb207b1d18ee4af8d6316f3375c37": 2000
   "fink_pro_e65b9d6c7d02b2939e64ff192520484a": 2000

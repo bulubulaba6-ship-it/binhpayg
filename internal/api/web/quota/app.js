@@ -38,15 +38,15 @@ const app = {
     'claude-opus-4-8':    { input: 1400, output: 2800, cache: 140 },
     'claude-opus-4-7':    { input: 1400, output: 2800, cache: 140 },
     'claude-opus-4-6':    { input: 1400, output: 2800, cache: 140 },
-    // Mimo-v2.5 backend: upstream ~$0.12/$0.40/1M → 10x
-    'claude-sonnet-4-6':  { input: 1200, output: 4000, cache: 120 },
-    'claude-haiku-4-5':   { input: 1000, output: 3500, cache: 100 },
-    'claude-fable-5':     { input: 1200, output: 4000, cache: 120 },
+    // Mimo-v2.5 backend
+    'claude-sonnet-4-6':  { input: 1000, output: 2000, cache: 100 },
+    'claude-haiku-4-5':   { input:  800, output: 1600, cache:  80 },
+    'claude-fable-5':     { input: 2000, output: 4000, cache: 200 },
     // GPT aliases — same backends as Claude counterparts
     'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
     'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },
-    'gpt-5.4-mini':       { input: 1000, output: 3500, cache: 100 },
-    'gpt-5.3-codex-spark':{ input: 700,  output: 2100, cache:  70 },
+    'gpt-5.4-mini':       { input:  800, output: 2000, cache:  80 },
+    'gpt-5.3-codex-spark':{ input:  700, output: 2100, cache:  70 },
   },
 
   // Compute virtual credits for a single session.
