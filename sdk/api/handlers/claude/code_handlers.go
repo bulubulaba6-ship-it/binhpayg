@@ -78,6 +78,11 @@ func (h *ClaudeCodeAPIHandler) ClaudeMessages(c *gin.Context) {
 		return
 	}
 
+	// Normalize vision messages: Mimo requires a text block alongside any image block.
+	// Claude Code sometimes sends messages whose content is image-only, which Mimo rejects
+	// with 400 "'text' is not set". Inject a fallback text part when missing.
+	rawJSON = ensureAnthropicMessagesHaveText(rawJSON)
+
 	// Check if the client requested a streaming response.
 	streamResult := gjson.GetBytes(rawJSON, "stream")
 	if !streamResult.Exists() || streamResult.Type == gjson.False {
@@ -295,6 +300,80 @@ func (h *ClaudeCodeAPIHandler) handleStreamingResponse(c *gin.Context, rawJSON [
 			return
 		}
 	}
+}
+
+// ensureAnthropicMessagesHaveText normalizes Anthropic-format request messages so that
+// any message whose content is an array containing an image block also contains a text
+// block. Some upstream providers (e.g. Mimo) return 400 "'text' is not set" when a
+// vision request arrives with no accompanying text content.
+func ensureAnthropicMessagesHaveText(rawJSON []byte) []byte {
+	if !gjson.GetBytes(rawJSON, "messages").IsArray() {
+		return rawJSON
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rawJSON, &body); err != nil {
+		return rawJSON
+	}
+
+	var msgs []json.RawMessage
+	if err := json.Unmarshal(body["messages"], &msgs); err != nil {
+		return rawJSON
+	}
+
+	modified := false
+	for i, msgRaw := range msgs {
+		var msg map[string]json.RawMessage
+		if err := json.Unmarshal(msgRaw, &msg); err != nil {
+			continue
+		}
+		contentRaw, ok := msg["content"]
+		if !ok {
+			continue
+		}
+		// Only process array-style content (multi-part messages).
+		var parts []json.RawMessage
+		if err := json.Unmarshal(contentRaw, &parts); err != nil {
+			continue
+		}
+		hasImage, hasText := false, false
+		for _, p := range parts {
+			switch gjson.GetBytes(p, "type").String() {
+			case "image":
+				hasImage = true
+			case "text":
+				hasText = true
+			}
+		}
+		if hasImage && !hasText {
+			parts = append(parts, json.RawMessage(`{"type":"text","text":"Please analyze the image."}`))
+			newContent, err := json.Marshal(parts)
+			if err != nil {
+				continue
+			}
+			msg["content"] = json.RawMessage(newContent)
+			newMsg, err := json.Marshal(msg)
+			if err != nil {
+				continue
+			}
+			msgs[i] = json.RawMessage(newMsg)
+			modified = true
+		}
+	}
+
+	if !modified {
+		return rawJSON
+	}
+	newMsgs, err := json.Marshal(msgs)
+	if err != nil {
+		return rawJSON
+	}
+	body["messages"] = json.RawMessage(newMsgs)
+	result, err := json.Marshal(body)
+	if err != nil {
+		return rawJSON
+	}
+	return result
 }
 
 func pendingClaudeStreamError(errs <-chan *interfaces.ErrorMessage) (*interfaces.ErrorMessage, bool) {
