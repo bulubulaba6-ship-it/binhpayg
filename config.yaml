@@ -261,13 +261,13 @@ openai-compatibility:
 
   - name: Anthropic-BR
     priority: 2
-    base-url: https://token-plan-sgp.xiaomimimo.com/v1
+    base-url: https://api.deepseek.com/v1
     api-key-entries:
-      - api-key: tp-saxaqmvwi329f93oetfhc3pjinyzsc1zhcnh74pebylmvins
+      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
     models:
-      - name: mimo-v2.5
+      - name: deepseek-v4-flash
         alias: claude-haiku-4-5
-      - name: mimo-v2.5
+      - name: deepseek-v4-flash
         alias: claude-sonnet-4-6
 
   - name: OpenAI
@@ -283,13 +283,13 @@ openai-compatibility:
 
   - name: OpenAI-BR
     priority: 2
-    base-url: https://token-plan-sgp.xiaomimimo.com/v1
+    base-url: https://api.deepseek.com/v1
     api-key-entries:
-      - api-key: tp-saxaqmvwi329f93oetfhc3pjinyzsc1zhcnh74pebylmvins
+      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
     models:
-      - name: mimo-v2.5
+      - name: deepseek-v4-flash
         alias: gpt-5.4-mini
-      - name: mimo-v2.5
+      - name: deepseek-v4-flash
         alias: gpt-5.3-codex-spark
 
 default-api-key-limit: 2000
