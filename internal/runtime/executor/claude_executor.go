@@ -44,6 +44,74 @@ type ClaudeExecutor struct {
 // Previously "proxy_" was used but this is a detectable fingerprint difference.
 const claudeToolPrefix = ""
 
+func shouldSanitizeClaudeMessagesForUpstream(baseModel string) bool {
+	return sigcompat.SignatureProviderFromModelName(baseModel) == sigcompat.SignatureProviderClaude
+}
+
+func sanitizeClaudeMessagesForClaudeUpstreamWithDebug(ctx context.Context, body []byte, baseModel string) []byte {
+	sanitized := body
+	if shouldSanitizeClaudeMessagesForUpstream(baseModel) {
+		var report sigcompat.SignatureSanitizeReport
+		sanitized, report = sigcompat.SanitizeClaudeMessagesForClaudeUpstream(body, baseModel)
+		logClaudeSignatureSanitizeReport(ctx, baseModel, report)
+	}
+	return sanitizeClaudeWebSearchDomains(sanitized)
+}
+
+// sanitizeClaudeWebSearchDomains removes empty allowed_domains/blocked_domains
+// arrays from built-in web_search tools. Some clients (e.g. litellm) emit an
+// empty array instead of omitting the field, and Anthropic rejects it with
+// "Empty list of domains is ambiguous. Provide at least one domain or null.".
+// Deleting the key is equivalent to leaving it unset.
+func sanitizeClaudeWebSearchDomains(body []byte) []byte {
+	tools := gjson.GetBytes(body, "tools")
+	if !tools.Exists() || !tools.IsArray() {
+		return body
+	}
+	tools.ForEach(func(index, tool gjson.Result) bool {
+		if !strings.HasPrefix(tool.Get("type").String(), "web_search_") {
+			return true
+		}
+		for _, field := range []string{"allowed_domains", "blocked_domains"} {
+			value := tool.Get(field)
+			if value.Exists() && value.IsArray() && len(value.Array()) == 0 {
+				path := fmt.Sprintf("tools.%d.%s", index.Int(), field)
+				if updated, errDelete := sjson.DeleteBytes(body, path); errDelete == nil {
+					body = updated
+				}
+			}
+		}
+		return true
+	})
+	return body
+}
+
+func logClaudeSignatureSanitizeReport(ctx context.Context, baseModel string, report sigcompat.SignatureSanitizeReport) {
+	if report.DroppedBlocks == 0 && report.DroppedSignatures == 0 && report.ReplacedSignatures == 0 {
+		return
+	}
+
+	fields := log.Fields{
+		"component":           "signature_sanitizer",
+		"executor":            "claude",
+		"action":              "sanitize_claude_messages",
+		"target_provider":     string(report.TargetProvider),
+		"target_model":        baseModel,
+		"preserved":           report.Preserved,
+		"dropped_blocks":      report.DroppedBlocks,
+		"dropped_signatures":  report.DroppedSignatures,
+		"replaced_signatures": report.ReplacedSignatures,
+	}
+	if len(report.Decisions) > 0 {
+		decision := report.Decisions[0]
+		fields["first_block_kind"] = string(decision.BlockKind)
+		fields["first_detected_provider"] = string(decision.DetectedProvider)
+		fields["first_reason"] = decision.Reason
+	}
+
+	helps.LogWithRequestID(ctx).WithFields(fields).Debug("claude executor: sanitized signature history before upstream")
+}
+
 // oauthToolRenameMap maps OpenCode-style (lowercase) tool names to Claude Code-style
 // (TitleCase) names. Anthropic uses tool name fingerprinting to detect third-party
 // clients on OAuth traffic. Renaming to official names avoids extra-usage billing.
