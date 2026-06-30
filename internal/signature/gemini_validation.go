@@ -1,4 +1,4 @@
-// Gemini thought signature validation notes.
+﻿// Gemini thought signature validation notes.
 //
 // The Antigravity Gemini request translator can preserve provider-compatible
 // Gemini thought signatures and uses the skip sentinel only for synthetic or
