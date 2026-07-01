@@ -23,14 +23,14 @@ type ClientUsageEntry struct {
 }
 
 type SessionSummary struct {
-	SessionID        string    `json:"SessionID"`
-	Model            string    `json:"Model"`
-	InputTokens      int64     `json:"InputTokens"`
-	OutputTokens     int64     `json:"OutputTokens"`
-	CachedTokens     int64     `json:"CachedTokens"`
-	ReasoningTokens  int64     `json:"ReasoningTokens"`
-	Timestamp        time.Time `json:"StartedAt"`
-	CreditsConsumed  float64   `json:"CreditsConsumed"` // server-billed amount at time of request
+	SessionID       string    `json:"SessionID"`
+	Model           string    `json:"Model"`
+	InputTokens     int64     `json:"InputTokens"`
+	OutputTokens    int64     `json:"OutputTokens"`
+	CachedTokens    int64     `json:"CachedTokens"`
+	ReasoningTokens int64     `json:"ReasoningTokens"`
+	Timestamp       time.Time `json:"StartedAt"`
+	CreditsConsumed float64   `json:"CreditsConsumed"` // server-billed amount at time of request
 }
 
 type PostPayUsageEntry struct {
@@ -237,6 +237,18 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					}
 				}
 				postPayUsageMu.RUnlock()
+
+				// 0. Time-based Expiration Check (Kill Switch)
+				if !clientCfg.ExpiresAt.IsZero() && time.Now().UTC().After(clientCfg.ExpiresAt.UTC()) {
+					c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
+						"error": gin.H{
+							"message": "subscription_expired: Your API plan has expired. Please renew your subscription.",
+							"type":    "subscription_expired",
+							"code":    "subscription_expired",
+						},
+					})
+					return
+				}
 
 				// 1. Balance Exhaustion (Hard Limit)
 				// For post-pay, the effective limit is the sum of payments made plus the allowed line of credit.
@@ -674,7 +686,7 @@ func ProcessDepositCredits(apiKey string, credits float64, txnID string) (addedC
 func SwapKeyInPostPayMemory(oldKey, newKey string) {
 	postPayUsageMu.Lock()
 	defer postPayUsageMu.Unlock()
-	
+
 	if entry, exists := postPayUsage[oldKey]; exists {
 		postPayUsage[newKey] = entry
 		delete(postPayUsage, oldKey)
@@ -685,18 +697,18 @@ func SwapKeyInPostPayMemory(oldKey, newKey string) {
 func SwapKeyInConfigMemory(oldKey, newKey string) {
 	liveCfgMu.Lock()
 	defer liveCfgMu.Unlock()
-	
+
 	if globalConfig == nil {
 		return
 	}
-	
+
 	// Swap in API keys list
 	for i, k := range globalConfig.APIKeys {
 		if k == oldKey {
 			globalConfig.APIKeys[i] = newKey
 		}
 	}
-	
+
 	// Swap in Model Pricing/Limits map if custom limits exist
 	if globalConfig.APIKeyLimits != nil {
 		if limit, ok := globalConfig.APIKeyLimits[oldKey]; ok {
@@ -704,7 +716,7 @@ func SwapKeyInConfigMemory(oldKey, newKey string) {
 			delete(globalConfig.APIKeyLimits, oldKey)
 		}
 	}
-	
+
 	// Swap in post-pay clients map
 	if globalConfig.PostPayBilling.Clients != nil {
 		if client, ok := globalConfig.PostPayBilling.Clients[oldKey]; ok {

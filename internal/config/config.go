@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	log "github.com/sirupsen/logrus"
@@ -171,7 +172,8 @@ type PostPayBillingConfig struct {
 
 // PostPayBillingClientCfg defines settings for a single post-pay client.
 type PostPayBillingClientCfg struct {
-	CreditLimit float64 `yaml:"credit-limit" json:"credit-limit"`
+	CreditLimit float64   `yaml:"credit-limit" json:"credit-limit"`
+	ExpiresAt   time.Time `yaml:"expires-at,omitempty" json:"expires-at,omitempty"`
 }
 
 // ModelPricingEntry defines the virtual credit cost per 1M tokens for a specific model alias.
