@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
@@ -23,7 +24,7 @@ import (
 // This is the plan's credit allowance, NOT derived from the USD price paid.
 // Example: 1-day plan = 4000, 7-day plan = 30000, Pro = 50000.
 //
-// FiveHLimit is the per-5-hour rolling-window credit rate limit (api-key-limits).
+// FiveHLimit is the per-5h rolling-window credit rate limit (api-key-limits).
 // The standard volatile kill-switch; resets after 5h.
 // Example: 1-day/7-day/Pro = 2000, Max-5x = 10000, Max-20x = 40000.
 //
@@ -33,6 +34,7 @@ type ProvisionRequest struct {
 	Email      string  `json:"email,omitempty"`
 	Credits    float64 `json:"credits"`      // plan credits to deposit (e.g. 8000 for 1-day)
 	FiveHLimit int     `json:"five_h_limit"` // per-5h rate limit in credits (e.g. 2000)
+	DaysValid  int     `json:"days_valid"`   // number of days until the plan expires (Time-based Kill Switch)
 	TxnID      string  `json:"txn_id,omitempty"`
 }
 
@@ -85,6 +87,7 @@ var AllowedOpenAI = []string{
 //	  "email":        "user@example.com",
 //	  "credits":      245000,   // exact plan credit allowance (total balance ceiling)
 //	  "five_h_limit": 2000,     // per-5h rolling rate limit
+//	  "days_valid":   30,       // optional time-based kill switch
 //	  "txn_id":       "payos_abc123"
 //	}
 func (h *Handler) PostProvisionKey(c *gin.Context) {
@@ -154,11 +157,16 @@ func (h *Handler) PostProvisionKey(c *gin.Context) {
 	if h.cfg.PostPayBilling.Clients == nil {
 		h.cfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
 	}
-	h.cfg.PostPayBilling.Clients[newKey] = config.PostPayBillingClientCfg{
+	
+	clientCfg := config.PostPayBillingClientCfg{
 		CreditLimit: 0, // no overdraft — strict enforcement
 	}
+	if req.DaysValid > 0 {
+		clientCfg.ExpiresAt = time.Now().UTC().AddDate(0, 0, req.DaysValid)
+	}
+	h.cfg.PostPayBilling.Clients[newKey] = clientCfg
 
-	// 4d. api-key-limits: per-5h rolling-window rate limit.
+	// 4d. api-key-limits: per-5h rolling-window rate limit. per-5h rolling-window rate limit.
 	//     Standard volatile kill-switch; resets automatically after 5 hours.
 	if h.cfg.APIKeyLimits == nil {
 		h.cfg.APIKeyLimits = make(map[string]int)
