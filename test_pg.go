@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"log"
 	"net/http"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {

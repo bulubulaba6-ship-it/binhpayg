@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-    var m map[string]interface{}
-    v, ok := m["test"].(float64)
-    fmt.Printf("v=%v ok=%v\n", v, ok)
+	var m map[string]interface{}
+	v, ok := m["test"].(float64)
+	fmt.Printf("v=%v ok=%v\n", v, ok)
 }

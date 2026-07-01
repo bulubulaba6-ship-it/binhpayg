@@ -1,4 +1,4 @@
-﻿// Package pluginapi defines host-side plugin capability schemas and adapters.
+// Package pluginapi defines host-side plugin capability schemas and adapters.
 package pluginapi
 
 import (

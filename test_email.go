@@ -67,7 +67,7 @@ func main() {
 
 	fmt.Printf("Sending test email to: %s\n", toEmail)
 	fmt.Printf("From: %s\n", fromEmail)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -75,10 +75,10 @@ func main() {
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
-	
+
 	fmt.Printf("HTTP Status Code: %d\n", resp.StatusCode)
 	fmt.Printf("Response Body: %s\n", string(respBody))
-	
+
 	if resp.StatusCode >= 300 {
 		log.Fatalf("ERROR: Resend API rejected the request.")
 	} else {

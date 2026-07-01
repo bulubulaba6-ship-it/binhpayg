@@ -1,4 +1,4 @@
-﻿package signature
+package signature
 
 import (
 	"encoding/base64"

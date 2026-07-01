@@ -1,4 +1,4 @@
-﻿package pluginabi
+package pluginabi
 
 import "encoding/json"
 

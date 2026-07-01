@@ -4,11 +4,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
-	"encoding/json"
 )
 
 func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey string) bool {
@@ -51,8 +51,8 @@ func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey st
 func main() {
 	payload := []byte(`{"code":"00","desc":"success","data":{"accountNumber":"123","amount":2000,"description":"VQ123","orderCode":123},"signature":"test"}`)
 	var req struct {
-		Data map[string]interface{} `json:"data"`
-		Signature string `json:"signature"`
+		Data      map[string]interface{} `json:"data"`
+		Signature string                 `json:"signature"`
 	}
 	json.Unmarshal(payload, &req)
 	verifyPayOSSignature(req.Data, req.Signature, "my-checksum-key")

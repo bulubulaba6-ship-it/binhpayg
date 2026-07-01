@@ -8,12 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"io"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -80,19 +80,19 @@ func main() {
 
 	data := map[string]interface{}{
 		"accountNumber": "123",
-		"amount": float64(amount),
-		"description": "MAX_20x Test",
-		"orderCode": float64(orderCode),
+		"amount":        float64(amount),
+		"description":   "MAX_20x Test",
+		"orderCode":     float64(orderCode),
 	}
-	
-	checksumKey := "4b79b69e12f73459af9559fcc188fd3197aa1e8eb72507897c2e7883f3ecdd1f" 
-	
+
+	checksumKey := "4b79b69e12f73459af9559fcc188fd3197aa1e8eb72507897c2e7883f3ecdd1f"
+
 	sig := verifyPayOSSignature(data, checksumKey)
 
 	payload := map[string]interface{}{
-		"code": "00",
-		"desc": "success",
-		"data": data,
+		"code":      "00",
+		"desc":      "success",
+		"data":      data,
 		"signature": sig,
 	}
 
@@ -105,12 +105,12 @@ func main() {
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		
+
 		fmt.Println("Status:", resp.StatusCode)
 		respBody, _ := io.ReadAll(resp.Body)
 		fmt.Println("Body:", string(respBody))
 		resp.Body.Close()
-		
+
 		if resp.StatusCode == 200 {
 			break
 		}

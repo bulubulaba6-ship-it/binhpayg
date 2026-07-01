@@ -244,9 +244,9 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		tier = "payg"
 		displayPlan = "Pay-As-You-Go"
 		credits = 0
-		
+
 		// Scale PAYG rate limits based on deposit amount to match subscription tiers.
-		// Without this, enterprise users depositing >2M for the Decoy Pricing 
+		// Without this, enterprise users depositing >2M for the Decoy Pricing
 		// would be unfairly throttled at the default 2000 cr/5h limit.
 		if amountFloat >= 2000000 {
 			limit = 40000
@@ -255,7 +255,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		} else {
 			limit = 2000
 		}
-		
+
 		isSubscription = false
 	}
 
@@ -346,7 +346,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	} else {
 		_, _, _, _ = middleware.ProcessDepositVND(newKey, amountFloat, orderCode)
 	}
-	
+
 	liveCfg := middleware.GetLiveConfig()
 	if liveCfg != nil && liveCfg.PostPayBilling.LedgerFile != "" {
 		fullPath := filepath.Join(liveCfg.AuthDir, liveCfg.PostPayBilling.LedgerFile)

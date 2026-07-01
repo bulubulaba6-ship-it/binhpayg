@@ -19,11 +19,11 @@ func main() {
 		fmt.Println("Err open:", err)
 		return
 	}
-	
+
 	// Create table
 	db.Exec("CREATE TABLE IF NOT EXISTS test_bigint (id BIGINT, val VARCHAR(10))")
 	db.Exec("INSERT INTO test_bigint (id, val) VALUES (123456789, 'hello')")
-	
+
 	// Query with string
 	var val string
 	err = db.QueryRow("SELECT val FROM test_bigint WHERE id = $1", "123456789").Scan(&val)
@@ -32,7 +32,7 @@ func main() {
 	} else {
 		fmt.Println("Query string success:", val)
 	}
-	
+
 	// Query with int64
 	err = db.QueryRow("SELECT val FROM test_bigint WHERE id = $1", int64(123456789)).Scan(&val)
 	if err != nil {

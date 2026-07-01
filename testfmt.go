@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"io"
 	"time"
 )
 
@@ -30,7 +30,7 @@ func main() {
 		log.Fatalf("failed to send email via resend: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	body, _ := io.ReadAll(resp.Body)
 	log.Printf("Response Status: %d", resp.StatusCode)
 	log.Printf("Response Body: %s", string(body))
