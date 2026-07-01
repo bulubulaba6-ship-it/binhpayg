@@ -30,10 +30,10 @@ const c = {
 
 const TXT = {
   vi: {
-    title: "FINK ORCHESTRATOR CORE — v1.1.4",
+    title: "Cổng kết nối API Gateway — v1.0.6",
     boot: [],
     setup: "ĐANG CÀI ĐẶT FINK ENTERPRISE CORE...",
-    auth_req: "YÊU CẦU XÁC THỰC FINK",
+    auth_req: "YÊU CẦU XÁC THỰC",
     auth_desc: "Auth Token là khóa API được cấp riêng cho bạn từ Fink.",
     auth_prompt: "🔑 Nhập Auth Token:",
     handshake: "Đang thiết lập bắt tay bảo mật với Gateway...",
@@ -42,57 +42,53 @@ const TXT = {
     handshake_timeout: "Hết thời gian kết nối.",
     os_title: "CHỌN HỆ ĐIỀU HÀNH",
     os_prompt: "Lựa chọn của bạn (1-3):",
-    installing_claude: "Đang cài đặt Native Binary...",
-    installed_claude: "Core Engine đã được cài đặt.",
-    install_err: "Không thể cài đặt Engine. Hãy đảm bảo npm đã được cài đặt.",
+    installing_claude: "Đang cài đặt @anthropic-ai/claude-code phiên bản mới nhất...",
+    installed_claude: "Đã cài đặt @anthropic-ai/claude-code",
+    install_err: "Không thể cài đặt Claude Code. Hãy đảm bảo npm đã được cài đặt.",
     applying_config: "Đang áp dụng Cấu hình Doanh nghiệp vào profile local...",
     config_ok: "Cấu hình đã được cập nhật.",
     config_err: "Không thể ghi file cấu hình.",
     env_setting: "Thiết lập biến môi trường hệ thống...",
     env_ok: "Biến môi trường đã được thiết lập.",
     env_err: "Không thể thiết lập biến môi trường.",
-    pro_notice: "✨ THÔNG BÁO: Tự động Kích hoạt Fink PRO!",
-    pro_desc: "Hệ thống tự động triển khai Gói Tối Ưu Hóa (Advanced AI Skills).",
-    opt_title: "🚀 Gói Tối Ưu Hóa (Enterprise Edition)",
+    pro_notice: "✨ THÔNG BÁO: Tài khoản Fink PRO được phát hiện!",
+    pro_desc: "Bạn có quyền truy cập vào Claude Code Optimization Pack (Advanced AI Skills).",
+    opt_prompt: "🎁 Bạn có muốn cài đặt Optimization Pack không? (y/n):",
+    opt_title: "🚀 Gói tối ưu hóa (Enterprise Edition)",
     opt_desc: "Đang nạp bộ quy tắc, kỹ năng và trí tuệ định tuyến nâng cao...",
     checking_env: "Đang kiểm tra Git và môi trường...",
-    git_err: "Không tìm thấy Git. Vui lòng cài đặt Git để sử dụng Gói Tối Ưu Hóa.",
-    downloading_opt: "Đang nạp dữ liệu Orchestration Pack từ kho lưu trữ...",
-    opt_updated: "Orchestration Pack đã được cập nhật.",
-    opt_downloaded: "Orchestration Pack đã được đồng bộ.",
-    opt_err: "Cập nhật gặp lỗi. Đang tiếp tục với phiên bản hiện tại...",
-    deps_installing: "Đang cài đặt dependencies...",
-    deps_ok: "Dependencies đã sẵn sàng.",
-    rules_configuring: "Đang cấu hình AI Rules & Sub-Agents...",
+    git_err: "Không tìm thấy Git. Vui lòng cài đặt Git để sử dụng Gói tối ưu hóa.",
+    downloading_opt: "Đang tải Gói tối ưu hóa từ GitHub...",
+    opt_updated: "Gói tối ưu hóa đã được cập nhật lên bản mới nhất.",
+    opt_downloaded: "Gói tối ưu hóa đã được tải về.",
+    opt_err: "Cập nhật Gói tối ưu hóa gặp lỗi. Đang tiếp tục với phiên bản hiện tại...",
+    deps_installing: "Đang cài đặt dependencies cho Plugin...",
+    deps_ok: "Dependencies đã được cài đặt.",
+    rules_configuring: "Đang cấu hình Claude Code Rules & Skills...",
     opt_finish: "Orchestrator đã được cấu hình thành công!",
-    setup_complete: "Cài đặt và Đồng bộ hoàn tất!",
-    guide_title: "💡 HƯỚNG DẪN FINK ORCHESTRATOR:",
-    guide_init: "🚀 Khởi động: Gõ /init để truyền tải cấu hình tối ưu.",
-    guide_skills: "🧠 Subagents Sẵn Sàng: researcher, analyst, memory-keeper đã online.",
-    guide_note: "Lưu ý: Quá trình thiết lập ban đầu có thể hiển thị một vài thông báo lỗi nhỏ.",
+    setup_complete: "Cài đặt hoàn tất!",
+    guide_title: "💡 HƯỚNG DẪN NHANH (PRO):",
+    guide_init: "🚀 Kích hoạt Chế độ Chuyên gia: Gõ /init để truyền tải tinh hoa và cấu hình tối ưu.",
+    guide_skills: "🧠 Siêu Kỹ Năng: Bộ kỹ năng research, architect, expert đã sẵn sàng để xử lý bài toán lớn.",
+    guide_note: "Lưu ý: Patch có thể hiển thị một vài lỗi nhỏ khi gọi tool mới lần đầu.",
     guide_fix: "Agent sẽ tự động thích nghi và sửa lỗi ngay lập tức, đừng lo lắng!",
     final_reboot: "Hãy tắt đi bật lại terminal và gõ:",
-    native_transition: "Chuẩn bị FINK Native Core...",
+    native_transition: "Đang chuyển đổi sang Claude Native Installer (Hiệu năng cao)...",
     token_required: "✖ Lỗi: Bắt buộc phải có Auth Token.",
     access_denied: "⚠ Truy cập bị từ chối. Vui lòng liên hệ quản trị viên.",
-    installing_ccusage: "Đang triển khai module giám sát token...",
-    ccusage_ok: "Module giám sát online.",
-    installing_rtk: "Đang kích hoạt RTK (Trình nén Token)...",
-    rtk_ok: "RTK Engine hoạt động.",
-    installing_repomix: "Đang triển khai Repomix Analytics...",
-    repomix_ok: "Repomix install.",
-    client_title: "CHỌN AI CLIENT",
-    client_prompt: "Lựa chọn của bạn (1-3):",
-    installing_codex: "Đang cấu hình Codex Client...",
-    installed_codex: "Cấu hình Codex hoàn tất.",
-    installing_cursor: "Đang cấu hình Cursor/Amp...",
-    installed_cursor: "Cấu hình Cursor hoàn tất.",
+    installing_ccusage: "Đang cài đặt ccusage để theo dõi lượng token tiêu thụ...",
+    ccusage_ok: "ccusage đã được cài đặt.",
+    installing_rtk: "Đang cài đặt RTK (Rust Token Killer) - Sát thủ Token...",
+    rtk_ok: "RTK đã được cài đặt và kích hoạt (Bash Hook active).",
+    installing_repomix: "Đang cài đặt Repomix & Cấu hình bộ quy tắc nén...",
+    repomix_ok: "Repomix đã sẵn sàng. Quy tắc CLAUDE.md đã được cập nhật.",
+
   },
   en: {
-    title: "FINK ORCHESTRATOR CORE — v1.1.4",
+    title: "Enterprise API Gateway Connector — v1.0.6",
     boot: [],
     setup: "INITIALIZING FINK ENTERPRISE CORE...",
-    auth_req: "FINK AUTHENTICATION REQUIRED",
+    auth_req: "AUTHENTICATION REQUIRED",
     auth_desc: "Auth Token is an API key provided exclusively by Fink.",
     auth_prompt: "🔑 Enter Auth Token:",
     handshake: "Establishing secure handshake with Gateway...",
@@ -101,51 +97,47 @@ const TXT = {
     handshake_timeout: "Connection timeout.",
     os_title: "SELECT OPERATING SYSTEM",
     os_prompt: "Selection (1-3):",
-    installing_claude: "Installing Native Binary Engine...",
-    installed_claude: "Core Engine installed and optimized successfully.",
-    install_err: "Failed to install Core Engine. Ensure your system meets the requirements.",
+    installing_claude: "Installing latest Claude Code (Native Binary)...",
+    installed_claude: "Claude Code installed and optimized successfully.",
+    install_err: "Failed to install Claude Code. Ensure your system meets the requirements.",
     applying_config: "Applying Enterprise Configuration to local profile...",
     config_ok: "Configuration updated.",
     config_err: "Failed to write configuration file.",
     env_setting: "Setting system environment variables...",
     env_ok: "Environment variables set.",
     env_err: "Failed to set environment variables.",
-    pro_notice: "✨ NOTICE: Fink PRO Auto-Provisioning!",
-    pro_desc: "System is automatically deploying the Optimization Pack (Advanced AI Skills).",
+    pro_notice: "✨ NOTICE: Fink PRO account detected!",
+    pro_desc: "You have access to the Claude Code Optimization Pack (Advanced AI Skills).",
+    opt_prompt: "🎁 Would you like to install the Optimization Pack? (y/n):",
     opt_title: "🚀 Optimization Pack (Enterprise Edition)",
     opt_desc: "Adding advanced skills, rules, and model-routing intelligence...",
     checking_env: "Checking Git and environment...",
-    git_err: "Git not found. Please install Git to use orchestration tools.",
-    downloading_opt: "Pulling Orchestration Pack from repository...",
-    opt_updated: "Orchestration Pack synchronized.",
-    opt_downloaded: "Orchestration Pack initialized.",
-    opt_err: "Optimization Pack sync failed. Continuing with current version...",
-    deps_installing: "Installing dependencies...",
+    git_err: "Git not found. Please install Git to use visual tools.",
+    downloading_opt: "Downloading Optimization Pack from GitHub...",
+    opt_updated: "Optimization Pack updated to latest.",
+    opt_downloaded: "Optimization Pack downloaded.",
+    opt_err: "Optimization Pack update failed. Continuing with current version...",
+    deps_installing: "Installing dependencies for Plugin...",
     deps_ok: "Dependencies installed.",
-    rules_configuring: "Configuring AI Rules & Sub-Agents...",
+    rules_configuring: "Configuring Claude Code Rules & Skills...",
     opt_finish: "Orchestrator configured successfully!",
-    setup_complete: "Setup and Synchronization complete!",
-    guide_title: "💡 FINK ORCHESTRATOR GUIDE:",
-    guide_init: "🚀 Boot Sequence: Type /init to sync elite instructions and optimized configs.",
-    guide_skills: "🧠 Subagents Ready: researcher, analyst, and memory-keeper are online.",
-    guide_note: "Note: Initial boot sequence may show minor warnings on first tool call.",
+    setup_complete: "Setup complete!",
+    guide_title: "💡 QUICK START (PRO):",
+    guide_init: "🚀 Activate Expert Mode: Type /init to sync elite instructions and optimized configs.",
+    guide_skills: "🧠 Integrated Super-Skills: Access research, architect, and expert tools for complex projects.",
+    guide_note: "Note: Optimization Patch may show minor errors on first tool call.",
     guide_fix: "Agent will adapt and fix automatically, no worries!",
     final_reboot: "Please restart your terminal and type:",
-    native_transition: "Preparing FINK Native Core...",
+    native_transition: "Transitioning to Claude Native Installer (High Performance)...",
     token_required: "✖ Error: Auth Token Required.",
     access_denied: "⚠ Access Denied. Please contact your administrator.",
-    installing_ccusage: "Deploying token telemetry module...",
-    ccusage_ok: "Telemetry online.",
-    installing_rtk: "Activating RTK (Token Compressor)...",
-    rtk_ok: "RTK Engine active.",
-    installing_repomix: "Deploying Repomix Analytics...",
-    repomix_ok: "Repomix online. Global rules applied.",
-    client_title: "SELECT TARGET AI CLIENT",
-    client_prompt: "Selection (1-3):",
-    installing_codex: "Configuring Codex Client...",
-    installed_codex: "Codex configuration complete.",
-    installing_cursor: "Configuring Cursor/Amp...",
-    installed_cursor: "Cursor configuration complete.",
+    installing_ccusage: "Installing ccusage to track token consumption...",
+    ccusage_ok: "ccusage installed.",
+    installing_rtk: "Installing RTK (Rust Token Killer) - Output Compression...",
+    rtk_ok: "RTK installed and activated.",
+    installing_repomix: "Installing Repomix & Configuring compression rules...",
+    repomix_ok: "Repomix ready. CLAUDE.md rules updated.",
+
   }
 };
 
@@ -159,7 +151,7 @@ const lang = getLangSelection();
 const T = TXT[lang];
 
 // --- VERSIONING ---
-const VERSION = "1.1.4";
+const VERSION = "1.0.12";
 const API_BASE_URL = "https://api.finkrouter.io.vn";
 const UPDATE_URL = `${API_BASE_URL}/v1/meta/version`;
 const DEFAULT_MODEL = "claude-opus-4-8";
@@ -250,9 +242,9 @@ ${c.brand}▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄�
 function printBox(text) {
   const width = 60;
   const padding = Math.max(0, width - text.length - 4);
-  console.log(`  ${c.brand}╭${"─".repeat(width - 2)}╮${c.r}`);
-  console.log(`  ${c.brand}│ ${c.r}${text}${" ".repeat(padding)} ${c.brand}│${c.r}`);
-  console.log(`  ${c.brand}╰${"─".repeat(width - 2)}╯${c.r}`);
+  console.log(`  ${c.brand}┏${"━".repeat(width - 2)}┓${c.r}`);
+  console.log(`  ${c.brand}┃ ${c.r}${text}${" ".repeat(padding)} ${c.brand}┃${c.r}`);
+  console.log(`  ${c.brand}┗${"━".repeat(width - 2)}┛${c.r}`);
 }
 
 async function bootSequence() {
@@ -305,6 +297,10 @@ class Spinner {
     process.stdout.write('\x1B[?25h');
     const frame = success ? `${c.green}✔${c.r}` : `${c.red}✖${c.r}`;
     console.log(`${frame} ${msg || this.text}`);
+  }
+  stopSilent() {
+    clearInterval(this.timer);
+    process.stdout.write('\x1B[2K\r\x1B[?25h');
   }
 }
 
@@ -500,44 +496,6 @@ async function promptOS() {
   return null;
 }
 
-async function promptClient() {
-  const isClaudeCodeInstaller = process.argv[1] && process.argv[1].includes('fink-claude-code-installer');
-  const isCodexInstaller = process.argv[1] && process.argv[1].includes('fink-codex-installer');
-  const isCursorInstaller = process.argv[1] && process.argv[1].includes('fink-cursor-installer');
-
-  if (isClaudeCodeInstaller) return ['claude'];
-  if (isCodexInstaller) return ['codex'];
-  if (isCursorInstaller) return ['cursor'];
-
-  process.stdout.write('\x1B[2J\x1B[H');
-  console.log(LOGO);
-  console.log(`\n  ${c.cyan}${c.b} ${T.client_title} ${c.r}\n`);
-
-  const options = [
-    `  ${c.b}1.${c.r} Claude Code  ${c.d}(Anthropic — claude-opus-4-8)${c.r}`,
-    `  ${c.b}2.${c.r} Codex        ${c.d}(OpenAI — gpt-5.5)${c.r}`,
-    `  ${c.b}3.${c.r} All          ${c.d}(Claude + Codex)${c.r}`,
-  ];
-
-  console.log(`  ╭${'─'.repeat(58)}╮`);
-  options.forEach(opt => console.log(`  │ ${opt}${c.r}${' '.repeat(Math.max(0, 55 - opt.replace(/\x1b\[[0-9;]*m/g, '').length))}│`));
-  console.log(`  ╰${'─'.repeat(58)}╯`);
-  console.log(`\n  ${c.d}Tip: Enter numbers separated by spaces or commas (e.g. 1 2)${c.r}`);
-
-  const answer = await prompt(`\n  ${c.cyan}${T.client_prompt}${c.r} `);
-  const raw = answer.toLowerCase().replace(/,/g, ' ');
-  const selected = new Set();
-
-  if (raw.includes('3') || raw.includes('all')) {
-    return ['claude', 'codex'];
-  }
-  if (raw.includes('1')) selected.add('claude');
-  if (raw.includes('2')) selected.add('codex');
-
-  return selected.size > 0 ? [...selected] : ['claude'];
-}
-
-
 async function installClaudeCode() {
   const s = new PulseBar(T.installing_claude);
   s.start();
@@ -592,122 +550,6 @@ async function installClaudeCode() {
   }
 }
 
-async function installCodex(authToken) {
-  const s = new PulseBar(T.installing_codex);
-  s.start();
-  try {
-    const homeDir = os.homedir();
-    const codexDir = path.join(homeDir, '.codex');
-    if (!fs.existsSync(codexDir)) {
-      fs.mkdirSync(codexDir, { recursive: true });
-    }
-
-    const configPath = path.join(codexDir, 'config.toml');
-    const authPath = path.join(codexDir, 'auth.json');
-
-    const CODEX_PROVIDER = 'fink';
-    const CODEX_MODELS = [
-      'gpt-5.5',
-      'gpt-5.4',
-      'gpt-5.3-codex',
-      'gpt-5.2',
-      'gpt-5.4-mini',
-      'gpt-5.3-codex-spark',
-    ];
-    const CODEX_DEFAULT_MODEL = 'gpt-5.5';
-
-    let configContent = '';
-    if (fs.existsSync(configPath)) {
-      configContent = fs.readFileSync(configPath, 'utf8');
-
-      const updateField = (field, value) => {
-        const regex = new RegExp(`^${field}\\s*=.*$`, 'm');
-        if (regex.test(configContent)) {
-          configContent = configContent.replace(regex, `${field} = "${value}"`);
-        } else {
-          configContent = `${field} = "${value}"\n` + configContent;
-        }
-      };
-
-      updateField('model_provider', CODEX_PROVIDER);
-      updateField('model', CODEX_DEFAULT_MODEL);
-      updateField('model_reasoning_effort', 'high');
-
-      // Remove any stale provider block (old or new name)
-      configContent = configContent.replace(/\[model_providers\.(cliproxyapi|fink)\][\s\S]*?(?=\n\[|$)/g, '');
-    } else {
-      configContent = `model_provider = "${CODEX_PROVIDER}"\nmodel = "${CODEX_DEFAULT_MODEL}"\nmodel_reasoning_effort = "high"\n`;
-    }
-
-    const modelsToml = CODEX_MODELS.map(m => `  "${m}",`).join('\n');
-    configContent = configContent.trim() + `\n\n[model_providers.${CODEX_PROVIDER}]\nname = "${CODEX_PROVIDER}"\nmodel_provider = "${CODEX_PROVIDER}"\nbase_url = "${API_BASE_URL}/v1"\nexperimental_bearer_token = "${authToken}"\nrequires_openai_auth = false\nmodels = [\n${modelsToml}\n]\n`;
-
-    // Write auth.json in API key mode (not ChatGPT OAuth mode)
-    const authContent = {
-      auth_mode: "api_key",
-      OPENAI_API_KEY: authToken,
-      api_key: authToken
-    };
-
-    fs.writeFileSync(configPath, configContent);
-    fs.writeFileSync(authPath, JSON.stringify(authContent, null, 2));
-
-    s.stop(true, T.installed_codex);
-  } catch (error) {
-    console.error("Codex install error:", error);
-    s.stop(false, T.install_err);
-  }
-}
-
-async function installCursor(authToken) {
-  const s = new PulseBar(T.installing_cursor);
-  s.start();
-  try {
-    const homeDir = os.homedir();
-    
-    // Create ~/.config/amp
-    const configDir = process.platform === 'win32' 
-      ? path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'amp')
-      : path.join(homeDir, '.config', 'amp');
-      
-    // Create ~/.local/share/amp
-    const shareDir = process.platform === 'win32'
-      ? path.join(process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local'), 'amp')
-      : path.join(homeDir, '.local', 'share', 'amp');
-
-    if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
-    if (!fs.existsSync(shareDir)) fs.mkdirSync(shareDir, { recursive: true });
-
-    const settingsPath = path.join(configDir, 'settings.json');
-    const secretsPath = path.join(shareDir, 'secrets.json');
-
-    let settingsContent = { amp: { url: API_BASE_URL } };
-    if (fs.existsSync(settingsPath)) {
-      try {
-        settingsContent = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-        if (!settingsContent.amp) settingsContent.amp = {};
-        settingsContent.amp.url = API_BASE_URL;
-      } catch (e) {}
-    }
-
-    let secretsContent = { amp: { api_key: authToken } };
-    if (fs.existsSync(secretsPath)) {
-      try {
-        secretsContent = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
-        if (!secretsContent.amp) secretsContent.amp = {};
-        secretsContent.amp.api_key = authToken;
-      } catch (e) {}
-    }
-
-    fs.writeFileSync(settingsPath, JSON.stringify(settingsContent, null, 2));
-    fs.writeFileSync(secretsPath, JSON.stringify(secretsContent, null, 2));
-
-    s.stop(true, T.installed_cursor);
-  } catch (error) {
-    s.stop(false, T.install_err);
-  }
-}
-
 function ensureConfigDir() {
   const homeDir = os.homedir();
   const configDir = path.join(homeDir, '.claude');
@@ -737,8 +579,8 @@ function updateConfig(authToken) {
     }
 
     const anthropicConf = getAnthropicConfig(authToken);
-    const isPro = authToken.startsWith('fink_pro_');
-
+    const isPro = authToken.startsWith('fink_pro_') || authToken.startsWith('fink_max_');
+    
     const mergedConfig = {
       ...existingConfig,
       ...anthropicConf,
@@ -784,7 +626,7 @@ function setEnvVars(authToken, osType) {
       const sHook = `Start-Process node -ArgumentList "$HOME\\.fink\\sentinel.js" -WindowStyle Hidden`;
       execSync(`powershell -Command "if (!(Get-Content $PROFILE -ErrorAction SilentlyContinue | Select-String 'sentinel.js')) { Add-Content $PROFILE '${sHook}' }"`, { stdio: 'ignore' });
 
-      if (authToken.startsWith('fink_pro_')) {
+      if (authToken.startsWith('fink_pro_') || authToken.startsWith('fink_max_')) {
         const eccPath = path.join(os.homedir(), '.fink', 'ecc');
         execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('CLAUDE_PLUGIN_ROOT', '${eccPath}', 'User')"`, { stdio: 'ignore' });
       }
@@ -812,7 +654,7 @@ function setEnvVars(authToken, osType) {
       // Setup PATH
       execSync(`${TARGET.pathCmd} >> ${profile}`, { stdio: 'ignore' });
 
-      if (authToken.startsWith('fink_pro_')) {
+      if (authToken.startsWith('fink_pro_') || authToken.startsWith('fink_max_')) {
         execSync(`[ -f ${profile} ] && sed -i '/CLAUDE_PLUGIN_ROOT/d' ${profile} || true`, { stdio: 'ignore' });
         execSync(`echo 'export CLAUDE_PLUGIN_ROOT="${eccPath}"' >> ${profile}`, { stdio: 'ignore' });
       }
@@ -871,14 +713,20 @@ async function installECC() {
     return;
   }
 
+  const s4 = new Spinner(T.rules_configuring);
+  s4.start();
   try {
     const spawnOptions = { cwd: eccPath, stdio: 'ignore', shell: process.platform === 'win32' };
     execSync('node scripts/install-apply.js --target claude typescript python go', spawnOptions);
+    s4.stop(true, T.opt_finish);
   } catch (e) {
+    s4.stop(false);
   }
 }
 
 async function provisionSubagents() {
+  const s = new Spinner(T.rules_configuring + " (Subagent Layer)");
+  s.start();
   try {
     ensureAgentsDir();
     const agentsDir = path.join(os.homedir(), '.claude', 'agents');
@@ -946,12 +794,17 @@ ${agent.body}`;
 
       fs.writeFileSync(filePath, content);
     }
+
+    s.stopSilent();
   } catch (e) {
+    s.stop(false);
     console.error(e);
   }
 }
 
 async function registerPROMcps() {
+  const s = new Spinner(T.rules_configuring + " (Global Brain)");
+  s.start();
   try {
     const s_prefix = process.platform === 'win32' ? 'cmd /c ' : '';
     const spawnOptions = { stdio: 'ignore', shell: process.platform === 'win32' };
@@ -961,9 +814,12 @@ async function registerPROMcps() {
       execSync(`claude mcp add sequential-thinking -- ${s_prefix}npx -y @modelcontextprotocol/server-sequential-thinking --scope user`, spawnOptions);
     } catch (e) { /* Already exists or fails silently */ }
 
+    s.stopSilent();
+
     // Provision the rest as efficient subagents
     await provisionSubagents();
   } catch (e) {
+    s.stop(false);
   }
 }
 
@@ -982,9 +838,8 @@ async function installRTK() {
       try {
         execSync('rtk --version', { stdio: 'ignore' });
       } catch (e) {
-        clearInterval(s.timer);
-        process.stdout.write('\x1B[2K\r\x1B[?25h');
-        console.log(`  ! RTK binary not found. Please install manually for native Windows.`);
+        // Not in path, skip auto-install for now as it requires manual pathing on native win
+        s.stop(false, "RTK binary not found. Please install manually for native Windows.");
         return;
       }
     }
@@ -1078,7 +933,7 @@ async function purgeCaveman() {
 
     // 3. Remove statusLine if it was the Caveman badge command
     if (settings.statusLine && typeof settings.statusLine.command === 'string' &&
-      settings.statusLine.command.includes('caveman@caveman')) {
+        settings.statusLine.command.includes('caveman@caveman')) {
       delete settings.statusLine;
     }
 
@@ -1139,55 +994,48 @@ async function main() {
     }
   }
 
-  const clients = await promptClient();
   const osType = await promptOS();
 
   console.log();
-  
-  if (clients.includes('claude')) {
-    await installClaudeCode();
-    updateConfig(authToken);
-    provisionSentinel();
-    setEnvVars(authToken, osType);
-  }
-
-  if (clients.includes('codex')) {
-    await installCodex(authToken);
-  }
-
-  if (clients.includes('cursor')) {
-    await installCursor(authToken);
-  }
+  await installClaudeCode();
+  updateConfig(authToken);
+  provisionSentinel();
+  setEnvVars(authToken, osType);
 
   const isPro = authToken.startsWith('fink_pro_') || authToken.startsWith('fink_max_');
   if (isPro) {
-    console.log(`\n   ${c.r}${T.pro_notice}${c.r}`);
-    console.log(`  ${c.d}${T.pro_desc}${c.r}\n`);
+    console.log(`\n  ${c.gold}${T.pro_notice}${c.r}`);
+    console.log(`  ${c.d}${T.pro_desc}${c.r}`);
+    const wantECC = await prompt(`  ${c.cyan}${T.opt_prompt}${c.r} `);
+    if (wantECC.toLowerCase() === 'y' || wantECC === '') {
+      // Phase 0: ccusage
+      try {
+        const s = new Spinner(T.installing_ccusage);
+        s.start();
+        execSync('npm install -g ccusage', { stdio: 'ignore' });
+        s.stop(true, T.ccusage_ok);
+      } catch (e) { }
 
-    // Auto-install phase
-    try {
-      execSync('npm install -g ccusage', { stdio: 'ignore' });
-    } catch (e) { }
+      // Phase 1: RTK
+      await installRTK();
 
-    // Phase 1: RTK
-    await installRTK();
+      // Phase 2: Repomix
+      await installRepomix();
 
-    // Phase 2: Repomix
-    await installRepomix();
+      // Phase 3: ECC
+      await installECC();
+      await registerPROMcps();
 
-    // Phase 3: ECC
-    await installECC();
-    await registerPROMcps();
-
-    // Phase 5: Hygiene
-    await setupSessionHygiene();
+      // Phase 5: Hygiene
+      await setupSessionHygiene();
+    }
   }
 
   await purgeCaveman(); // Final deep-clean to ensure no legacy rules remain
 
   console.log(`\n  ${c.green}✔ ${T.setup_complete}${c.r}`);
 
-
+  // Guide block removed as requested
 
   console.log(`\n  ${c.d}${T.final_reboot}${c.r}`);
   console.log(`  ${c.bgBrand} claude ${c.r}\n`);
