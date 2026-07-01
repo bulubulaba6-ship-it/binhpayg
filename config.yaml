@@ -20,10 +20,6 @@ api-keys:
   - fink_pro_f64fb207b1d18ee4af8d6316f3375c37
   - fink_pro_e65b9d6c7d02b2939e64ff192520484a
   - fink_pro_e436e43187e4d84beba1517af14ffbf4
-  - fink_e9b2eae5d40fedcab892542161268086
-  - fink_b730b05dbb2e984a5ed05dbcdbd9cb6d
-  - fink_555d80e6552f4d091d4c01900acbd4ee
-  - fink_d00145a3d2d238ff800428296f6f7b45
   - fink_ca0b9ffdbb5398e93bc29d2ab44ffd03
 
 api-key-models:
@@ -137,66 +133,6 @@ api-key-models:
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
-  fink_e9b2eae5d40fedcab892542161268086:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
-  fink_b730b05dbb2e984a5ed05dbcdbd9cb6d:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
-  fink_555d80e6552f4d091d4c01900acbd4ee:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
-  fink_d00145a3d2d238ff800428296f6f7b45:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
   fink_ca0b9ffdbb5398e93bc29d2ab44ffd03:
     claude:
       - claude-opus-4-8
@@ -272,14 +208,6 @@ post-pay-billing:
       credit-limit: 50000
     "fink_pro_e436e43187e4d84beba1517af14ffbf4":
       credit-limit: 50000
-    fink_e9b2eae5d40fedcab892542161268086:
-      credit-limit: 30000
-    fink_b730b05dbb2e984a5ed05dbcdbd9cb6d:
-      credit-limit: 0
-    fink_555d80e6552f4d091d4c01900acbd4ee:
-      credit-limit: 0
-    fink_d00145a3d2d238ff800428296f6f7b45:
-      credit-limit: 0
     fink_ca0b9ffdbb5398e93bc29d2ab44ffd03:
       credit-limit: 0
   markup-rates:
@@ -386,8 +314,4 @@ api-key-limits:
   "fink_pro_f64fb207b1d18ee4af8d6316f3375c37": 2000
   "fink_pro_e65b9d6c7d02b2939e64ff192520484a": 2000
   "fink_pro_e436e43187e4d84beba1517af14ffbf4": 2000
-  fink_e9b2eae5d40fedcab892542161268086: 1500
-  fink_b730b05dbb2e984a5ed05dbcdbd9cb6d: 1000
-  fink_555d80e6552f4d091d4c01900acbd4ee: 1000
-  fink_d00145a3d2d238ff800428296f6f7b45: 1000
   fink_ca0b9ffdbb5398e93bc29d2ab44ffd03: 1000
