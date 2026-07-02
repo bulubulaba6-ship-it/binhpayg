@@ -26,6 +26,7 @@ api-key-models:
   "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
     claude:
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -37,6 +38,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
   "fink_pro_5d41402abc4b2a76b9719d911017c592":
@@ -45,6 +47,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
   "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
@@ -53,6 +56,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
   "fink_max_cfacc7472333305910a0176c82e951d8":
@@ -61,6 +65,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -74,6 +79,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -87,6 +93,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -100,6 +107,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -113,6 +121,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -126,6 +135,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -139,6 +149,7 @@ api-key-models:
       - claude-opus-4-7
       - claude-opus-4-6
       - claude-sonnet-5
+      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -224,9 +235,9 @@ post-pay-billing:
       output: 2800
       cache: 140
     "claude-sonnet-5":
-      input: 1000
-      output: 2000
-      cache: 100
+      input: 1600
+      output: 3000
+      cache: 140
     "claude-sonnet-4-6":
       input: 1000
       output: 2000
@@ -277,6 +288,8 @@ openai-compatibility:
     models:
       - name: deepseek-v4-flash
         alias: claude-sonnet-5
+      - name: deepseek-v4-flash
+        alias: claude-fable-5
       - name: deepseek-v4-flash
         alias: claude-haiku-4-5
       - name: deepseek-v4-flash
