@@ -235,9 +235,9 @@ post-pay-billing:
       output: 2800
       cache: 140
     "claude-sonnet-5":
-      input: 1600
-      output: 3000
-      cache: 140
+      input: 2600
+      output: 5000
+      cache: 240
     "claude-sonnet-4-6":
       input: 1000
       output: 2000
