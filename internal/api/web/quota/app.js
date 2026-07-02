@@ -38,11 +38,11 @@ const app = {
     'claude-opus-4-8':    { input: 1400, output: 2800, cache: 140 },
     'claude-opus-4-7':    { input: 1400, output: 2800, cache: 140 },
     'claude-opus-4-6':    { input: 1400, output: 2800, cache: 140 },
-    'claude-sonnet-5':    { input: 2600, output: 5000, cache: 240 },
+    'claude-sonnet-5':    { input: 1600, output: 3000, cache: 140 },
     // Mimo-v2.5 backend
     'claude-sonnet-4-6':  { input: 1000, output: 2000, cache: 100 },
     'claude-haiku-4-5':   { input:  800, output: 1600, cache:  80 },
-    'claude-fable-5':     { input: 2000, output: 4000, cache: 200 },
+    'claude-fable-5':     { input: 3000, output: 6000, cache: 300 },
     // GPT aliases — same backends as Claude counterparts
     'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
     'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },

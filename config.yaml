@@ -235,9 +235,9 @@ post-pay-billing:
       output: 2800
       cache: 140
     "claude-sonnet-5":
-      input: 2600
-      output: 5000
-      cache: 240
+      input: 1600
+      output: 3000
+      cache: 140
     "claude-sonnet-4-6":
       input: 1000
       output: 2000
@@ -247,9 +247,9 @@ post-pay-billing:
       output: 1600
       cache: 80
     "claude-fable-5":
-      input: 2000
-      output: 4000
-      cache: 200
+      input: 3000
+      output: 6000
+      cache: 300
     "gpt-5.5":
       input: 1400
       output: 2800
