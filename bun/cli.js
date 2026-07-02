@@ -968,9 +968,69 @@ async function purgeCaveman() {
 }
 
 
+async function uninstallFink() {
+  console.log(`\n  ${c.magenta}${c.b}🧹 FINK UNINSTALLER${c.r}\n`);
+  const s = new Spinner("Removing environment variables and hooks...");
+  s.start();
+  try {
+    if (TARGET.os === 'windows') {
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', '', 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN', '', 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', '', 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ECC_HOOK_PROFILE', '', 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('CLAUDE_PLUGIN_ROOT', '', 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "if (Test-Path $PROFILE) { (Get-Content $PROFILE) -notmatch 'sentinel.js' | Set-Content $PROFILE }"`, { stdio: 'ignore' });
+    } else {
+      const profile = TARGET.profile;
+      const sedFlag = process.platform === 'darwin' ? "-i ''" : "-i";
+      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/ANTHROPIC_AUTH_TOKEN/d' ${profile} || true`, { stdio: 'ignore' });
+      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/ANTHROPIC_BASE_URL/d' ${profile} || true`, { stdio: 'ignore' });
+      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/ECC_HOOK_PROFILE/d' ${profile} || true`, { stdio: 'ignore' });
+      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/CLAUDE_PLUGIN_ROOT/d' ${profile} || true`, { stdio: 'ignore' });
+      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/sentinel.js/d' ${profile} || true`, { stdio: 'ignore' });
+    }
+    s.stop(true, "Environment variables removed.");
+  } catch(e) {
+    s.stop(false, "Failed to remove environment variables.");
+  }
+
+  const s2 = new Spinner("Cleaning up configurations and cache...");
+  s2.start();
+  try {
+    const configPath = path.join(os.homedir(), '.claude', 'settings.json');
+    if (fs.existsSync(configPath)) {
+      try {
+        let settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (settings.env) {
+          delete settings.env.ANTHROPIC_AUTH_TOKEN;
+          delete settings.env.ANTHROPIC_BASE_URL;
+          delete settings.env.ECC_HOOK_PROFILE;
+          delete settings.env.CLAUDE_PLUGIN_ROOT;
+        }
+        fs.writeFileSync(configPath, JSON.stringify(settings, null, 2));
+      } catch(e){}
+    }
+    const finkDir = path.join(os.homedir(), '.fink');
+    if (fs.existsSync(finkDir)) {
+      fs.rmSync(finkDir, { recursive: true, force: true });
+    }
+    s2.stop(true, "Configuration cleaned.");
+  } catch(e) {
+    s2.stop(false, "Failed to clean configuration.");
+  }
+  
+  console.log(`\n  ${c.green}✔ Uninstall complete!${c.r}`);
+  console.log(`  ${c.d}Please restart your terminal for changes to take effect.${c.r}\n`);
+}
+
 async function main() {
   await bootSequence();
   // Logo is centrally managed by prompting functions to avoid duplication
+
+  if (process.argv.includes('--uninstall')) {
+    await uninstallFink();
+    process.exit(0);
+  }
 
   // Phase 2: Check for Updates & Doctor Mode
   await checkForUpdates();
