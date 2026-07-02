@@ -159,7 +159,7 @@ const lang = getLangSelection();
 const T = TXT[lang];
 
 // --- VERSIONING ---
-const VERSION = "1.1.6";
+const VERSION = "1.1.5";
 const API_BASE_URL = "https://api.finkrouter.io.vn";
 const UPDATE_URL = `${API_BASE_URL}/v1/meta/version`;
 const DEFAULT_MODEL = "claude-opus-4-8";
