@@ -974,20 +974,20 @@ async function uninstallFink() {
   s.start();
   try {
     if (TARGET.os === 'windows') {
-      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', '', 'User')"`, { stdio: 'ignore' });
-      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN', '', 'User')"`, { stdio: 'ignore' });
-      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', '', 'User')"`, { stdio: 'ignore' });
-      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ECC_HOOK_PROFILE', '', 'User')"`, { stdio: 'ignore' });
-      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('CLAUDE_PLUGIN_ROOT', '', 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', $null, 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN', $null, 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', $null, 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('ECC_HOOK_PROFILE', $null, 'User')"`, { stdio: 'ignore' });
+      execSync(`powershell -Command "[System.Environment]::SetEnvironmentVariable('CLAUDE_PLUGIN_ROOT', $null, 'User')"`, { stdio: 'ignore' });
       execSync(`powershell -Command "if (Test-Path $PROFILE) { (Get-Content $PROFILE) -notmatch 'sentinel.js' | Set-Content $PROFILE }"`, { stdio: 'ignore' });
     } else {
       const profile = TARGET.profile;
       const sedFlag = process.platform === 'darwin' ? "-i ''" : "-i";
-      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/ANTHROPIC_AUTH_TOKEN/d' ${profile} || true`, { stdio: 'ignore' });
-      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/ANTHROPIC_BASE_URL/d' ${profile} || true`, { stdio: 'ignore' });
-      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/ECC_HOOK_PROFILE/d' ${profile} || true`, { stdio: 'ignore' });
-      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/CLAUDE_PLUGIN_ROOT/d' ${profile} || true`, { stdio: 'ignore' });
-      execSync(`[ -f ${profile} ] && sed ${sedFlag} '/sentinel.js/d' ${profile} || true`, { stdio: 'ignore' });
+      execSync(`[ -f "${profile}" ] && sed ${sedFlag} '/ANTHROPIC_AUTH_TOKEN/d' "${profile}" || true`, { stdio: 'ignore' });
+      execSync(`[ -f "${profile}" ] && sed ${sedFlag} '/ANTHROPIC_BASE_URL/d' "${profile}" || true`, { stdio: 'ignore' });
+      execSync(`[ -f "${profile}" ] && sed ${sedFlag} '/ECC_HOOK_PROFILE/d' "${profile}" || true`, { stdio: 'ignore' });
+      execSync(`[ -f "${profile}" ] && sed ${sedFlag} '/CLAUDE_PLUGIN_ROOT/d' "${profile}" || true`, { stdio: 'ignore' });
+      execSync(`[ -f "${profile}" ] && sed ${sedFlag} '/sentinel.js/d' "${profile}" || true`, { stdio: 'ignore' });
     }
     s.stop(true, "Environment variables removed.");
   } catch(e) {
@@ -997,6 +997,7 @@ async function uninstallFink() {
   const s2 = new Spinner("Cleaning up configurations and cache...");
   s2.start();
   try {
+    // 1. Clean settings.json
     const configPath = path.join(os.homedir(), '.claude', 'settings.json');
     if (fs.existsSync(configPath)) {
       try {
@@ -1010,13 +1011,26 @@ async function uninstallFink() {
         fs.writeFileSync(configPath, JSON.stringify(settings, null, 2));
       } catch(e){}
     }
+
+    // 2. Remove Fink Subagents
+    const agentsDir = path.join(os.homedir(), '.claude', 'agents');
+    if (fs.existsSync(agentsDir)) {
+      const agents = ['web-researcher.md', 'code-analyst.md', 'memory-keeper.md'];
+      for (const ag of agents) {
+        const p = path.join(agentsDir, ag);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      }
+    }
+
+    // 3. Remove .fink directory completely
     const finkDir = path.join(os.homedir(), '.fink');
     if (fs.existsSync(finkDir)) {
       fs.rmSync(finkDir, { recursive: true, force: true });
     }
-    s2.stop(true, "Configuration cleaned.");
+
+    s2.stop(true, "Configuration and cache cleaned.");
   } catch(e) {
-    s2.stop(false, "Failed to clean configuration.");
+    s2.stop(false, "Failed to completely clean configuration.");
   }
   
   console.log(`\n  ${c.green}✔ Uninstall complete!${c.r}`);
