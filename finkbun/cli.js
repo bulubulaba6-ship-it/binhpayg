@@ -159,7 +159,7 @@ const lang = getLangSelection();
 const T = TXT[lang];
 
 // --- VERSIONING ---
-const VERSION = "1.1.5";
+const VERSION = "1.1.6";
 const API_BASE_URL = "https://api.finkrouter.io.vn";
 const UPDATE_URL = `${API_BASE_URL}/v1/meta/version`;
 const DEFAULT_MODEL = "claude-opus-4-8";
@@ -507,7 +507,10 @@ async function promptClient() {
 
   if (isClaudeCodeInstaller) return ['claude'];
   if (isCodexInstaller) return ['codex'];
-  if (isCursorInstaller) return ['cursor'];
+  if (isCursorInstaller) {
+    console.log(`\n  ${c.red}Cursor integration is COMING SOON and currently locked.${c.r}\n`);
+    process.exit(1);
+  }
 
   process.stdout.write('\x1B[2J\x1B[H');
   console.log(LOGO);
@@ -517,6 +520,7 @@ async function promptClient() {
     `  ${c.b}1.${c.r} Claude Code  ${c.d}(Anthropic — claude-opus-4-8)${c.r}`,
     `  ${c.b}2.${c.r} Codex        ${c.d}(OpenAI — gpt-5.5)${c.r}`,
     `  ${c.b}3.${c.r} All          ${c.d}(Claude + Codex)${c.r}`,
+    `  ${c.b}4.${c.r} Cursor AI    ${c.red}[LOCKED - COMING SOON]${c.r}`,
   ];
 
   console.log(`  ╭${'─'.repeat(58)}╮`);
@@ -524,17 +528,26 @@ async function promptClient() {
   console.log(`  ╰${'─'.repeat(58)}╯`);
   console.log(`\n  ${c.d}Tip: Enter numbers separated by spaces or commas (e.g. 1 2)${c.r}`);
 
-  const answer = await prompt(`\n  ${c.cyan}${T.client_prompt}${c.r} `);
-  const raw = answer.toLowerCase().replace(/,/g, ' ');
-  const selected = new Set();
+  while (true) {
+    const answer = await prompt(`\n  ${c.cyan}${T.client_prompt}${c.r} `);
+    const raw = answer.toLowerCase().replace(/,/g, ' ');
+    const selected = new Set();
 
-  if (raw.includes('3') || raw.includes('all')) {
-    return ['claude', 'codex'];
+    if (raw.includes('4') || raw.includes('cursor')) {
+      console.log(`  ${c.red}Cursor integration is not yet available. Please select another option.${c.r}`);
+      continue;
+    }
+
+    if (raw.includes('3') || raw.includes('all')) {
+      return ['claude', 'codex'];
+    }
+    if (raw.includes('1')) selected.add('claude');
+    if (raw.includes('2')) selected.add('codex');
+
+    if (selected.size > 0 || raw.trim() === '') {
+      return selected.size > 0 ? [...selected] : ['claude'];
+    }
   }
-  if (raw.includes('1')) selected.add('claude');
-  if (raw.includes('2')) selected.add('codex');
-
-  return selected.size > 0 ? [...selected] : ['claude'];
 }
 
 
