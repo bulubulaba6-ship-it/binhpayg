@@ -1,16 +1,16 @@
-# FINK Orchestrator Core
+# Fink Claude Code Installer
 
-CLI tool để cài đặt FINK Core Engine và cấu hình Enterprise tự động.
+CLI tool để cài đặt Claude Code phiên bản mới nhất và cấu hình Enterprise.
 
 ## Cài đặt
 
 Sử dụng **bunx**:
 ```bash
-bunx finkrouter
+bunx fink-claude-code-installer
 ```
 Hoặc **npx**:
 ```bash
-npx finkrouter
+npx fink-claude-code-installer
 ```
 *Lưu ý: Tool sẽ yêu cầu bạn nhập Auth Token khi chạy. Mặc định sử dụng tiếng Việt.*
 
@@ -21,14 +21,14 @@ npx finkrouter
 
 Ví dụ chạy với tiếng Anh:
 ```bash
-npx finkrouter -en
+npx fink-claude-code-installer -en
 ```
 
 ## Gỡ cài đặt (Uninstall)
 
 Để dọn dẹp sạch sẽ cấu hình, biến môi trường và bộ nhớ đệm do Fink tạo ra, chạy cờ `--uninstall`:
 ```bash
-npx finkrouter --uninstall
+npx fink-claude-code-installer --uninstall
 ```
 
 ## Tính năng
@@ -51,4 +51,4 @@ Tool sẽ tự động thiết lập đè cấu hình tại `~/.claude/settings.
 2. **Git**: Để tải và đồng bộ các gói tối ưu hóa (Fink Optimization Pack).
 
 ---
-**Keywords**: `fink` `orchestrator` `gateway` `cli` `installer`
+**Keywords**: `claude` `cli` `anthropic` `gateway` `ai` `installer`
