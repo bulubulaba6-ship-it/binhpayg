@@ -111,6 +111,7 @@ func getWebhookDB() *sql.DB {
 //   - Arrays → JSON-encode them (sorted), still include the key
 //   - Objects → skip per spec (we don't receive nested objects in payment webhooks)
 //   - All other scalars (string, float64 bool) → normal string representation
+//
 // Join with "&", then HMAC-SHA256 with checksumKey.
 func verifyPayOSSignature(data map[string]interface{}, signature, checksumKey string) (bool, string) {
 	keys := make([]string, 0, len(data))

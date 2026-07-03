@@ -158,7 +158,7 @@ func (h *Handler) PostProvisionKey(c *gin.Context) {
 	if h.cfg.PostPayBilling.Clients == nil {
 		h.cfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
 	}
-	
+
 	clientCfg := config.PostPayBillingClientCfg{
 		CreditLimit: 0, // no overdraft — strict enforcement
 	}
