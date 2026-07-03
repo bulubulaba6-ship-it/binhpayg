@@ -203,6 +203,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	credits := float64(0)
 	limit := 2000
 	isSubscription := false
+	daysValid := 0 // 0 = no time-based expiry
 	descLower := strings.ToLower(description)
 
 	if strings.Contains(descLower, "max_20x") || amountFloat >= 1800000 {
@@ -232,6 +233,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		credits = 30000
 		limit = 1500
 		isSubscription = true
+		daysValid = 8 // 7 days + 1 day grace buffer
 	} else if strings.Contains(descLower, "day1") {
 		// 1-day short-term subscription: 4,000 fixed credits.
 		// Detected by description only — amount-based detection is deliberately omitted
@@ -241,6 +243,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		credits = 4000
 		limit = 1000
 		isSubscription = true
+		daysValid = 2 // 1 day + 1 day grace buffer
 	} else {
 		tier = "payg"
 		displayPlan = "Pay-As-You-Go"
@@ -329,7 +332,14 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	if h.cfg.PostPayBilling.Clients == nil {
 		h.cfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
 	}
-	h.cfg.PostPayBilling.Clients[newKey] = config.PostPayBillingClientCfg{CreditLimit: 0}
+	clientCfg := config.PostPayBillingClientCfg{CreditLimit: 0}
+	if daysValid > 0 {
+		// Time-based kill switch: key is hard-expired after daysValid days.
+		// This is a secondary guard on top of credit exhaustion — prevents
+		// hoarding a day1/day7 key and using it weeks later.
+		clientCfg.ExpiresAt = time.Now().UTC().AddDate(0, 0, daysValid)
+	}
+	h.cfg.PostPayBilling.Clients[newKey] = clientCfg
 
 	if h.cfg.APIKeyLimits == nil {
 		h.cfg.APIKeyLimits = make(map[string]int)
