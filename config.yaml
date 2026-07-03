@@ -1,14 +1,11 @@
 host: ""
 port: 8317
-
 remote-management:
   allow-remote: true
   secret-key: "$2a$10$krTTgB/OXAj1kewsqH7yPe9qpdwCl1Dm/sCudemC4PdYdKQyB87zy"
   disable-control-panel: false
   panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-
 auth-dir: "/CLIProxyAPI/pgstore/auths"
-
 api-keys:
   - fink_max_hcweuuiwgec787238hcdewuhuce3ofws
   - fink_pro_5d41402abc4b2a76b9719d911017c592
@@ -20,8 +17,9 @@ api-keys:
   - fink_pro_f64fb207b1d18ee4af8d6316f3375c37
   - fink_pro_e65b9d6c7d02b2939e64ff192520484a
   - fink_pro_e436e43187e4d84beba1517af14ffbf4
-  - fink_ca0b9ffdbb5398e93bc29d2ab44ffd03
-
+  - fink_max_966bf870eae82218eaac72e2de1a87aa
+  - test_fink_pro_1234567890abcdef_test
+  - fink_d280a63ee03c8ce1b360bf79c4a913c6
 api-key-models:
   "fink_pro_gagsgas8c58418d2569b5879fdgagsat":
     claude:
@@ -143,7 +141,22 @@ api-key-models:
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.3-codex-spark
-  fink_ca0b9ffdbb5398e93bc29d2ab44ffd03:
+  fink_max_966bf870eae82218eaac72e2de1a87aa:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  test_fink_pro_1234567890abcdef_test:
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
@@ -159,7 +172,21 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
-
+  fink_d280a63ee03c8ce1b360bf79c4a913c6:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
 debug: false
 pprof:
   enable: false
@@ -178,12 +205,10 @@ max-retry-interval: 30
 disable-cooling: false
 disable-image-generation: true
 commercial-mode: true
-
 quota-exceeded:
   switch-project: false
   switch-preview-model: false
   antigravity-credits: false
-
 routing:
   strategy: "round-robin"
   session-affinity: true
@@ -193,7 +218,6 @@ enable-gemini-cli-endpoint: false
 nonstream-keepalive-interval: 0
 streaming:
   keepalive-seconds: 20
-
 post-pay-billing:
   enabled: true
   ledger-file: "finkrouter_ledger.json"
@@ -219,8 +243,12 @@ post-pay-billing:
       credit-limit: 50000
     "fink_pro_e436e43187e4d84beba1517af14ffbf4":
       credit-limit: 50000
-    fink_ca0b9ffdbb5398e93bc29d2ab44ffd03:
+    fink_max_966bf870eae82218eaac72e2de1a87aa:
       credit-limit: 0
+    test_fink_pro_1234567890abcdef_test:
+      credit-limit: 1e+06
+    fink_d280a63ee03c8ce1b360bf79c4a913c6:
+      credit-limit: 50000
   markup-rates:
     "claude-opus-4-8":
       input: 1400
@@ -266,7 +294,6 @@ post-pay-billing:
       input: 700
       output: 2100
       cache: 70
-
 openai-compatibility:
   - name: Anthropic
     priority: 1
@@ -280,12 +307,6 @@ openai-compatibility:
         alias: claude-opus-4-7
       - name: deepseek-v4-flash
         alias: claude-opus-4-6
-  - name: Anthropic-BR
-    priority: 2
-    base-url: https://api.deepseek.com/v1
-    api-key-entries:
-      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
-    models:
       - name: deepseek-v4-flash
         alias: claude-sonnet-5
       - name: deepseek-v4-flash
@@ -304,17 +325,10 @@ openai-compatibility:
         alias: gpt-5.5
       - name: deepseek-v4-flash
         alias: gpt-5.4
-  - name: OpenAI-BR
-    priority: 2
-    base-url: https://api.deepseek.com/v1
-    api-key-entries:
-      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
-    models:
       - name: deepseek-v4-flash
         alias: gpt-5.4-mini
       - name: deepseek-v4-flash
         alias: gpt-5.3-codex-spark
-
 default-api-key-limit: 2000
 api-key-limits:
   "fink_max_hcweuuiwgec787238hcdewuhuce3ofws": 10000
@@ -327,4 +341,6 @@ api-key-limits:
   "fink_pro_f64fb207b1d18ee4af8d6316f3375c37": 2000
   "fink_pro_e65b9d6c7d02b2939e64ff192520484a": 2000
   "fink_pro_e436e43187e4d84beba1517af14ffbf4": 2000
-  fink_ca0b9ffdbb5398e93bc29d2ab44ffd03: 1000
+  fink_max_966bf870eae82218eaac72e2de1a87aa: 10000
+  test_fink_pro_1234567890abcdef_test: 10000
+  fink_d280a63ee03c8ce1b360bf79c4a913c6: 1000
