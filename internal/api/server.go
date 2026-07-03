@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,6 +47,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"gopkg.in/yaml.v3"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const oauthCallbackSuccessHTML = `<html><head><meta charset="utf-8"><title>Authentication successful</title><script>setTimeout(function(){window.close();},5000);</script></head><body><h1>Authentication successful!</h1><p>You can close this window.</p><p>This window will close automatically in 5 seconds.</p></body></html>`
@@ -301,9 +303,39 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 			ledgerFile = "postpay_ledger.json"
 		}
 		fullLedgerPath := filepath.Join(cfg.AuthDir, ledgerFile)
+
+		// Open PGSTORE_DSN once and register it for ledger persistence.
+		// This ensures CreditsPurchased survives Railway redeploys.
+		var pgDB *sql.DB
+		if dsn := func() string {
+			if v := os.Getenv("PGSTORE_DSN"); v != "" {
+				return v
+			}
+			return os.Getenv("DATABASE_URL")
+		}(); dsn != "" {
+			if db, errDB := sql.Open("pgx", dsn); errDB == nil {
+				pgDB = db
+				middleware.SetLedgerDB(db)
+				log.Info("Ledger Postgres persistence enabled (auth_store)")
+			} else {
+				log.Warnf("Failed to open PGSTORE_DSN for ledger persistence: %v", errDB)
+			}
+		}
+
+		// 1. Try loading from disk first (fastest path, works when file exists)
 		if err := middleware.LoadPostPayUsage(fullLedgerPath); err != nil {
 			log.Errorf("Failed to load post-pay ledger %s: %v", fullLedgerPath, err)
 		}
+		// 2. Cold-start fallback: merge from Postgres (survives redeploys).
+		//    Only applied when pgDB is available — merges in higher CreditsPurchased values.
+		if pgDB != nil {
+			if err := middleware.LoadLedgerFromPostgres(pgDB); err != nil {
+				log.Warnf("Failed to load ledger from Postgres fallback: %v", err)
+			} else {
+				log.Info("Ledger cold-start merge from Postgres completed")
+			}
+		}
+
 		middleware.StartPostPayPersister(fullLedgerPath)
 		log.Infof("Initialized isolated post-pay billing ledger at %s", fullLedgerPath)
 	}

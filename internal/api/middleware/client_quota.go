@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	coreusage "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/usage"
+	log "github.com/sirupsen/logrus"
 )
 
 type ClientUsageEntry struct {
@@ -55,6 +57,12 @@ var (
 
 	liveCfgMu    sync.RWMutex
 	globalConfig *config.Config
+
+	// pgLedgerDB is the optional Postgres connection used to persist the post-pay
+	// ledger across Railway redeploys (ephemeral filesystem). When set, every call
+	// to SavePostPayUsage also writes to the auth_store table.
+	pgLedgerMu sync.RWMutex
+	pgLedgerDB *sql.DB
 )
 
 // SetClientQuotaConfig injects the live config so the middleware always reads the latest
@@ -466,7 +474,85 @@ func LoadPostPayUsage(filePath string) error {
 	return nil
 }
 
-// SavePostPayUsage saves the current post-pay token ledger to disk atomically.
+// SetLedgerDB registers a Postgres connection for ledger persistence.
+// When set, SavePostPayUsage also writes the ledger to the auth_store table
+// so that CreditsPurchased survives Railway redeploys (ephemeral filesystem).
+func SetLedgerDB(db *sql.DB) {
+	pgLedgerMu.Lock()
+	pgLedgerDB = db
+	pgLedgerMu.Unlock()
+}
+
+// persistLedgerToPostgres upserts the current in-memory ledger into auth_store.
+// Called asynchronously after every disk save — failures are logged but not fatal.
+func persistLedgerToPostgres(data []byte) {
+	pgLedgerMu.RLock()
+	db := pgLedgerDB
+	pgLedgerMu.RUnlock()
+	if db == nil {
+		return
+	}
+	// Use a short context — this is a best-effort background write.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO auth_store (id, content, created_at, updated_at)
+		VALUES ('ledger', $1::jsonb, NOW(), NOW())
+		ON CONFLICT (id) DO UPDATE
+		  SET content    = EXCLUDED.content,
+		      updated_at = NOW()
+	`, string(data))
+	if err != nil {
+		log.Errorf("persistLedgerToPostgres: failed to upsert auth_store: %v", err)
+	}
+}
+
+// LoadLedgerFromPostgres reads the ledger from Postgres auth_store and merges it
+// into in-memory state. Designed as a cold-start fallback when the JSON file is
+// missing (e.g. after a Railway redeploy with ephemeral FS).
+// Existing in-memory entries are preserved; Postgres entries are applied only when
+// they carry a higher CreditsPurchased value than what is already loaded.
+func LoadLedgerFromPostgres(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	row := db.QueryRowContext(ctx, `SELECT content FROM auth_store WHERE id = 'ledger' LIMIT 1`)
+	var raw string
+	if err := row.Scan(&raw); err != nil {
+		if err == sql.ErrNoRows {
+			return nil // no ledger snapshot yet — first boot
+		}
+		return err
+	}
+	var pgLedger map[string]*PostPayUsageEntry
+	if err := json.Unmarshal([]byte(raw), &pgLedger); err != nil {
+		return err
+	}
+	postPayUsageMu.Lock()
+	defer postPayUsageMu.Unlock()
+	for key, pgEntry := range pgLedger {
+		if pgEntry == nil {
+			continue
+		}
+		existing, ok := postPayUsage[key]
+		if !ok || existing == nil {
+			// Key not in memory — load from Postgres
+			postPayUsage[key] = pgEntry
+			continue
+		}
+		// Prefer the higher CreditsPurchased to avoid accidentally reverting top-ups
+		if pgEntry.CreditsPurchased > existing.CreditsPurchased {
+			existing.CreditsPurchased = pgEntry.CreditsPurchased
+			existing.ProcessedTxns = pgEntry.ProcessedTxns
+		}
+	}
+	return nil
+}
+
+// SavePostPayUsage saves the current post-pay token ledger to disk atomically
+// and asynchronously persists it to Postgres (if SetLedgerDB was called).
 func SavePostPayUsage(filePath string) error {
 	postPayUsageMu.RLock()
 	data, err := json.MarshalIndent(postPayUsage, "", "  ")
@@ -484,7 +570,13 @@ func SavePostPayUsage(filePath string) error {
 	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, filePath)
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return err
+	}
+
+	// Persist to Postgres in the background — non-blocking, best-effort.
+	go persistLedgerToPostgres(data)
+	return nil
 }
 
 // StartPostPayPersister runs a background loop to save post-pay usage periodically.
