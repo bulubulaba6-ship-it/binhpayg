@@ -20,6 +20,7 @@ api-keys:
   - test_fink_pro_1234567890abcdef_test
   - fink_d280a63ee03c8ce1b360bf79c4a913c6
   - fink_b99e3a88d3b50005bf63a34997271da0
+  - fink_max_123fd87f9250a4b09330961a32ec667f
 api-key-models:
   "fink_max_hcweuuiwgec787238hcdewuhuce3ofws":
     claude:
@@ -193,6 +194,21 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
+  fink_max_123fd87f9250a4b09330961a32ec667f:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
 debug: false
 pprof:
   enable: false
@@ -254,7 +270,9 @@ post-pay-billing:
     fink_d280a63ee03c8ce1b360bf79c4a913c6:
       credit-limit: 0
     fink_b99e3a88d3b50005bf63a34997271da0:
-      credit-limit: 50000
+      credit-limit: 0
+    fink_max_123fd87f9250a4b09330961a32ec667f:
+      credit-limit: 0
   markup-rates:
     "claude-opus-4-8":
       input: 1400
@@ -350,3 +368,4 @@ api-key-limits:
   test_fink_pro_1234567890abcdef_test: 10000
   fink_d280a63ee03c8ce1b360bf79c4a913c6: 1000
   fink_b99e3a88d3b50005bf63a34997271da0: 1000
+  fink_max_123fd87f9250a4b09330961a32ec667f: 10000
