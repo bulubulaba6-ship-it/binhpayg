@@ -36,16 +36,17 @@ type SessionSummary struct {
 }
 
 type PostPayUsageEntry struct {
-	CreditsConsumed  float64          `json:"CreditsConsumed"`
-	CreditsPurchased float64          `json:"CreditsPurchased"`
-	Success          int64            `json:"Success"`
-	Failed           int64            `json:"Failed"`
-	Timestamp        time.Time        `json:"Timestamp"`
-	TotalTokens      int64            `json:"TotalTokens"`
-	Models           map[string]int64 `json:"Models,omitempty"`
-	DailyRequests    map[string]int64 `json:"DailyRequests,omitempty"`
-	Sessions         []SessionSummary `json:"Sessions,omitempty"`
-	ProcessedTxns    []string         `json:"ProcessedTxns,omitempty"`
+	CreditsConsumed  float64            `json:"CreditsConsumed"`
+	CreditsPurchased float64            `json:"CreditsPurchased"`
+	Success          int64              `json:"Success"`
+	Failed           int64              `json:"Failed"`
+	Timestamp        time.Time          `json:"Timestamp"`
+	TotalTokens      int64              `json:"TotalTokens"`
+	Models           map[string]int64   `json:"Models,omitempty"`
+	DailyRequests    map[string]int64   `json:"DailyRequests,omitempty"`
+	DailyBurn        map[string]float64 `json:"DailyBurn,omitempty"` // credits consumed per calendar day (UTC) — used for burn-rate multiplier
+	Sessions         []SessionSummary   `json:"Sessions,omitempty"`
+	ProcessedTxns    []string           `json:"ProcessedTxns,omitempty"`
 }
 
 var (
@@ -78,6 +79,31 @@ func init() {
 }
 
 type clientQuotaPlugin struct{}
+
+// dailyBurnMultiplier returns the transparent burn-rate multiplier for a key
+// based on how many credits it has consumed today (UTC).
+//
+//	< 50 000 cr/day  → x1.0 (normal)
+//	50 000–150 000   → x1.3 (heavy usage)
+//	≥ 150 000        → x1.6 (peak usage)
+//
+// The multiplier is applied server-side and exposed via the quota API so the
+// dashboard can display it transparently — users always know their current rate.
+func dailyBurnMultiplier(entry *PostPayUsageEntry) float64 {
+	if entry == nil || entry.DailyBurn == nil {
+		return 1.0
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	daily := entry.DailyBurn[today]
+	switch {
+	case daily >= 150_000:
+		return 1.6
+	case daily >= 50_000:
+		return 1.3
+	default:
+		return 1.0
+	}
+}
 
 func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Record) {
 	apiKey := strings.TrimSpace(record.APIKey)
@@ -113,8 +139,23 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				entry = &PostPayUsageEntry{Timestamp: time.Now()}
 				postPayUsage[apiKey] = entry
 			}
-			entry.CreditsConsumed += credits
+
+			// Apply transparent daily burn-rate multiplier.
+			// The multiplier scales with daily consumption to reflect higher
+			// infrastructure cost during peak usage. It is shown in the dashboard.
+			mult := dailyBurnMultiplier(entry)
+			billedCredits := credits * mult
+
+			entry.CreditsConsumed += billedCredits
 			entry.TotalTokens += record.Detail.InputTokens + record.Detail.OutputTokens
+
+			// Track daily burn for next-request multiplier recalculation.
+			today := time.Now().UTC().Format("2006-01-02")
+			if entry.DailyBurn == nil {
+				entry.DailyBurn = make(map[string]float64)
+			}
+			entry.DailyBurn[today] += billedCredits
+
 			if success {
 				entry.Success++
 				if entry.Models == nil {
@@ -124,7 +165,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				if entry.DailyRequests == nil {
 					entry.DailyRequests = make(map[string]int64)
 				}
-				entry.DailyRequests[time.Now().Format("2006-01-02")]++
+				entry.DailyRequests[today]++
 				entry.Sessions = append([]SessionSummary{{
 					SessionID:       record.SessionID,
 					Model:           record.Alias,
@@ -133,7 +174,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					CachedTokens:    record.Detail.CachedTokens,
 					ReasoningTokens: record.Detail.ReasoningTokens,
 					Timestamp:       time.Now(),
-					CreditsConsumed: credits, // store server-billed amount for dashboard
+					CreditsConsumed: billedCredits, // post-multiplier billed amount for dashboard
 				}}, entry.Sessions...)
 				if len(entry.Sessions) > 100 {
 					entry.Sessions = entry.Sessions[:100]
@@ -379,6 +420,28 @@ func GetPostPayCreditLimit(apiKey string) float64 {
 		}
 	}
 	return -1
+}
+
+// GetBurnMultiplierForKey returns the current transparent burn-rate multiplier
+// for the given post-pay API key. Returns 1.0 if key not found or no daily usage.
+// This is the value the dashboard shows as "Current rate: x1.3".
+func GetBurnMultiplierForKey(apiKey string) float64 {
+	postPayUsageMu.RLock()
+	entry := postPayUsage[apiKey]
+	postPayUsageMu.RUnlock()
+	return dailyBurnMultiplier(entry)
+}
+
+// GetDailyBurnForKey returns credits consumed today (UTC) for the given key.
+func GetDailyBurnForKey(apiKey string) float64 {
+	postPayUsageMu.RLock()
+	entry := postPayUsage[apiKey]
+	postPayUsageMu.RUnlock()
+	if entry == nil || entry.DailyBurn == nil {
+		return 0
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	return entry.DailyBurn[today]
 }
 
 // LoadPostPayUsage loads the persisted post-pay token ledger from disk.

@@ -431,6 +431,16 @@ func (s *Server) setupRoutes() {
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
 
+	// Admin billing dashboard shortcut
+	s.engine.GET("/admin", func(c *gin.Context) {
+		data, err := quota.FS.ReadFile("admin.html")
+		if err != nil {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+	})
+
 	// FinkRouter Storefront & Webhook
 	// Note: Storefront UI is now embedded in /dashboard
 	if s.mgmt != nil {
@@ -789,6 +799,21 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/xai-auth-url", s.mgmt.RequestXAIToken)
 		mgmt.POST("/oauth-callback", s.mgmt.PostOAuthCallback)
 		mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
+
+		// Admin billing & key management dashboard routes.
+		// Protected by management middleware + internal admin secret validation.
+		// GET  /v0/management/admin/summary           → high-level fleet summary
+		// GET  /v0/management/admin/keys              → all post-pay keys with status & balance
+		// GET  /v0/management/admin/orders?status=all → payment orders from DB
+		// POST /v0/management/admin/keys/activate     → re-activate an expired key
+		// POST /v0/management/admin/keys/deactivate   → instantly block a key
+		// POST /v0/management/admin/keys/expire       → hard-expire a key now
+		mgmt.GET("/admin/summary", s.mgmt.GetAdminSummary)
+		mgmt.GET("/admin/keys", s.mgmt.GetAdminKeys)
+		mgmt.GET("/admin/orders", s.mgmt.GetAdminOrders)
+		mgmt.POST("/admin/keys/activate", s.mgmt.PostAdminKeyActivate)
+		mgmt.POST("/admin/keys/deactivate", s.mgmt.PostAdminKeyDeactivate)
+		mgmt.POST("/admin/keys/expire", s.mgmt.PostAdminKeyExpireNow)
 	}
 }
 

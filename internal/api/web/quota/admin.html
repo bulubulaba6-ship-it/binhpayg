@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinkRouter — Admin Dashboard</title>
+  <link rel="icon" type="image/png" href="/dashboard/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    :root {
+      --bg: #0a0b0f; --surface: #111318; --surface2: #181b23;
+      --border: rgba(255,255,255,0.08); --primary: #a78bfa;
+      --primary2: #818cf8; --success: #34d399; --warning: #fbbf24;
+      --error: #f87171; --exhausted: #fb923c;
+      --fg: #e2e8f0; --muted: #64748b;
+      --font: 'Inter', sans-serif; --mono: 'JetBrains Mono', monospace;
+      --r: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+
+    /* NAV */
+    .nav { display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:56px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.1rem; }
+    .brand img { width:28px; height:28px; border-radius:6px; }
+    .badge { background:rgba(167,139,250,0.15); color:var(--primary); font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:20px; border:1px solid rgba(167,139,250,0.3); letter-spacing:0.05em; }
+    .nav-right { display:flex; align-items:center; gap:12px; }
+    .secret-input { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; color:var(--fg); font-family:var(--mono); font-size:0.8rem; width:220px; outline:none; }
+    .secret-input:focus { border-color:var(--primary); }
+    .btn { padding:6px 16px; border-radius:8px; border:none; cursor:pointer; font-family:var(--font); font-size:0.82rem; font-weight:600; transition:all 0.15s; }
+    .btn-primary { background:var(--primary); color:#0a0b0f; }
+    .btn-primary:hover { background:#c4b5fd; }
+    .btn-sm { padding:3px 10px; font-size:0.75rem; border-radius:6px; font-weight:600; }
+    .btn-success { background:rgba(52,211,153,0.15); color:var(--success); border:1px solid rgba(52,211,153,0.3); }
+    .btn-success:hover { background:rgba(52,211,153,0.25); }
+    .btn-danger { background:rgba(248,113,113,0.15); color:var(--error); border:1px solid rgba(248,113,113,0.3); }
+    .btn-danger:hover { background:rgba(248,113,113,0.25); }
+
+    /* TABS */
+    .tabs { display:flex; gap:4px; padding:16px 24px 0; border-bottom:1px solid var(--border); background:var(--surface); }
+    .tab { padding:8px 18px; border-radius:8px 8px 0 0; border:1px solid transparent; border-bottom:none; cursor:pointer; font-weight:500; color:var(--muted); background:transparent; font-family:var(--font); font-size:0.85rem; transition:all 0.15s; }
+    .tab.active { background:var(--surface2); border-color:var(--border); color:var(--fg); }
+    .tab:hover:not(.active) { color:var(--fg); }
+
+    /* SUMMARY CARDS */
+    .page { padding:24px; max-width:1400px; margin:0 auto; }
+    .summary-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:24px; }
+    .sum-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px 18px; }
+    .sum-label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+    .sum-val { font-size:1.6rem; font-weight:700; font-family:var(--mono); }
+    .sum-val.green { color:var(--success); }
+    .sum-val.red { color:var(--error); }
+    .sum-val.yellow { color:var(--warning); }
+    .sum-val.orange { color:var(--exhausted); }
+    .sum-val.purple { color:var(--primary); }
+
+    /* FILTER BAR */
+    .filter-bar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    .filter-bar input { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; color:var(--fg); font-size:0.82rem; outline:none; width:220px; }
+    .filter-bar input:focus { border-color:var(--primary); }
+    .filter-bar select { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; color:var(--fg); font-size:0.82rem; outline:none; cursor:pointer; }
+    .filter-count { color:var(--muted); font-size:0.8rem; margin-left:auto; }
+
+    /* TABLE */
+    .table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r); }
+    table { width:100%; border-collapse:collapse; }
+    thead th { background:var(--surface); padding:10px 14px; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+    tbody tr { border-bottom:1px solid var(--border); transition:background 0.1s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:rgba(255,255,255,0.02); }
+    td { padding:10px 14px; font-size:0.82rem; vertical-align:middle; }
+    .mono { font-family:var(--mono); font-size:0.78rem; }
+
+    /* STATUS BADGES */
+    .status { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:20px; font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+    .status::before { content:''; width:6px; height:6px; border-radius:50%; }
+    .status-active { background:rgba(52,211,153,0.12); color:var(--success); border:1px solid rgba(52,211,153,0.25); }
+    .status-active::before { background:var(--success); }
+    .status-expired { background:rgba(248,113,113,0.12); color:var(--error); border:1px solid rgba(248,113,113,0.25); }
+    .status-expired::before { background:var(--error); }
+    .status-exhausted { background:rgba(251,146,60,0.12); color:var(--exhausted); border:1px solid rgba(251,146,60,0.25); }
+    .status-exhausted::before { background:var(--exhausted); }
+    .status-pending { background:rgba(251,191,36,0.12); color:var(--warning); border:1px solid rgba(251,191,36,0.25); }
+    .status-pending::before { background:var(--warning); }
+    .status-paid { background:rgba(52,211,153,0.12); color:var(--success); border:1px solid rgba(52,211,153,0.25); }
+    .status-paid::before { background:var(--success); }
+
+    /* MULTIPLIER */
+    .mult { font-family:var(--mono); font-weight:700; font-size:0.8rem; }
+    .mult-10 { color:var(--success); }
+    .mult-13 { color:var(--warning); }
+    .mult-16 { color:var(--error); }
+
+    /* PROGRESS BAR */
+    .prog-wrap { width:100px; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; overflow:hidden; }
+    .prog-fill { height:100%; border-radius:3px; transition:width 0.3s; }
+
+    /* OVERLAY / LOGIN */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(12px); display:flex; align-items:center; justify-content:center; z-index:999; }
+    .login-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 48px; width:380px; text-align:center; }
+    .login-card h2 { font-size:1.5rem; margin-bottom:6px; }
+    .login-card p { color:var(--muted); font-size:0.85rem; margin-bottom:24px; }
+    .login-card input { width:100%; margin-bottom:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--fg); font-family:var(--mono); font-size:0.9rem; outline:none; }
+    .login-card input:focus { border-color:var(--primary); }
+    .login-card .btn { width:100%; padding:10px; font-size:0.9rem; }
+
+    /* EMPTY / ERROR */
+    .empty { text-align:center; padding:48px; color:var(--muted); }
+    .error-banner { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.3); border-radius:8px; padding:10px 16px; color:var(--error); margin-bottom:16px; font-size:0.85rem; }
+
+    /* ACTIONS COL */
+    .actions { display:flex; gap:6px; align-items:center; }
+
+    /* SPINNER */
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.15); border-top-color:var(--primary); border-radius:50%; animation:spin 0.6s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* REVENUE */
+    .revenue { font-size:0.78rem; color:var(--muted); margin-top:3px; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div class="overlay" id="loginOverlay">
+  <div class="login-card">
+    <img src="/dashboard/favicon.png" style="width:44px;height:44px;border-radius:10px;margin-bottom:16px;">
+    <h2>Admin Dashboard</h2>
+    <p>Enter your management secret to access key monitoring and billing controls.</p>
+    <input type="password" id="secretInput" placeholder="Management secret..." onkeydown="if(event.key==='Enter') admin.login()">
+    <div id="loginErr" style="color:var(--error);font-size:0.8rem;margin-bottom:10px;display:none;"></div>
+    <button class="btn btn-primary" onclick="admin.login()">Access Dashboard</button>
+  </div>
+</div>
+
+<!-- NAVBAR -->
+<nav class="nav">
+  <div class="brand">
+    <img src="/dashboard/favicon.png" alt="FinkRouter">
+    <span>FinkRouter</span>
+    <span class="badge">ADMIN</span>
+  </div>
+  <div class="nav-right">
+    <span id="lastRefresh" style="color:var(--muted);font-size:0.75rem;"></span>
+    <button class="btn btn-primary" onclick="admin.refresh()" id="refreshBtn">↻ Refresh</button>
+  </div>
+</nav>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" id="tabKeys" onclick="admin.showTab('keys')">🔑 Keys (<span id="tabKeyCount">—</span>)</button>
+  <button class="tab" id="tabOrders" onclick="admin.showTab('orders')">📦 Orders (<span id="tabOrderCount">—</span>)</button>
+</div>
+
+<!-- PAGE -->
+<div class="page">
+
+  <!-- SUMMARY -->
+  <div class="summary-grid" id="summaryGrid">
+    <div class="sum-card"><div class="sum-label">Total Keys</div><div class="sum-val purple" id="sumTotal">—</div></div>
+    <div class="sum-card"><div class="sum-label">Active</div><div class="sum-val green" id="sumActive">—</div></div>
+    <div class="sum-card"><div class="sum-label">Expired</div><div class="sum-val red" id="sumExpired">—</div></div>
+    <div class="sum-card"><div class="sum-label">Exhausted</div><div class="sum-val orange" id="sumExhausted">—</div></div>
+    <div class="sum-card"><div class="sum-label">Total Purchased</div><div class="sum-val" id="sumPurchased">—</div></div>
+    <div class="sum-card"><div class="sum-label">Total Consumed</div><div class="sum-val yellow" id="sumConsumed">—</div></div>
+    <div class="sum-card"><div class="sum-label">Revenue (VND)</div><div class="sum-val green" id="sumRevenue">—</div><div class="revenue" id="sumRevenueUSD"></div></div>
+  </div>
+
+  <div id="errorBanner" class="error-banner" style="display:none;"></div>
+
+  <!-- KEYS TAB -->
+  <div id="keysTab">
+    <div class="filter-bar">
+      <input type="search" id="keySearch" placeholder="Search key / email / plan…" oninput="admin.filterKeys()">
+      <select id="keyStatusFilter" onchange="admin.filterKeys()">
+        <option value="all">All Status</option>
+        <option value="active">Active</option>
+        <option value="expired">Expired</option>
+        <option value="exhausted">Exhausted</option>
+      </select>
+      <select id="keyPlanFilter" onchange="admin.filterKeys()">
+        <option value="all">All Plans</option>
+        <option value="MAX">MAX</option>
+        <option value="PRO">PRO</option>
+        <option value="DAYPASS">DAYPASS</option>
+        <option value="PAYG">PAYG</option>
+      </select>
+      <span class="filter-count" id="keyFilterCount"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Email</th>
+            <th>Consumed</th>
+            <th>Purchased</th>
+            <th>Remaining %</th>
+            <th>Daily Burn</th>
+            <th>Rate</th>
+            <th>5H Limit</th>
+            <th>Expires</th>
+            <th>Reqs</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="keysBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ORDERS TAB -->
+  <div id="ordersTab" style="display:none;">
+    <div class="filter-bar">
+      <input type="search" id="orderSearch" placeholder="Search order / email…" oninput="admin.filterOrders()">
+      <select id="orderStatusFilter" onchange="admin.filterOrders()">
+        <option value="all">All</option>
+        <option value="pending">Pending</option>
+        <option value="paid">Paid</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <span class="filter-count" id="orderFilterCount"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order Code</th>
+            <th>Email</th>
+            <th>Plan</th>
+            <th>Amount (VND)</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const admin = (() => {
+  let secret = '';
+  let allKeys = [];
+  let allOrders = [];
+  let currentTab = 'keys';
+
+  function getBase() { return window.location.origin; }
+
+  function headers() {
+    return { 'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json' };
+  }
+
+  async function login() {
+    const v = document.getElementById('secretInput').value.trim();
+    if (!v) return;
+    secret = v;
+    try {
+      const r = await fetch(getBase() + '/v0/management/admin/summary', { headers: headers() });
+      if (!r.ok) {
+        showLoginErr('Invalid secret or server error (' + r.status + ')');
+        secret = '';
+        return;
+      }
+      document.getElementById('loginOverlay').style.display = 'none';
+      refresh();
+    } catch(e) {
+      showLoginErr('Network error: ' + e.message);
+      secret = '';
+    }
+  }
+
+  function showLoginErr(msg) {
+    const el = document.getElementById('loginErr');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function showTab(tab) {
+    currentTab = tab;
+    document.getElementById('keysTab').style.display = tab === 'keys' ? '' : 'none';
+    document.getElementById('ordersTab').style.display = tab === 'orders' ? '' : 'none';
+    document.getElementById('tabKeys').className = 'tab' + (tab === 'keys' ? ' active' : '');
+    document.getElementById('tabOrders').className = 'tab' + (tab === 'orders' ? ' active' : '');
+  }
+
+  async function refresh() {
+    const btn = document.getElementById('refreshBtn');
+    btn.innerHTML = '<span class="spinner"></span>';
+    btn.disabled = true;
+    document.getElementById('errorBanner').style.display = 'none';
+    try {
+      await Promise.all([loadSummary(), loadKeys(), loadOrders()]);
+      document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } catch(e) {
+      showError(e.message);
+    } finally {
+      btn.innerHTML = '↻ Refresh';
+      btn.disabled = false;
+    }
+  }
+
+  function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = '⚠ ' + msg;
+    b.style.display = 'block';
+  }
+
+  async function loadSummary() {
+    const r = await fetch(getBase() + '/v0/management/admin/summary', { headers: headers() });
+    if (!r.ok) throw new Error('Summary fetch failed: ' + r.status);
+    const d = await r.json();
+    document.getElementById('sumTotal').textContent = d.total_keys ?? '—';
+    document.getElementById('sumActive').textContent = d.active_keys ?? '—';
+    document.getElementById('sumExpired').textContent = d.expired_keys ?? '—';
+    document.getElementById('sumExhausted').textContent = d.exhausted_keys ?? '—';
+    document.getElementById('sumPurchased').textContent = fmtCr(d.total_purchased);
+    document.getElementById('sumConsumed').textContent = fmtCr(d.total_consumed);
+    const rev = d.total_revenue_vnd || 0;
+    document.getElementById('sumRevenue').textContent = fmtVND(rev);
+    document.getElementById('sumRevenueUSD').textContent = '≈ $' + (rev / 25000).toFixed(0) + ' USD';
+  }
+
+  async function loadKeys() {
+    const r = await fetch(getBase() + '/v0/management/admin/keys', { headers: headers() });
+    if (!r.ok) throw new Error('Keys fetch failed: ' + r.status);
+    const d = await r.json();
+    allKeys = d.keys || [];
+    document.getElementById('tabKeyCount').textContent = allKeys.length;
+    filterKeys();
+  }
+
+  async function loadOrders() {
+    const r = await fetch(getBase() + '/v0/management/admin/orders', { headers: headers() });
+    if (!r.ok) throw new Error('Orders fetch failed: ' + r.status);
+    const d = await r.json();
+    allOrders = d.orders || [];
+    document.getElementById('tabOrderCount').textContent = allOrders.length;
+    filterOrders();
+  }
+
+  function filterKeys() {
+    const q = document.getElementById('keySearch').value.toLowerCase();
+    const st = document.getElementById('keyStatusFilter').value;
+    const pl = document.getElementById('keyPlanFilter').value;
+    const filtered = allKeys.filter(k => {
+      const matchQ = !q || k.key_masked.toLowerCase().includes(q) ||
+        (k.email || '').toLowerCase().includes(q) || k.plan.toLowerCase().includes(q);
+      const matchSt = st === 'all' || k.status === st;
+      const matchPl = pl === 'all' || k.plan === pl;
+      return matchQ && matchSt && matchPl;
+    });
+    document.getElementById('keyFilterCount').textContent = filtered.length + ' / ' + allKeys.length + ' keys';
+    renderKeys(filtered);
+  }
+
+  function filterOrders() {
+    const q = document.getElementById('orderSearch').value.toLowerCase();
+    const st = document.getElementById('orderStatusFilter').value;
+    const filtered = allOrders.filter(o => {
+      const matchQ = !q || o.order_code.toLowerCase().includes(q) || (o.email || '').toLowerCase().includes(q);
+      const matchSt = st === 'all' || o.status === st;
+      return matchQ && matchSt;
+    });
+    document.getElementById('orderFilterCount').textContent = filtered.length + ' / ' + allOrders.length + ' orders';
+    renderOrders(filtered);
+  }
+
+  function renderKeys(keys) {
+    const tbody = document.getElementById('keysBody');
+    if (!keys.length) { tbody.innerHTML = '<tr><td colspan="13" class="empty">No keys found.</td></tr>'; return; }
+    tbody.innerHTML = keys.map(k => {
+      const pct = k.credits_purchased > 0 ? Math.min(100, k.credits_consumed / k.credits_purchased * 100) : 0;
+      const progColor = pct > 90 ? 'var(--error)' : pct > 70 ? 'var(--warning)' : 'var(--success)';
+      const multClass = k.burn_multiplier >= 1.6 ? 'mult-16' : k.burn_multiplier >= 1.3 ? 'mult-13' : 'mult-10';
+      const exp = k.expires_at ? new Date(k.expires_at).toLocaleDateString('vi-VN') : '∞';
+      const expColor = k.is_expired ? 'var(--error)' : 'inherit';
+      return `<tr>
+        <td class="mono" title="${k.key_masked}">${k.key_masked}</td>
+        <td><span class="badge" style="font-size:0.68rem">${k.plan}</span></td>
+        <td><span class="status status-${k.status}">${k.status}</span></td>
+        <td style="color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${k.email || '—'}</td>
+        <td class="mono">${fmtCr(k.credits_consumed)}</td>
+        <td class="mono">${fmtCr(k.credits_purchased)}</td>
+        <td>
+          <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:${progColor}"></div></div>
+          <span style="font-size:0.72rem;color:var(--muted)">${pct.toFixed(0)}%</span>
+        </td>
+        <td class="mono">${fmtCr(k.daily_burn_today)}<span style="color:var(--muted);font-size:0.7rem">/day</span></td>
+        <td><span class="mult ${multClass}">×${k.burn_multiplier.toFixed(1)}</span></td>
+        <td class="mono">${k.five_h_limit.toLocaleString()}</td>
+        <td style="color:${expColor};font-size:0.78rem">${exp}</td>
+        <td class="mono">${(k.total_requests||0).toLocaleString()}</td>
+        <td>
+          <div class="actions">
+            ${k.status !== 'active' ? `<button class="btn btn-sm btn-success" onclick="admin.activate('${encodeKey(k.key_masked)}')">Activate</button>` : ''}
+            ${k.status === 'active' ? `<button class="btn btn-sm btn-danger" onclick="admin.deactivate('${encodeKey(k.key_masked)}')">Deactivate</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderOrders(orders) {
+    const tbody = document.getElementById('ordersBody');
+    if (!orders.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No orders found.</td></tr>'; return; }
+    tbody.innerHTML = orders.map(o => {
+      const d = o.created_at ? new Date(o.created_at).toLocaleString('vi-VN') : '—';
+      return `<tr>
+        <td class="mono">${o.order_code}</td>
+        <td>${o.email || '—'}</td>
+        <td><span class="badge" style="font-size:0.68rem">${o.plan || '—'}</span></td>
+        <td class="mono">${(o.amount_vnd||0).toLocaleString('vi-VN')}đ</td>
+        <td>${o.phone || '—'}</td>
+        <td><span class="status status-${o.status}">${o.status}</span></td>
+        <td style="color:var(--muted);font-size:0.78rem">${d}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Key action handlers — require full key input (prompt)
+  function encodeKey(masked) { return masked; }
+
+  async function activate(masked) {
+    const full = prompt('Enter FULL API key to ACTIVATE:\n(masked: ' + masked + ')');
+    if (!full) return;
+    await keyAction('activate', full.trim(), 'Key activated successfully.');
+  }
+
+  async function deactivate(masked) {
+    const full = prompt('Enter FULL API key to DEACTIVATE:\n(masked: ' + masked + ')');
+    if (!full) return;
+    if (!confirm('Deactivate ' + masked + '? This immediately blocks the user.')) return;
+    await keyAction('deactivate', full.trim(), 'Key deactivated.');
+  }
+
+  async function keyAction(action, fullKey, successMsg) {
+    try {
+      const r = await fetch(getBase() + '/v0/management/admin/keys/' + action, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ key: fullKey })
+      });
+      const d = await r.json();
+      if (!r.ok) { alert('Error: ' + (d.error || r.status)); return; }
+      alert(successMsg + '\nKey: ' + d.key);
+      await refresh();
+    } catch(e) {
+      alert('Request failed: ' + e.message);
+    }
+  }
+
+  // Formatters
+  function fmtCr(n) {
+    if (!n || n === 0) return '0';
+    if (n >= 1_000_000) return (n/1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return (n/1_000).toFixed(1) + 'K';
+    return n.toFixed(2);
+  }
+
+  function fmtVND(n) {
+    if (!n) return '0đ';
+    return n.toLocaleString('vi-VN') + 'đ';
+  }
+
+  return { login, showTab, refresh, filterKeys, filterOrders, activate, deactivate };
+})();
+</script>
+</body>
+</html>

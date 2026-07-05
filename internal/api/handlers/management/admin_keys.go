@@ -1,0 +1,394 @@
+package management
+
+import (
+	"crypto/sha256"
+	"database/sql"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+)
+
+// AdminKeyInfo is the response shape for a single API key in the admin dashboard.
+type AdminKeyInfo struct {
+	KeyPrefix        string     `json:"key_prefix"`
+	KeyMasked        string     `json:"key_masked"` // e.g. "fink_max_a1b2****c3d4"
+	Plan             string     `json:"plan"`
+	Status           string     `json:"status"` // "active" | "inactive" | "expired"
+	Email            string     `json:"email"`
+	CreditsConsumed  float64    `json:"credits_consumed"`
+	CreditsPurchased float64    `json:"credits_purchased"`
+	CreditsRemaining float64    `json:"credits_remaining"`
+	DailyBurnToday   float64    `json:"daily_burn_today"`
+	BurnMultiplier   float64    `json:"burn_multiplier"`
+	FiveHLimit       int        `json:"five_h_limit"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	IsExpired        bool       `json:"is_expired"`
+	CreatedAt        *time.Time `json:"created_at,omitempty"`
+	TotalRequests    int64      `json:"total_requests"`
+	TotalTokens      int64      `json:"total_tokens"`
+}
+
+// AdminOrderInfo is the response shape for a payment order.
+type AdminOrderInfo struct {
+	OrderCode string     `json:"order_code"`
+	Email     string     `json:"email"`
+	Plan      string     `json:"plan"`
+	Amount    int64      `json:"amount_vnd"`
+	Phone     string     `json:"phone,omitempty"`
+	Status    string     `json:"status"` // "pending" | "paid" | "cancelled"
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+}
+
+// maskKey returns a masked version of the key for safe display in admin UI:
+// e.g. "fink_max_a1b2****c3d4" — prefix preserved, middle hidden, last 4 shown.
+func maskKey(key string) string {
+	if len(key) <= 12 {
+		return key
+	}
+	suffix := key[len(key)-4:]
+	for _, p := range []string{"fink_max_", "fink_pro_", "fink_d", "fink_"} {
+		if strings.HasPrefix(key, p) {
+			rest := key[len(p):]
+			if len(rest) >= 8 {
+				return p + rest[:4] + "****" + suffix
+			}
+			return p + "****" + suffix
+		}
+	}
+	return key[:8] + "****" + suffix
+}
+
+// planFromKey infers the plan tier from the key prefix.
+func planFromKey(key string) string {
+	switch {
+	case strings.HasPrefix(key, "fink_max_"):
+		return "MAX"
+	case strings.HasPrefix(key, "fink_pro_"):
+		return "PRO"
+	case strings.HasPrefix(key, "fink_d"):
+		return "DAYPASS"
+	default:
+		return "PAYG"
+	}
+}
+
+// GetAdminKeys returns full info for all post-pay API keys.
+// GET /v0/management/admin/keys
+// Protected by management group middleware.
+func (h *Handler) GetAdminKeys(c *gin.Context) {
+
+	cfg := middleware.GetLiveConfig()
+	if cfg == nil || !cfg.PostPayBilling.Enabled {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "post-pay billing not enabled"})
+		return
+	}
+
+	// Snapshot in-memory ledger
+	ledger := middleware.GetPostPaySnapshot()
+	// Snapshot live config clients
+	clients := cfg.PostPayBilling.Clients
+	rateLimits := cfg.APIKeyLimits
+
+	// Attempt to fetch emails from DB
+	emailByKey := make(map[string]string)
+	createdByKey := make(map[string]*time.Time)
+	db := getWebhookDB()
+	if db != nil {
+		rows, err := db.QueryContext(c.Request.Context(),
+			`SELECT key_hash, email, created_at FROM api_keys ORDER BY created_at DESC LIMIT 2000`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var keyHash, email string
+				var createdRaw sql.NullString
+				if errScan := rows.Scan(&keyHash, &email, &createdRaw); errScan == nil {
+					emailByKey[keyHash] = email
+				}
+			}
+		}
+	}
+
+	now := time.Now().UTC()
+	result := make([]AdminKeyInfo, 0, len(clients))
+
+	for key, clientCfg := range clients {
+		entry := ledger[key]
+
+		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(key)))
+		email := emailByKey[keyHash]
+
+		var consumed, purchased float64
+		var totalReq, totalTokens int64
+		if entry.CreditsConsumed > 0 || entry.CreditsPurchased > 0 {
+			consumed = entry.CreditsConsumed
+			purchased = entry.CreditsPurchased
+			totalReq = entry.Success + entry.Failed
+			totalTokens = entry.TotalTokens
+		}
+
+		remaining := purchased - consumed
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		isExpired := false
+		var expiresAt *time.Time
+		if !clientCfg.ExpiresAt.IsZero() {
+			t := clientCfg.ExpiresAt
+			expiresAt = &t
+			if now.After(clientCfg.ExpiresAt) {
+				isExpired = true
+			}
+		}
+
+		status := "active"
+		if isExpired {
+			status = "expired"
+		} else if remaining <= 0 && purchased > 0 {
+			status = "exhausted"
+		}
+
+		fiveHLimit := 0
+		if rateLimits != nil {
+			fiveHLimit = rateLimits[key]
+		}
+
+		created := createdByKey[keyHash]
+
+		result = append(result, AdminKeyInfo{
+			KeyPrefix:        planFromKey(key),
+			KeyMasked:        maskKey(key),
+			Plan:             planFromKey(key),
+			Status:           status,
+			Email:            email,
+			CreditsConsumed:  consumed,
+			CreditsPurchased: purchased,
+			CreditsRemaining: remaining,
+			DailyBurnToday:   middleware.GetDailyBurnForKey(key),
+			BurnMultiplier:   middleware.GetBurnMultiplierForKey(key),
+			FiveHLimit:       fiveHLimit,
+			ExpiresAt:        expiresAt,
+			IsExpired:        isExpired,
+			CreatedAt:        created,
+			TotalRequests:    totalReq,
+			TotalTokens:      totalTokens,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count": len(result),
+		"keys":  result,
+	})
+}
+
+// GetAdminOrders returns payment orders from the database.
+// GET /v0/management/admin/orders?status=pending|paid|all
+// Protected by management group middleware.
+func (h *Handler) GetAdminOrders(c *gin.Context) {
+
+	db := getWebhookDB()
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not available"})
+		return
+	}
+
+	statusFilter := strings.ToLower(strings.TrimSpace(c.Query("status")))
+	if statusFilter == "" || statusFilter == "all" {
+		statusFilter = ""
+	}
+
+	var rows *sql.Rows
+	var errQ error
+	if statusFilter != "" {
+		rows, errQ = db.QueryContext(c.Request.Context(),
+			`SELECT order_code, email, plan, amount, COALESCE(phone,''), status, created_at
+			 FROM payment_orders WHERE status = $1 ORDER BY created_at DESC LIMIT 500`,
+			statusFilter)
+	} else {
+		rows, errQ = db.QueryContext(c.Request.Context(),
+			`SELECT order_code, email, plan, amount, COALESCE(phone,''), status, created_at
+			 FROM payment_orders ORDER BY created_at DESC LIMIT 500`)
+	}
+	if errQ != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "db query failed: " + errQ.Error()})
+		return
+	}
+	defer rows.Close()
+
+	orders := make([]AdminOrderInfo, 0)
+	for rows.Next() {
+		var o AdminOrderInfo
+		var createdRaw sql.NullTime
+		var orderCode string
+		if err := rows.Scan(&orderCode, &o.Email, &o.Plan, &o.Amount, &o.Phone, &o.Status, &createdRaw); err != nil {
+			continue
+		}
+		o.OrderCode = orderCode
+		if createdRaw.Valid {
+			t := createdRaw.Time
+			o.CreatedAt = &t
+		}
+		orders = append(orders, o)
+	}
+
+	pending := 0
+	paid := 0
+	for _, o := range orders {
+		switch o.Status {
+		case "pending":
+			pending++
+		case "paid":
+			paid++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total":   len(orders),
+		"pending": pending,
+		"paid":    paid,
+		"orders":  orders,
+	})
+}
+
+// PostAdminKeyDeactivate sets a key's ExpiresAt to now (effectively immediately blocking it).
+// POST /v0/management/admin/keys/deactivate
+func (h *Handler) PostAdminKeyDeactivate(c *gin.Context) {
+	h.setKeyExpiry(c, time.Now().UTC().Add(-1*time.Second))
+}
+
+// PostAdminKeyActivate re-activates a key by clearing its ExpiresAt.
+// POST /v0/management/admin/keys/activate
+func (h *Handler) PostAdminKeyActivate(c *gin.Context) {
+	h.setKeyExpiry(c, time.Time{}) // zero = no expiry
+}
+
+// PostAdminKeyExpireNow hard-expires the key immediately.
+// POST /v0/management/admin/keys/expire
+func (h *Handler) PostAdminKeyExpireNow(c *gin.Context) {
+	h.setKeyExpiry(c, time.Now().UTC().Add(-1*time.Second))
+}
+
+type keyActionRequest struct {
+	Key string `json:"key"`
+}
+
+func (h *Handler) setKeyExpiry(c *gin.Context, newExpiry time.Time) {
+	var req keyActionRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Key) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "body must have {\"key\": \"<full api key>\"}"})
+		return
+	}
+	key := strings.TrimSpace(req.Key)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.cfg.PostPayBilling.Clients == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "key not found in billing config"})
+		return
+	}
+	clientCfg, ok := h.cfg.PostPayBilling.Clients[key]
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "key not found in billing config"})
+		return
+	}
+
+	clientCfg.ExpiresAt = newExpiry
+	h.cfg.PostPayBilling.Clients[key] = clientCfg
+
+	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
+		return
+	}
+
+	action := "deactivated"
+	if newExpiry.IsZero() {
+		action = "activated"
+	}
+
+	// Also update DB api_keys.status for persistence
+	db := getWebhookDB()
+	if db != nil {
+		dbStatus := "inactive"
+		if newExpiry.IsZero() {
+			dbStatus = "active"
+		}
+		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(key)))
+		_, _ = db.ExecContext(c.Request.Context(),
+			`UPDATE api_keys SET status = $1 WHERE key_hash = $2`, dbStatus, keyHash)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"action":  action,
+		"key":     maskKey(key),
+		"expires": newExpiry,
+	})
+}
+
+// GetAdminSummary returns a high-level summary for the admin dashboard.
+// GET /v0/management/admin/summary
+func (h *Handler) GetAdminSummary(c *gin.Context) {
+	cfg := middleware.GetLiveConfig()
+	if cfg == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config not available"})
+		return
+	}
+
+	ledger := middleware.GetPostPaySnapshot()
+	clients := cfg.PostPayBilling.Clients
+
+	now := time.Now().UTC()
+	var (
+		totalKeys      int
+		activeKeys     int
+		expiredKeys    int
+		exhaustedKeys  int
+		totalConsumed  float64
+		totalPurchased float64
+		totalRevenue   float64
+	)
+
+	for key, clientCfg := range clients {
+		totalKeys++
+		entry := ledger[key]
+		totalConsumed += entry.CreditsConsumed
+		totalPurchased += entry.CreditsPurchased
+
+		isExpired := !clientCfg.ExpiresAt.IsZero() && now.After(clientCfg.ExpiresAt)
+		isExhausted := entry.CreditsConsumed >= entry.CreditsPurchased && entry.CreditsPurchased > 0
+
+		switch {
+		case isExpired:
+			expiredKeys++
+		case isExhausted:
+			exhaustedKeys++
+		default:
+			activeKeys++
+		}
+	}
+
+	// Try to get revenue from DB
+	db := getWebhookDB()
+	if db != nil {
+		row := db.QueryRowContext(c.Request.Context(),
+			`SELECT COALESCE(SUM(amount),0) FROM payment_orders WHERE status='paid'`)
+		_ = row.Scan(&totalRevenue)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_keys":        totalKeys,
+		"active_keys":       activeKeys,
+		"expired_keys":      expiredKeys,
+		"exhausted_keys":    exhaustedKeys,
+		"total_consumed":    totalConsumed,
+		"total_purchased":   totalPurchased,
+		"total_revenue_vnd": totalRevenue,
+		"as_of":             now,
+	})
+}
