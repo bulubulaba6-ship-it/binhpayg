@@ -425,10 +425,12 @@ const app = {
       app.currentKey = key;
       app.lastQuotaData = data.quota;
       app.lastBurnMultiplier  = data.burn_multiplier  || 1.0;
-      app.lastDailyBurnToday  = data.daily_burn_today || 0;
+      app.lastBurnRatio       = data.burn_ratio        || 0.0;
+      app.lastFiveHCredits    = data.five_h_credits    || 0;
+      app.lastDailyBurnToday  = data.daily_burn_today  || 0;
       app.updateCreditDisplay();
       app.updatePlanBadge(key, (data.quota && data.quota.rate_limit_5h) || 0);
-      app.renderBurnIndicator(app.lastBurnMultiplier, app.lastDailyBurnToday);
+      app.renderBurnIndicator(app.lastBurnMultiplier, app.lastBurnRatio, app.lastFiveHCredits, data.quota.rate_limit_5h || 0);
 
       // Reset timer
       const exp = data.quota.window_expires_at;
@@ -567,9 +569,11 @@ const app = {
   },
 
   // ── Burn-rate indicator ──────────────────────────────────────────────────
-  // Renders a small pill in the Credits stat card showing the current
-  // daily burn multiplier (x1.0 / x1.3 / x1.6). Hidden when multiplier = 1.0.
-  renderBurnIndicator: (multiplier, dailyBurn) => {
+  // Renders a contextual warning card inside the Credits stat card showing
+  // the current 5H rolling window burst multiplier and usage ratio.
+  // Tiers: 0-20%→x1.0 | 20-40%→x1.2 | 40-60%→x1.4 | 60-80%→x1.7 | ≥80%→x1.8-2.0
+  // Hidden entirely when multiplier = 1.0 and ratio < 20% (fresh/idle window).
+  renderBurnIndicator: (multiplier, burnRatio, fiveHCredits, rateLimit) => {
     const card = document.querySelector('.stat-card');
     if (!card) return;
 
@@ -577,29 +581,71 @@ const app = {
     const old = document.getElementById('burnIndicator');
     if (old) old.remove();
 
-    if (!multiplier || multiplier <= 1.0) return;
+    // No indicator needed when at base rate with minimal window consumption
+    if ((!multiplier || multiplier <= 1.0) && (!burnRatio || burnRatio < 0.20)) return;
 
-    const color  = multiplier >= 1.6 ? '#f87171' : '#fbbf24';
-    const label  = multiplier >= 1.6 ? '×1.6 — High usage today' : '×1.3 — Medium usage today';
-    const dailyK = dailyBurn >= 1000 ? (dailyBurn / 1000).toFixed(1) + 'K' : dailyBurn.toFixed(0);
+    // Determine tier label, color, and description
+    const ratio = burnRatio || 0;
+    const pct   = Math.min(100, Math.round(ratio * 100));
+    const mult  = multiplier || 1.0;
 
-    const pill = document.createElement('div');
-    pill.id = 'burnIndicator';
-    pill.title = `Burn-rate multiplier active. Daily burn today: ${dailyK} cr. Resets at UTC midnight.`;
-    pill.style.cssText = [
-      'display:inline-flex', 'align-items:center', 'gap:5px',
-      `color:${color}`, 'font-size:0.75rem', 'font-weight:600',
-      'background:' + color.replace(')', ',0.12)').replace('rgb', 'rgba'),
-      'border:1px solid ' + color.replace(')', ',0.3)').replace('rgb', 'rgba'),
-      'border-radius:20px', 'padding:2px 8px', 'margin-top:6px',
-      'cursor:help'
+    let color, tierLabel, tierDesc;
+    if (mult >= 1.8) {
+      color     = '#f87171'; // red
+      tierLabel = `×${mult.toFixed(1)} — Ceiling`;
+      tierDesc  = 'Randomised ceiling active (1.8–2.0×). At ≥80% of 5H limit.';
+    } else if (mult >= 1.7) {
+      color     = '#fb923c'; // orange
+      tierLabel = `×1.7 — Severe burst`;
+      tierDesc  = 'Severe burst: 60–80% of 5H window consumed.';
+    } else if (mult >= 1.4) {
+      color     = '#f59e0b'; // amber
+      tierLabel = `×1.4 — Heavy burst`;
+      tierDesc  = 'Heavy burst: 40–60% of 5H window consumed.';
+    } else if (mult >= 1.2) {
+      color     = '#fbbf24'; // yellow
+      tierLabel = `×1.2 — Moderate burst`;
+      tierDesc  = 'Moderate burst: 20–40% of 5H window consumed.';
+    } else {
+      color     = '#a3e635'; // lime — informational, approaching first tier
+      tierLabel = `×1.0 — Normal`;
+      tierDesc  = 'Window active. Cost multiplier will rise as window fills.';
+    }
+
+    const fiveHK    = fiveHCredits >= 1000 ? (fiveHCredits / 1000).toFixed(1) + 'K' : (fiveHCredits || 0).toFixed(0);
+    const limitK    = rateLimit   >= 1000 ? (rateLimit   / 1000).toFixed(0) + 'K' : (rateLimit   || 0).toString();
+    const barColor  = mult >= 1.7 ? '#f87171' : mult >= 1.4 ? '#fb923c' : mult >= 1.2 ? '#f59e0b' : '#a3e635';
+
+    const wrap = document.createElement('div');
+    wrap.id = 'burnIndicator';
+    wrap.title = tierDesc + ` (${fiveHK} / ${limitK} cr in current 5H window)`;
+    wrap.style.cssText = [
+      'margin-top:8px', 'padding:8px 10px',
+      'background:rgba(0,0,0,0.18)', 'border-radius:10px',
+      `border:1px solid ${color}33`,
+      'font-size:0.73rem', 'cursor:help'
     ].join(';');
-    pill.innerHTML = `⚡ ${label} <span style="opacity:0.7;font-weight:400">(${dailyK} cr today)</span>`;
+
+    wrap.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <span style="font-weight:700;color:${color};letter-spacing:0.02em">⚡ ${tierLabel}</span>
+        <span style="color:var(--text-muted);font-size:0.70rem">${fiveHK} / ${limitK} cr &nbsp;(${pct}%)</span>
+      </div>
+      <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width 0.4s ease"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;color:var(--text-muted);font-size:0.68rem">
+        <span>0%</span>
+        <span style="color:${color}40">20%&nbsp;×1.2</span>
+        <span style="color:${color}60">40%&nbsp;×1.4</span>
+        <span style="color:${color}80">60%&nbsp;×1.7</span>
+        <span style="color:${color}">80%&nbsp;×2.0</span>
+      </div>`;
 
     // Insert after progress bar inside first stat card
     const progress = card.querySelector('.progress-track');
-    if (progress) progress.after(pill);
-    else card.appendChild(pill);
+    if (progress) progress.after(wrap);
+    else card.appendChild(wrap);
   },
 
   // ── Storefront / Tabs ───────────────────────────────────────────────────

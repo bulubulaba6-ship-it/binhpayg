@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,9 +45,17 @@ type PostPayUsageEntry struct {
 	TotalTokens      int64              `json:"TotalTokens"`
 	Models           map[string]int64   `json:"Models,omitempty"`
 	DailyRequests    map[string]int64   `json:"DailyRequests,omitempty"`
-	DailyBurn        map[string]float64 `json:"DailyBurn,omitempty"` // credits consumed per calendar day (UTC) — used for burn-rate multiplier
+	DailyBurn        map[string]float64 `json:"DailyBurn,omitempty"` // credits consumed per calendar day (UTC) — retained for historical stats only
 	Sessions         []SessionSummary   `json:"Sessions,omitempty"`
 	ProcessedTxns    []string           `json:"ProcessedTxns,omitempty"`
+
+	// 5-hour rolling window burst-pricing fields.
+	// FiveHWindowStart marks when the current window opened.
+	// FiveHCredits accumulates post-multiplier credits billed within that window.
+	// When time.Now() - FiveHWindowStart > 5h the window resets and the
+	// multiplier returns to x1.0 for the next request.
+	FiveHWindowStart time.Time `json:"FiveHWindowStart,omitempty"`
+	FiveHCredits     float64   `json:"FiveHCredits,omitempty"`
 }
 
 var (
@@ -80,28 +89,43 @@ func init() {
 
 type clientQuotaPlugin struct{}
 
-// dailyBurnMultiplier returns the transparent burn-rate multiplier for a key
-// based on how many credits it has consumed today (UTC).
+// fiveHWindowBurnMultiplier returns the dynamic cost multiplier for a post-pay key
+// based on how much of its 5-hour rate limit has been consumed in the current window.
 //
-//	< 50 000 cr/day  → x1.0 (normal)
-//	50 000–150 000   → x1.3 (heavy usage)
-//	≥ 150 000        → x1.6 (peak usage)
+// Ratio = FiveHCredits / rateLimit (the key's configured 5H credit cap).
 //
-// The multiplier is applied server-side and exposed via the quota API so the
-// dashboard can display it transparently — users always know their current rate.
-func dailyBurnMultiplier(entry *PostPayUsageEntry) float64 {
-	if entry == nil || entry.DailyBurn == nil {
+//	ratio < 20%  → x1.0  (normal — fresh window)
+//	ratio < 40%  → x1.2  (moderate burst)
+//	ratio < 60%  → x1.4  (heavy burst)
+//	ratio < 80%  → x1.7  (severe burst)
+//	ratio ≥ 80%  → random{1.8, 1.9, 2.0} (ceiling — unpredictable to deter gaming)
+//
+// When the 5H window has fully expired (no write for 5h) the multiplier resets to x1.0.
+// This model captures burst abuse (100 requests in 5 minutes) that a daily threshold
+// completely misses, while remaining fair to steady, low-frequency heavy users.
+func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) float64 {
+	if entry == nil || rateLimit <= 0 {
 		return 1.0
 	}
-	today := time.Now().UTC().Format("2006-01-02")
-	daily := entry.DailyBurn[today]
-	switch {
-	case daily >= 150_000:
-		return 1.6
-	case daily >= 50_000:
-		return 1.3
-	default:
+	// Window fully expired → fresh start.
+	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
 		return 1.0
+	}
+	ratio := entry.FiveHCredits / rateLimit
+	switch {
+	case ratio < 0.20:
+		return 1.0
+	case ratio < 0.40:
+		return 1.2
+	case ratio < 0.60:
+		return 1.4
+	case ratio < 0.80:
+		return 1.7
+	default:
+		// Randomised ceiling: unpredictable within [1.8, 2.0] to prevent
+		// users from gaming the exact threshold boundary.
+		opts := [3]float64{1.8, 1.9, 2.0}
+		return opts[rand.Intn(3)]
 	}
 }
 
@@ -133,6 +157,14 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				credits += float64(record.Detail.ReasoningTokens) * pricing.Output / 1_000_000.0
 			}
 
+			// Resolve this key's 5H rate limit for multiplier calculation.
+			rateLimit := float64(liveCfg.DefaultAPIKeyLimit)
+			if liveCfg.APIKeyLimits != nil {
+				if customLimit, ok := liveCfg.APIKeyLimits[apiKey]; ok {
+					rateLimit = float64(customLimit)
+				}
+			}
+
 			postPayUsageMu.Lock()
 			entry, exists := postPayUsage[apiKey]
 			if !exists {
@@ -140,16 +172,26 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				postPayUsage[apiKey] = entry
 			}
 
-			// Apply transparent daily burn-rate multiplier.
-			// The multiplier scales with daily consumption to reflect higher
-			// infrastructure cost during peak usage. It is shown in the dashboard.
-			mult := dailyBurnMultiplier(entry)
+			// Reset the 5H rolling window when it has fully expired.
+			// This guarantees the multiplier returns to x1.0 after a quiet period.
+			if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+				entry.FiveHWindowStart = time.Now()
+				entry.FiveHCredits = 0
+			}
+
+			// Apply 5H rolling window burst-rate multiplier BEFORE billing.
+			// Multiplier is based on what fraction of the window limit has already
+			// been consumed — so the very first request in a fresh window is always x1.0.
+			mult := fiveHWindowBurnMultiplier(entry, rateLimit)
 			billedCredits := credits * mult
 
 			entry.CreditsConsumed += billedCredits
 			entry.TotalTokens += record.Detail.InputTokens + record.Detail.OutputTokens
 
-			// Track daily burn for next-request multiplier recalculation.
+			// Accumulate 5H window credits (drives next-request multiplier).
+			entry.FiveHCredits += billedCredits
+
+			// Also track daily burn for historical stats / admin analytics.
 			today := time.Now().UTC().Format("2006-01-02")
 			if entry.DailyBurn == nil {
 				entry.DailyBurn = make(map[string]float64)
@@ -422,17 +464,61 @@ func GetPostPayCreditLimit(apiKey string) float64 {
 	return -1
 }
 
-// GetBurnMultiplierForKey returns the current transparent burn-rate multiplier
-// for the given post-pay API key. Returns 1.0 if key not found or no daily usage.
-// This is the value the dashboard shows as "Current rate: x1.3".
+// GetBurnMultiplierForKey returns the current 5H rolling window burst multiplier
+// for the given post-pay API key. Looks up the key's rate limit from live config
+// so it scales correctly for every plan (1K, 10K, 40K CR limits).
+// Returns 1.0 when no active window exists or the window has fully expired.
 func GetBurnMultiplierForKey(apiKey string) float64 {
+	liveCfgMu.RLock()
+	cfg := globalConfig
+	liveCfgMu.RUnlock()
+	var rateLimit float64
+	if cfg != nil {
+		rateLimit = float64(cfg.DefaultAPIKeyLimit)
+		if cfg.APIKeyLimits != nil {
+			if lim, ok := cfg.APIKeyLimits[apiKey]; ok {
+				rateLimit = float64(lim)
+			}
+		}
+	}
 	postPayUsageMu.RLock()
 	entry := postPayUsage[apiKey]
 	postPayUsageMu.RUnlock()
-	return dailyBurnMultiplier(entry)
+	return fiveHWindowBurnMultiplier(entry, rateLimit)
+}
+
+// GetFiveHCreditsForKey returns credits consumed in the current 5H rolling window
+// for the given key. Returns 0 when no active window exists or it has expired.
+func GetFiveHCreditsForKey(apiKey string) float64 {
+	postPayUsageMu.RLock()
+	entry := postPayUsage[apiKey]
+	postPayUsageMu.RUnlock()
+	if entry == nil {
+		return 0
+	}
+	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+		return 0
+	}
+	return entry.FiveHCredits
+}
+
+// GetFiveHWindowStartForKey returns the start time of the current 5H window.
+// Returns zero time when no active window exists.
+func GetFiveHWindowStartForKey(apiKey string) time.Time {
+	postPayUsageMu.RLock()
+	entry := postPayUsage[apiKey]
+	postPayUsageMu.RUnlock()
+	if entry == nil {
+		return time.Time{}
+	}
+	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+		return time.Time{}
+	}
+	return entry.FiveHWindowStart
 }
 
 // GetDailyBurnForKey returns credits consumed today (UTC) for the given key.
+// Retained for historical stats and admin analytics dashboards.
 func GetDailyBurnForKey(apiKey string) float64 {
 	postPayUsageMu.RLock()
 	entry := postPayUsage[apiKey]

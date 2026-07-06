@@ -146,10 +146,27 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		}
 	}
 
-	// Burn-rate multiplier for this key (transparent to users).
-	// x1.0 = normal, x1.3 = medium usage day, x1.6 = heavy usage day.
+	// 5H rolling window burst multiplier — progressive tiers based on ratio of
+	// 5H credits consumed vs. key's rate limit:
+	//   0–20% → x1.0 | 20–40% → x1.2 | 40–60% → x1.4 | 60–80% → x1.7 | ≥80% → x1.8–2.0 (random)
 	burnMultiplier := middleware.GetBurnMultiplierForKey(principal)
+	fiveHCreditsWindow := middleware.GetFiveHCreditsForKey(principal)
+	fiveHWindowStart := middleware.GetFiveHWindowStartForKey(principal)
 	dailyBurnToday := middleware.GetDailyBurnForKey(principal)
+
+	// Compute window expiry for client display (zero time when no active window).
+	var windowExpiresAt interface{}
+	if !fiveHWindowStart.IsZero() {
+		windowExpiresAt = fiveHWindowStart.Add(5 * time.Hour).UTC().Format(time.RFC3339)
+	} else {
+		windowExpiresAt = nil
+	}
+
+	// Burn ratio = how far through the 5H window the user is (0.0 – 1.0+).
+	var burnRatio float64
+	if rateLimit5h > 0 {
+		burnRatio = fiveHCreditsWindow / float64(rateLimit5h)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"usage": gin.H{
@@ -161,22 +178,25 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"daily_requests":   dailyRequests,
 		},
 		"quota": gin.H{
-			"credits_used":       fiveHCredits, // 5-hour rolling window
+			"credits_used":       fiveHCredits, // session-derived 5H rolling window (kill-switch input)
 			"total_credits_used": totalCredits, // all-time cumulative
 			"credits_purchased":  creditsPurchased,
 			"tier":               tier,
 			"credit_limit":       creditLimit,
 			"rate_limit_5h":      rateLimit5h,
-			"window_expires_at":  "0001-01-01T00:00:00Z",
+			"window_expires_at":  windowExpiresAt, // ISO8601 or null when no active window
 			"recent_sessions":    sessions,
 		},
-		// Burn-rate fields — surface multiplier so users understand cost scaling.
-		"burn_multiplier":  burnMultiplier, // current x factor (1.0 / 1.3 / 1.6)
-		"daily_burn_today": dailyBurnToday, // credits consumed so far today (UTC)
-		"api_key":          redactKey(strings.TrimSpace(principal)),
-		"status":           "active",
-		"message":          fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),
-		"debug_info":       "finkrouter-postpay-isolated",
+		// 5H rolling window burst-pricing fields — exposed for dashboard transparency.
+		"burn_multiplier":     burnMultiplier,     // current x factor: 1.0/1.2/1.4/1.7/1.8–2.0
+		"burn_ratio":          burnRatio,          // 0.0–1.0+ fraction of 5H window consumed
+		"five_h_credits":      fiveHCreditsWindow, // credits billed in the current 5H window
+		"five_h_window_start": fiveHWindowStart,   // UTC start of current window (zero when idle)
+		"daily_burn_today":    dailyBurnToday,     // cumulative today (UTC) — historical only
+		"api_key":             redactKey(strings.TrimSpace(principal)),
+		"status":              "active",
+		"message":             fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),
+		"debug_info":          "finkrouter-postpay-isolated",
 	})
 }
 

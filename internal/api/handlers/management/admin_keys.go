@@ -25,6 +25,9 @@ type AdminKeyInfo struct {
 	CreditsRemaining float64    `json:"credits_remaining"`
 	DailyBurnToday   float64    `json:"daily_burn_today"`
 	BurnMultiplier   float64    `json:"burn_multiplier"`
+	BurnRatio        float64    `json:"burn_ratio"`                    // 0.0–1.0+ fraction of 5H window consumed
+	FiveHCredits     float64    `json:"five_h_credits"`                // credits billed in current 5H window
+	FiveHWindowStart *time.Time `json:"five_h_window_start,omitempty"` // UTC window open time
 	FiveHLimit       int        `json:"five_h_limit"`
 	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
 	IsExpired        bool       `json:"is_expired"`
@@ -158,6 +161,19 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 			fiveHLimit = rateLimits[key]
 		}
 
+		fiveHCredits := middleware.GetFiveHCreditsForKey(key)
+		fiveHWindowStart := middleware.GetFiveHWindowStartForKey(key)
+
+		var fiveHWindowStartPtr *time.Time
+		var burnRatio float64
+		if !fiveHWindowStart.IsZero() {
+			t := fiveHWindowStart
+			fiveHWindowStartPtr = &t
+			if fiveHLimit > 0 {
+				burnRatio = fiveHCredits / float64(fiveHLimit)
+			}
+		}
+
 		created := createdByKey[keyHash]
 
 		result = append(result, AdminKeyInfo{
@@ -171,6 +187,9 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 			CreditsRemaining: remaining,
 			DailyBurnToday:   middleware.GetDailyBurnForKey(key),
 			BurnMultiplier:   middleware.GetBurnMultiplierForKey(key),
+			BurnRatio:        burnRatio,
+			FiveHCredits:     fiveHCredits,
+			FiveHWindowStart: fiveHWindowStartPtr,
 			FiveHLimit:       fiveHLimit,
 			ExpiresAt:        expiresAt,
 			IsExpired:        isExpired,
