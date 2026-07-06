@@ -424,8 +424,11 @@ const app = {
       // Store for toggle and plan detection
       app.currentKey = key;
       app.lastQuotaData = data.quota;
+      app.lastBurnMultiplier  = data.burn_multiplier  || 1.0;
+      app.lastDailyBurnToday  = data.daily_burn_today || 0;
       app.updateCreditDisplay();
       app.updatePlanBadge(key, (data.quota && data.quota.rate_limit_5h) || 0);
+      app.renderBurnIndicator(app.lastBurnMultiplier, app.lastDailyBurnToday);
 
       // Reset timer
       const exp = data.quota.window_expires_at;
@@ -561,6 +564,42 @@ const app = {
         app.setStyle('creditProgress', 'width', '0%');
       }
     }
+  },
+
+  // ── Burn-rate indicator ──────────────────────────────────────────────────
+  // Renders a small pill in the Credits stat card showing the current
+  // daily burn multiplier (x1.0 / x1.3 / x1.6). Hidden when multiplier = 1.0.
+  renderBurnIndicator: (multiplier, dailyBurn) => {
+    const card = document.querySelector('.stat-card');
+    if (!card) return;
+
+    // Remove any existing indicator
+    const old = document.getElementById('burnIndicator');
+    if (old) old.remove();
+
+    if (!multiplier || multiplier <= 1.0) return;
+
+    const color  = multiplier >= 1.6 ? '#f87171' : '#fbbf24';
+    const label  = multiplier >= 1.6 ? '×1.6 — High usage today' : '×1.3 — Medium usage today';
+    const dailyK = dailyBurn >= 1000 ? (dailyBurn / 1000).toFixed(1) + 'K' : dailyBurn.toFixed(0);
+
+    const pill = document.createElement('div');
+    pill.id = 'burnIndicator';
+    pill.title = `Burn-rate multiplier active. Daily burn today: ${dailyK} cr. Resets at UTC midnight.`;
+    pill.style.cssText = [
+      'display:inline-flex', 'align-items:center', 'gap:5px',
+      `color:${color}`, 'font-size:0.75rem', 'font-weight:600',
+      'background:' + color.replace(')', ',0.12)').replace('rgb', 'rgba'),
+      'border:1px solid ' + color.replace(')', ',0.3)').replace('rgb', 'rgba'),
+      'border-radius:20px', 'padding:2px 8px', 'margin-top:6px',
+      'cursor:help'
+    ].join(';');
+    pill.innerHTML = `⚡ ${label} <span style="opacity:0.7;font-weight:400">(${dailyK} cr today)</span>`;
+
+    // Insert after progress bar inside first stat card
+    const progress = card.querySelector('.progress-track');
+    if (progress) progress.after(pill);
+    else card.appendChild(pill);
   },
 
   // ── Storefront / Tabs ───────────────────────────────────────────────────

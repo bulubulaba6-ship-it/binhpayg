@@ -146,6 +146,11 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		}
 	}
 
+	// Burn-rate multiplier for this key (transparent to users).
+	// x1.0 = normal, x1.3 = medium usage day, x1.6 = heavy usage day.
+	burnMultiplier := middleware.GetBurnMultiplierForKey(principal)
+	dailyBurnToday := middleware.GetDailyBurnForKey(principal)
+
 	c.JSON(http.StatusOK, gin.H{
 		"usage": gin.H{
 			"success_requests": successCount,
@@ -165,10 +170,13 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"window_expires_at":  "0001-01-01T00:00:00Z",
 			"recent_sessions":    sessions,
 		},
-		"api_key":    redactKey(strings.TrimSpace(principal)),
-		"status":     "active",
-		"message":    fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),
-		"debug_info": "finkrouter-postpay-isolated",
+		// Burn-rate fields — surface multiplier so users understand cost scaling.
+		"burn_multiplier":  burnMultiplier, // current x factor (1.0 / 1.3 / 1.6)
+		"daily_burn_today": dailyBurnToday, // credits consumed so far today (UTC)
+		"api_key":          redactKey(strings.TrimSpace(principal)),
+		"status":           "active",
+		"message":          fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),
+		"debug_info":       "finkrouter-postpay-isolated",
 	})
 }
 
