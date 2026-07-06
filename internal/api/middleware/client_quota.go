@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
@@ -304,27 +305,19 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				postPayUsageMu.RLock()
 				entry, exists := postPayUsage[apiKey]
 
-				var fiveHCredits float64
+				var fiveHBilled float64 // post-multiplier credits used in current window
 				var creditsConsumed float64
 				var creditsPurchased float64
 				if exists && entry != nil {
 					creditsConsumed = entry.CreditsConsumed
 					creditsPurchased = entry.CreditsPurchased
-					fiveHCutoff := time.Now().Add(-5 * time.Hour)
-					for _, s := range entry.Sessions {
-						if s.Timestamp.After(fiveHCutoff) {
-							if pricing, ok := liveCfg.PostPayBilling.MarkupRates[s.Model]; ok {
-								billableInput := s.InputTokens - s.CachedTokens
-								if billableInput < 0 {
-									billableInput = 0
-								}
-								fiveHCredits += float64(billableInput) * pricing.Input / 1_000_000.0
-								fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
-								fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
-								// Reasoning tokens billed at output rate.
-								fiveHCredits += float64(s.ReasoningTokens) * pricing.Output / 1_000_000.0
-							}
-						}
+					// Read FiveHCredits directly — this is the single source of truth and
+					// includes burst multipliers. Do NOT recompute from raw session tokens:
+					// the session-token sum ignores multipliers, creating a gap where a user
+					// at x2.0 ceiling can consume 2× more credits than the limit before being blocked.
+					// Also check window expiry so stale windows don't block fresh requests.
+					if !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour {
+						fiveHBilled = entry.FiveHCredits
 					}
 				}
 				postPayUsageMu.RUnlock()
@@ -360,6 +353,8 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				}
 
 				// 2. 5-Hour Rate Limit Check
+				// Compares post-multiplier window spend (fiveHBilled) against the configured limit
+				// so burst pricing actually enforces the cap — not a pre-multiplier shortfall.
 				limit := liveCfg.DefaultAPIKeyLimit
 				if liveCfg.APIKeyLimits != nil {
 					if customLimit, ok := liveCfg.APIKeyLimits[apiKey]; ok {
@@ -367,7 +362,7 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					}
 				}
 				if limit > 0 {
-					if fiveHCredits >= float64(limit) {
+					if fiveHBilled >= float64(limit) {
 						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 							"error": gin.H{
 								"message": "insufficient_quota: You exceeded your 5-hour rate limit. Please wait before continuing.",
@@ -377,6 +372,23 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 						})
 						return
 					}
+				}
+
+				// Attach transparent billing headers so clients can throttle proactively
+				// without polling the quota endpoint on every request.
+				burnMult := GetBurnMultiplierForKey(apiKey)
+				limit5h := liveCfg.DefaultAPIKeyLimit
+				if liveCfg.APIKeyLimits != nil {
+					if lim, ok := liveCfg.APIKeyLimits[apiKey]; ok {
+						limit5h = lim
+					}
+				}
+				if burnMult > 1.0 {
+					c.Header("X-Billing-Multiplier", fmt.Sprintf("%.1f", burnMult))
+				}
+				if limit5h > 0 {
+					ratio := fiveHBilled / float64(limit5h) * 100
+					c.Header("X-Billing-5H-Ratio", fmt.Sprintf("%.1f", ratio))
 				}
 
 				c.Next()
