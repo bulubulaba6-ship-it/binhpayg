@@ -428,22 +428,11 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					}
 				}
 
-				// Attach transparent billing headers so clients can throttle proactively
-				// without polling the quota endpoint on every request.
-				burnMult := GetBurnMultiplierForKey(apiKey)
-				limit5h := liveCfg.DefaultAPIKeyLimit
-				if liveCfg.APIKeyLimits != nil {
-					if lim, ok := liveCfg.APIKeyLimits[apiKey]; ok {
-						limit5h = lim
-					}
-				}
-				if burnMult > 1.0 {
-					c.Header("X-Billing-Multiplier", fmt.Sprintf("%.1f", burnMult))
-				}
-				if limit5h > 0 {
-					ratio := fiveHBilled / float64(limit5h) * 100
-					c.Header("X-Billing-5H-Ratio", fmt.Sprintf("%.1f", ratio))
-				}
+				// Note: We deliberately do NOT attach internal billing multipliers 
+				// or burst-tier ratios to the end-user HTTP response headers.
+				// Exposing these details allows clients to reverse-engineer profit margins 
+				// and game the rate-limit boundaries. This data must remain isolated 
+				// to the management API endpoints.
 
 				c.Next()
 				return // Skip standard volatile kill switch
