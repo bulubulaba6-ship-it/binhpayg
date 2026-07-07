@@ -1,32 +1,70 @@
+# Bind all interfaces so Render can route traffic in.
 host: ""
+# Render injects a PORT env variable; set this to match your Render service
+# "Port" setting (default 10000 on Render, or whatever you configured).
 port: 8317
+
+# Management API
 remote-management:
   allow-remote: true
+  # Set a strong secret key — change this before deploying!
   secret-key: "$2a$10$krTTgB/OXAj1kewsqH7yPe9qpdwCl1Dm/sCudemC4PdYdKQyB87zy"
   disable-control-panel: false
   panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-auth-dir: "/CLIProxyAPI/pgstore/auths"
+
+# Auth directory — on Render free tier the filesystem is ephemeral (resets on
+# every sleep/wake cycle). Using ./auths is fine since we have no OAuth files
+# here; only the billing ledger lives here (see ledger-file below).
+auth-dir: "./auths"
+
+# ==============================================================================
+# CLIENT API KEYS
+# Each paying user gets one key. The quota dashboard reads from this list.
+# Format: fink_<tier>_<random hex>
+# ==============================================================================
 api-keys:
+  - fink_max_d41d8cd98f00b204e9800998ecf8427e
+  - fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8
+  - fink_max_ad0234829205b9033196ba818f7a872b
   - fink_pro_5d41402abc4b2a76b9719d911017c592
   - fink_pro_e2fc714c4727ee9395f324cd2e7f331f
-  - fink_max_cfacc7472333305910a0176c82e951d8
-  - fink_pro_0e6f8568c58418d2569b5879fb4d9c72
-  - fink_pro_b54e2ebaca28b22e32345a2872f6be9d
-  - fink_pro_f64fb207b1d18ee4af8d6316f3375c37
-  - fink_pro_e65b9d6c7d02b2939e64ff192520484a
-  - fink_pro_e436e43187e4d84beba1517af14ffbf4
-  - fink_max_966bf870eae82218eaac72e2de1a87aa
-  - test_fink_pro_1234567890abcdef_test
-  - fink_max_123fd87f9250a4b09330961a32ec667f
   - fink_max_3d6be4e0c6f57d845c49b853b246053a
+
+# Restrict each key to exactly the models it should see.
 api-key-models:
+  "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  "fink_max_ad0234829205b9033196ba818f7a872b":
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
   "fink_pro_5d41402abc4b2a76b9719d911017c592":
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
       - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
   "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
@@ -34,100 +72,13 @@ api-key-models:
       - claude-opus-4-8
       - claude-opus-4-7
       - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
-  "fink_max_cfacc7472333305910a0176c82e951d8":
+  "fink_max_3d6be4e0c6f57d845c49b853b246053a":
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
       - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  "fink_pro_0e6f8568c58418d2569b5879fb4d9c72":
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  fink_pro_b54e2ebaca28b22e32345a2872f6be9d:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  fink_pro_f64fb207b1d18ee4af8d6316f3375c37:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  "fink_pro_e65b9d6c7d02b2939e64ff192520484a":
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  "fink_pro_e436e43187e4d84beba1517af14ffbf4":
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex-spark
-  fink_max_966bf870eae82218eaac72e2de1a87aa:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
       - claude-sonnet-4-6
       - claude-haiku-4-5
     openai:
@@ -137,163 +88,170 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
-  test_fink_pro_1234567890abcdef_test:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-fable-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
-  fink_max_123fd87f9250a4b09330961a32ec667f:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
-  fink_max_3d6be4e0c6f57d845c49b853b246053a:
-    claude:
-      - claude-opus-4-8
-      - claude-opus-4-7
-      - claude-opus-4-6
-      - claude-sonnet-5
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    openai:
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-      - gpt-5.3-codex
-      - gpt-5.3-codex-spark
-      - gpt-5.2
+
+# ==============================================================================
+# GENERAL SETTINGS
+# ==============================================================================
 debug: false
 pprof:
   enable: false
   addr: "127.0.0.1:8316"
-logging-to-file: true
+# On Render, stdout is streamed to the log dashboard — keep logging-to-file off.
+logging-to-file: false
 logs-max-total-size-mb: 0
 error-logs-max-files: 10
+# Enable usage stats so the quota dashboard charts work.
 usage-statistics-enabled: true
+# Keep 30 min of sessions in memory for RPM calculation (1800s).
 redis-usage-queue-retention-seconds: 1800
 proxy-url: ""
 force-model-prefix: false
 passthrough-headers: false
+# Retry on transient upstream errors (5xx / timeouts).
 request-retry: 3
 max-retry-credentials: 0
 max-retry-interval: 30
 disable-cooling: false
+# Disable image generation (DeepSeek V4 Flash is text-only).
 disable-image-generation: true
-commercial-mode: true
+commercial-mode: false
+
 quota-exceeded:
   switch-project: false
   switch-preview-model: false
   antigravity-credits: false
+
+# ==============================================================================
+# ROUTING
+# ==============================================================================
 routing:
   strategy: "round-robin"
+  # Enable session affinity so one user always hits the same DeepSeek key
+  # (important for consistent context and billing accuracy).
   session-affinity: true
   session-affinity-ttl: "5h"
 ws-auth: true
 enable-gemini-cli-endpoint: false
+# Send SSE keep-alive pings every 20s to prevent Render from closing long-poll
+# connections during slow DeepSeek streaming responses.
 nonstream-keepalive-interval: 0
 streaming:
   keepalive-seconds: 20
+
+# ==============================================================================
+# RATE LIMITS (per-5-hour rolling window, in credits)
+# ==============================================================================
+# CRITICAL FIX: Any key listed in post-pay-billing.clients MUST also appear here.
+# Reason: The ClientQuotaMiddleware reads api-key-limits for the 5h rate limit
+# check for BOTH standard and post-pay keys. Without this entry, a post-pay key
+# only has the hard credit-limit balance check — it has no per-5h throttle at all.
+#
+# Plan rate limit mapping:
+#   1 Day   →  1,000 cr/5h  (corresponds to 4,000 cr total daily budget)
+#   7 Day   →  1,500 cr/5h  (corresponds to 30,000 cr total budget)
+#   Pro     →  2,000 cr/5h  (corresponds to 50,000 cr balance)
+#   Max 5x  → 10,000 cr/5h  (corresponds to 250,000 cr balance)
+#   Max 20x → 40,000 cr/5h  (corresponds to 1,000,000 cr balance)
+# ==============================================================================
+
+# Safety net: any key NOT explicitly listed below falls back to this limit.
+# Prevents unlimited usage on keys that are accidentally misconfigured.
+default-api-key-limit: 2000
+
+api-key-limits:
+  # Post-pay clients — mirrors post-pay-billing.clients below (REQUIRED for rate limiting)
+  "fink_max_d41d8cd98f00b204e9800998ecf8427e": 10000  # Max 5x: 10,000 cr/5h
+  "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8": 2000   # Pro:    2,000 cr/5h
+  "fink_max_ad0234829205b9033196ba818f7a872b": 10000   # Max legacy: 10,000 cr/5h
+  "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000    # Pro:    2,000 cr/5h
+  "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000    # Pro:    2,000 cr/5h
+  "fink_max_3d6be4e0c6f57d845c49b853b246053a": 10000   # Max:    10,000 cr/5h
+
+# ==============================================================================
+# POST-PAY BILLING
+# ==============================================================================
 post-pay-billing:
   enabled: true
+  # NOTE: On Render free tier this file resets on sleep/restart (ephemeral FS).
+  # For persistent billing, mount a disk (paid plan) or export to Postgres.
   ledger-file: "finkrouter_ledger.json"
-  webhook-secret: "finkrouter_webhook_2026"
+  # webhook-secret: "your_deposit_webhook_secret_here"
+
   clients:
+    "fink_max_d41d8cd98f00b204e9800998ecf8427e":
+      # Max 5x plan — 10,000 cr/5h rate limit (set in api-key-limits above).
+      # credit-limit here is the hard total spending cap (balance exhaustion guard).
+      credit-limit: 20000
+    "fink_pro_a7f3d2e8b1c4f9a0e5d6c3b2a1f0e9d8":
+      # Pro plan — 2,000 cr/5h rate limit.
+      credit-limit: 2000
+    "fink_max_ad0234829205b9033196ba818f7a872b":
+      # Max legacy plan — 10,000 cr/5h rate limit.
+      credit-limit: 10000
     "fink_pro_5d41402abc4b2a76b9719d911017c592":
-      credit-limit: 50000
+      credit-limit: 2000
     "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
-      credit-limit: 50000
-    "fink_max_cfacc7472333305910a0176c82e951d8":
-      credit-limit: 0
-    "fink_pro_0e6f8568c58418d2569b5879fb4d9c72":
-      credit-limit: 0
-    "fink_pro_b54e2ebaca28b22e32345a2872f6be9d":
-      credit-limit: 0
-    "fink_pro_f64fb207b1d18ee4af8d6316f3375c37":
-      credit-limit: 0
-    "fink_pro_e65b9d6c7d02b2939e64ff192520484a":
-      credit-limit: 0
-    "fink_pro_e436e43187e4d84beba1517af14ffbf4":
-      credit-limit: 0
-    fink_max_966bf870eae82218eaac72e2de1a87aa:
-      credit-limit: 250000
-    test_fink_pro_1234567890abcdef_test:
-      credit-limit: 1e+06
-    fink_max_123fd87f9250a4b09330961a32ec667f:
-      credit-limit: 0
-    fink_max_3d6be4e0c6f57d845c49b853b246053a:
-      credit-limit: 250000
+      credit-limit: 2000
+    "fink_max_3d6be4e0c6f57d845c49b853b246053a":
+      credit-limit: 200000
+
   markup-rates:
     "claude-opus-4-8":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 280
+      output: 560
+      cache: 28
     "claude-opus-4-7":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 280
+      output: 560
+      cache: 28
     "claude-opus-4-6":
-      input: 1400
-      output: 2800
-      cache: 140
-    "claude-sonnet-5":
-      input: 1600
-      output: 3000
-      cache: 140
+      input: 280
+      output: 560
+      cache: 28
     "claude-sonnet-4-6":
-      input: 1000
-      output: 2000
-      cache: 100
+      input: 210
+      output: 420
+      cache: 21
     "claude-haiku-4-5":
-      input: 800
-      output: 1600
-      cache: 80
-    "claude-fable-5":
-      input: 3000
-      output: 6000
-      cache: 300
+      input: 175
+      output: 350
+      cache: 17.5
     "gpt-5.5":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 300
+      output: 600
+      cache: 30
     "gpt-5.4":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 200
+      output: 400
+      cache: 20
+    "gpt-5.3-codex":
+      input: 185
+      output: 370
+      cache: 18.5
+    "gpt-5.2":
+      input: 185
+      output: 370
+      cache: 18.5
     "gpt-5.4-mini":
-      input: 800
-      output: 2000
-      cache: 80
+      input: 150
+      output: 300
+      cache: 15
     "gpt-5.3-codex-spark":
-      input: 700
-      output: 2100
-      cache: 70
+      input: 150
+      output: 300
+      cache: 15
+
+# ==============================================================================
+# DEEPSEEK V4 FLASH — OPENAI-COMPATIBLE BACKEND
+# All client-facing model names route to deepseek-v4-flash via DeepSeek API.
+# ==============================================================================
 openai-compatibility:
   - name: Anthropic
     priority: 1
     base-url: https://api.deepseek.com/v1
     api-key-entries:
       - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
+    # DeepSeek supports thinking/extended reasoning on v4-flash.
     models:
       - name: deepseek-v4-flash
         alias: claude-opus-4-8
@@ -302,19 +260,9 @@ openai-compatibility:
       - name: deepseek-v4-flash
         alias: claude-opus-4-6
       - name: deepseek-v4-flash
-        alias: claude-sonnet-5
-      - name: deepseek-v4-flash
-        alias: claude-fable-5
+        alias: claude-sonnet-4-6
       - name: deepseek-v4-flash
         alias: claude-haiku-4-5
-      - name: deepseek-v4-flash
-        alias: claude-sonnet-4-6
-  - name: OpenAI
-    priority: 1
-    base-url: https://api.deepseek.com/v1
-    api-key-entries:
-      - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
-    models:
       - name: deepseek-v4-flash
         alias: gpt-5.5
       - name: deepseek-v4-flash
@@ -322,18 +270,10 @@ openai-compatibility:
       - name: deepseek-v4-flash
         alias: gpt-5.4-mini
       - name: deepseek-v4-flash
+        alias: gpt-5.3-codex
+      - name: deepseek-v4-flash
         alias: gpt-5.3-codex-spark
-default-api-key-limit: 2000
-api-key-limits:
-  "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000
-  "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000
-  "fink_max_cfacc7472333305910a0176c82e951d8": 10000
-  "fink_pro_0e6f8568c58418d2569b5879fb4d9c72": 2000
-  "fink_pro_b54e2ebaca28b22e32345a2872f6be9d": 2000
-  "fink_pro_f64fb207b1d18ee4af8d6316f3375c37": 2000
-  "fink_pro_e65b9d6c7d02b2939e64ff192520484a": 2000
-  "fink_pro_e436e43187e4d84beba1517af14ffbf4": 2000
-  fink_max_966bf870eae82218eaac72e2de1a87aa: 10000
-  test_fink_pro_1234567890abcdef_test: 10000
-  fink_max_123fd87f9250a4b09330961a32ec667f: 10000
-  fink_max_3d6be4e0c6f57d845c49b853b246053a: 10000
+      - name: deepseek-v4-flash
+        alias: gpt-5.2
+
+# (Payload override removed to fix prompt caching and prevent AI from addressing language instructions)

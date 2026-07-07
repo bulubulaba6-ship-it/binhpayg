@@ -242,7 +242,7 @@ post-pay-billing:
     fink_max_123fd87f9250a4b09330961a32ec667f:
       credit-limit: 0
     fink_max_3d6be4e0c6f57d845c49b853b246053a:
-      credit-limit: 250000
+      credit-limit: 200000
   markup-rates:
     "claude-opus-4-8":
       input: 1400
