@@ -81,6 +81,18 @@ var (
 	// to SavePostPayUsage also writes to the auth_store table.
 	pgLedgerMu sync.RWMutex
 	pgLedgerDB *sql.DB
+
+	// alertHTTPClient is a dedicated HTTP client for burst-tier webhook POSTs.
+	// Using a separate client (instead of http.DefaultClient) prevents alert
+	// goroutines from contending with the global transport pool and makes
+	// timeouts fully explicit.
+	alertHTTPClient = &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:    5,
+			IdleConnTimeout: 30 * time.Second,
+		},
+	}
 )
 
 // SetClientQuotaConfig injects the live config so the middleware always reads the latest
@@ -257,10 +269,22 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					alertRatio := postRatio
 					alertCredits := entry.FiveHCredits
 					alertLimit := rateLimit
-					// Read webhook URL from live config — hot-reload aware.
+					// Read ledger file path and webhook URL from live config — hot-reload aware.
 					webhookURL := liveCfg.PostPayBilling.BurstAlertWebhookURL
+					ledgerFile := liveCfg.PostPayBilling.LedgerFile
 					if webhookURL != "" {
 						go fireBurstAlert(webhookURL, alertKey, alertTier, alertRatio, alertCredits, alertLimit)
+					}
+					// Immediately flush FiveHCredits to disk+Postgres on every tier crossing
+					// to close the 60-second periodic-save drift window. Without this, a
+					// server crash between saves can restore stale window state from Postgres,
+					// giving the user a free quota refund of up to 60s of burst consumption.
+					if ledgerFile != "" {
+						go func() {
+							if err := SavePostPayUsage(ledgerFile); err != nil {
+								log.Errorf("burst tier %d: immediate ledger save failed: %v", alertTier, err)
+							}
+						}()
 					}
 				}
 			}
@@ -793,6 +817,18 @@ func LoadLedgerFromPostgres(db *sql.DB) error {
 //	  "limit":         10000,
 //	  "fired_at":      "2026-07-06T03:57:00Z"
 //	}
+// maskedKey returns a redacted version of the API key safe to include in
+// outbound webhook payloads. Only the last 8 characters are preserved so
+// operators can identify the key without exposing the full secret over a
+// potentially non-TLS webhook endpoint.
+func maskedKey(apiKey string) string {
+	const visible = 8
+	if len(apiKey) <= visible {
+		return "****"
+	}
+	return "****" + apiKey[len(apiKey)-visible:]
+}
+
 func fireBurstAlert(webhookURL, apiKey string, tier int, ratio, fiveHCredits, limit float64) {
 	tierLabel := map[int]string{
 		1: "MODERATE",
@@ -802,7 +838,7 @@ func fireBurstAlert(webhookURL, apiKey string, tier int, ratio, fiveHCredits, li
 	}[tier]
 	payload, err := json.Marshal(map[string]any{
 		"event":          "burst_tier_crossed",
-		"api_key":        apiKey,
+		"api_key":        maskedKey(apiKey), // masked: prevents key exposure over plain-HTTP webhooks
 		"tier":           tier,
 		"tier_label":     tierLabel,
 		"ratio":          ratio,
@@ -814,6 +850,8 @@ func fireBurstAlert(webhookURL, apiKey string, tier int, ratio, fiveHCredits, li
 		log.Errorf("fireBurstAlert: json.Marshal: %v", err)
 		return
 	}
+	// Use dedicated alertHTTPClient — not http.DefaultClient — to keep alert
+	// goroutines isolated from the main outbound connection pool.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
@@ -822,7 +860,7 @@ func fireBurstAlert(webhookURL, apiKey string, tier int, ratio, fiveHCredits, li
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := alertHTTPClient.Do(req)
 	if err != nil {
 		log.Errorf("fireBurstAlert: POST %s: %v", webhookURL, err)
 		return
@@ -830,7 +868,7 @@ func fireBurstAlert(webhookURL, apiKey string, tier int, ratio, fiveHCredits, li
 	_ = resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		log.Warnf("fireBurstAlert: webhook returned HTTP %d for key %s tier %d",
-			resp.StatusCode, apiKey, tier)
+			resp.StatusCode, maskedKey(apiKey), tier)
 	}
 }
 

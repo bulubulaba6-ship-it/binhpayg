@@ -562,14 +562,45 @@ func TestFireBurstAlertWebhook(t *testing.T) {
 		t.Fatal("webhook alert was not received")
 	}
 
-	if receivedPayload["api_key"] != "fink_test_alert_key" {
-		t.Errorf("expected api_key fink_test_alert_key, got %v", receivedPayload["api_key"])
+	// api_key must be masked (only last 8 chars visible) to prevent key exposure.
+	wantMasked := maskedKey("fink_test_alert_key") // "****lert_key"
+	if receivedPayload["api_key"] != wantMasked {
+		t.Errorf("expected masked api_key %q, got %v", wantMasked, receivedPayload["api_key"])
 	}
 	if int(receivedPayload["tier"].(float64)) != 3 {
 		t.Errorf("expected tier 3, got %v", receivedPayload["tier"])
 	}
 	if receivedPayload["tier_label"] != "SEVERE" {
 		t.Errorf("expected tier_label SEVERE, got %v", receivedPayload["tier_label"])
+	}
+}
+
+func TestMaskedKey(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"fink_max_3d6be4e0c6f57d845c49b853b246053a", "****46053a"},
+		{"short", "****"},
+		{"exactly8c", "****xactly8c"[4:]}, // exactly 9 chars → last 8 = "xactly8c"
+		{"", "****"},
+	}
+	for _, tc := range cases {
+		got := maskedKey(tc.input)
+		if tc.input == "" || len(tc.input) <= 8 {
+			if got != "****" {
+				t.Errorf("input=%q: want ****, got %q", tc.input, got)
+			}
+		} else {
+			// Must start with **** and end with last 8 chars
+			if len(got) < 12 || got[:4] != "****" {
+				t.Errorf("input=%q: want ****<last8>, got %q", tc.input, got)
+			}
+			wantSuffix := tc.input[len(tc.input)-8:]
+			if got[4:] != wantSuffix {
+				t.Errorf("input=%q: suffix want %q, got %q", tc.input, wantSuffix, got[4:])
+			}
+		}
 	}
 }
 
