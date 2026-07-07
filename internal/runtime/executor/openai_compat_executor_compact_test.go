@@ -57,7 +57,7 @@ func TestOpenAICompatExecutorCompactPassthrough(t *testing.T) {
 	if gjson.GetBytes(gotBody, "messages").Exists() {
 		t.Fatalf("unexpected messages in body")
 	}
-	if string(resp.Payload) != `{"id":"resp_1","object":"response.compaction","usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}` {
+	if string(resp.Payload) != `{"id":"resp_1","object":"response.compaction","usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3},"model":"gpt-5.1-codex-max"}` {
 		t.Fatalf("payload = %s", string(resp.Payload))
 	}
 }

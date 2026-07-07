@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -57,6 +58,12 @@ type PostPayUsageEntry struct {
 	// multiplier returns to x1.0 for the next request.
 	FiveHWindowStart time.Time `json:"FiveHWindowStart,omitempty"`
 	FiveHCredits     float64   `json:"FiveHCredits,omitempty"`
+
+	// LastAlertedTier tracks the highest burst tier for which an alert has
+	// already been fired in this window, to prevent duplicate webhook POSTs.
+	// 0 = no alert sent yet; 4 = ceiling tier already alerted.
+	// Resets to 0 whenever FiveHWindowStart is reset.
+	LastAlertedTier int `json:"LastAlertedTier,omitempty"`
 }
 
 var (
@@ -178,6 +185,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 			if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
 				entry.FiveHWindowStart = time.Now()
 				entry.FiveHCredits = 0
+				entry.LastAlertedTier = 0 // fresh window — reset alert state
 			}
 
 			// Apply 5H rolling window burst-rate multiplier BEFORE billing.
@@ -224,6 +232,37 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				}
 			} else {
 				entry.Failed++
+			}
+			// Check whether we crossed into a new burst tier this request.
+			// Tier numbers: 1=20%, 2=40%, 3=60%, 4=80% ceiling.
+			// Only fire the alert once per tier per window (LastAlertedTier prevents duplicates).
+			if rateLimit > 0 {
+				postRatio := entry.FiveHCredits / rateLimit
+				newTier := 0
+				switch {
+				case postRatio >= 0.80:
+					newTier = 4
+				case postRatio >= 0.60:
+					newTier = 3
+				case postRatio >= 0.40:
+					newTier = 2
+				case postRatio >= 0.20:
+					newTier = 1
+				}
+				if newTier > entry.LastAlertedTier {
+					entry.LastAlertedTier = newTier
+					// Snapshot values under the lock before releasing it.
+					alertKey := apiKey
+					alertTier := newTier
+					alertRatio := postRatio
+					alertCredits := entry.FiveHCredits
+					alertLimit := rateLimit
+					// Read webhook URL from live config — hot-reload aware.
+					webhookURL := liveCfg.PostPayBilling.BurstAlertWebhookURL
+					if webhookURL != "" {
+						go fireBurstAlert(webhookURL, alertKey, alertTier, alertRatio, alertCredits, alertLimit)
+					}
+				}
 			}
 			postPayUsageMu.Unlock()
 			return // Skip standard volatile tracking
@@ -363,6 +402,21 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				}
 				if limit > 0 {
 					if fiveHBilled >= float64(limit) {
+						// Compute exact seconds until the 5H window resets.
+						// This lets clients backoff precisely instead of polling /v1/billing/quota.
+						postPayUsageMu.RLock()
+						windowEntry := postPayUsage[apiKey]
+						postPayUsageMu.RUnlock()
+						var retryAfterSecs int
+						if windowEntry != nil && !windowEntry.FiveHWindowStart.IsZero() {
+							windowEnd := windowEntry.FiveHWindowStart.Add(5 * time.Hour)
+							if secs := int(time.Until(windowEnd).Seconds()); secs > 0 {
+								retryAfterSecs = secs
+							}
+						}
+						if retryAfterSecs > 0 {
+							c.Header("Retry-After", fmt.Sprintf("%d", retryAfterSecs))
+						}
 						c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 							"error": gin.H{
 								"message": "insufficient_quota: You exceeded your 5-hour rate limit. Please wait before continuing.",
@@ -703,13 +757,92 @@ func LoadLedgerFromPostgres(db *sql.DB) error {
 			postPayUsage[key] = pgEntry
 			continue
 		}
-		// Prefer the higher CreditsPurchased to avoid accidentally reverting top-ups
+		// Prefer the higher CreditsPurchased to avoid accidentally reverting top-ups.
 		if pgEntry.CreditsPurchased > existing.CreditsPurchased {
 			existing.CreditsPurchased = pgEntry.CreditsPurchased
 			existing.ProcessedTxns = pgEntry.ProcessedTxns
 		}
+		// Restore 5H window state from Postgres if in-memory window is stale/empty.
+		// This prevents a free window reset when the server redeploys on Railway
+		// (ephemeral FS loses the JSON file, but Postgres retains the last snapshot).
+		// Only restore when the Postgres window is still active (not yet expired).
+		pgWindowAlive := !pgEntry.FiveHWindowStart.IsZero() &&
+			time.Since(pgEntry.FiveHWindowStart) <= 5*time.Hour
+		memWindowAlive := !existing.FiveHWindowStart.IsZero() &&
+			time.Since(existing.FiveHWindowStart) <= 5*time.Hour
+		if pgWindowAlive && !memWindowAlive {
+			// In-memory window is absent/expired but Postgres has a live one — restore it.
+			existing.FiveHWindowStart = pgEntry.FiveHWindowStart
+			existing.FiveHCredits = pgEntry.FiveHCredits
+			existing.LastAlertedTier = pgEntry.LastAlertedTier
+		} else if pgWindowAlive && memWindowAlive {
+			// Both windows are alive — prefer the one with more credits consumed
+			// (handles dual-writer races during rolling deploys).
+			if pgEntry.FiveHCredits > existing.FiveHCredits {
+				existing.FiveHWindowStart = pgEntry.FiveHWindowStart
+				existing.FiveHCredits = pgEntry.FiveHCredits
+				existing.LastAlertedTier = pgEntry.LastAlertedTier
+			}
+		}
 	}
 	return nil
+}
+
+// fireBurstAlert POSTs a JSON payload to webhookURL notifying operators that
+// a post-pay key has crossed a burst tier threshold. It is called in a goroutine
+// from HandleUsage — failures are logged but never fatal to the billing path.
+//
+// Payload shape:
+//
+//	{
+//	  "event":         "burst_tier_crossed",
+//	  "api_key":       "fink_max_...",
+//	  "tier":          4,
+//	  "tier_label":    "CEILING",
+//	  "ratio":         0.82,
+//	  "five_h_credits": 8200.5,
+//	  "limit":         10000,
+//	  "fired_at":      "2026-07-06T03:57:00Z"
+//	}
+func fireBurstAlert(webhookURL, apiKey string, tier int, ratio, fiveHCredits, limit float64) {
+	tierLabel := map[int]string{
+		1: "MODERATE",
+		2: "HEAVY",
+		3: "SEVERE",
+		4: "CEILING",
+	}[tier]
+	payload, err := json.Marshal(map[string]any{
+		"event":          "burst_tier_crossed",
+		"api_key":        apiKey,
+		"tier":           tier,
+		"tier_label":     tierLabel,
+		"ratio":          ratio,
+		"five_h_credits": fiveHCredits,
+		"limit":          limit,
+		"fired_at":       time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		log.Errorf("fireBurstAlert: json.Marshal: %v", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
+	if err != nil {
+		log.Errorf("fireBurstAlert: build request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Errorf("fireBurstAlert: POST %s: %v", webhookURL, err)
+		return
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		log.Warnf("fireBurstAlert: webhook returned HTTP %d for key %s tier %d",
+			resp.StatusCode, apiKey, tier)
+	}
 }
 
 // SavePostPayUsage saves the current post-pay token ledger to disk atomically

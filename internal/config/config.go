@@ -168,6 +168,10 @@ type PostPayBillingConfig struct {
 	WebhookSecret string                             `yaml:"webhook-secret" json:"webhook-secret"`
 	Clients       map[string]PostPayBillingClientCfg `yaml:"clients" json:"clients"`
 	MarkupRates   map[string]ModelPricingEntry       `yaml:"markup-rates" json:"markup-rates"`
+	// BurstAlertWebhookURL is an optional URL that receives a POST request when
+	// a key crosses a burst tier threshold (20/40/60/80%). When empty, no alert is sent.
+	// Payload: {"event":"burst_tier_crossed","api_key":"...","tier":4,"ratio":0.82,"five_h_credits":8200,"limit":10000}
+	BurstAlertWebhookURL string `yaml:"burst-alert-webhook-url" json:"burst-alert-webhook-url"`
 }
 
 // PostPayBillingClientCfg defines settings for a single post-pay client.
