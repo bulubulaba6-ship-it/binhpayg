@@ -206,7 +206,14 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	daysValid := 0 // 0 = no time-based expiry
 	descLower := strings.ToLower(description)
 
-	if strings.Contains(descLower, "max_20x") || amountFloat >= 1800000 {
+	if strings.Contains(descLower, "payg") {
+		// Explicit PAYG orders bypass amount-based subscription upgrades.
+		tier = "payg"
+		displayPlan = "Pay-As-You-Go"
+		credits = 0
+		limit = 0
+		isSubscription = false
+	} else if strings.Contains(descLower, "max_20x") || amountFloat >= 1800000 {
 		tier = "max"
 		displayPlan = "MAX 20x"
 		credits = 1000000
@@ -249,16 +256,8 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		displayPlan = "Pay-As-You-Go"
 		credits = 0
 
-		// Scale PAYG rate limits based on deposit amount to match subscription tiers.
-		// Without this, enterprise users depositing >2M for the Decoy Pricing
-		// would be unfairly throttled at the default 2000 cr/5h limit.
-		if amountFloat >= 2000000 {
-			limit = 40000
-		} else if amountFloat >= 600000 {
-			limit = 10000
-		} else {
-			limit = 2000
-		}
+		// PAYG has NO 5H limit (unlimited burst) because the base credit price is higher.
+		limit = 0
 
 		isSubscription = false
 	}

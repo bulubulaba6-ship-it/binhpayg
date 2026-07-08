@@ -157,8 +157,22 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 		}
 
 		fiveHLimit := 0
+		hasCustomLimit := false
 		if rateLimits != nil {
-			fiveHLimit = rateLimits[key]
+			if lim, ok := rateLimits[key]; ok {
+				fiveHLimit = lim
+				hasCustomLimit = true
+			}
+		}
+
+		if !hasCustomLimit && cfg != nil {
+			fiveHLimit = cfg.DefaultAPIKeyLimit
+			isPAYG := strings.HasPrefix(key, "fink_") && !strings.HasPrefix(key, "fink_max_") && !strings.HasPrefix(key, "fink_pro_") && !strings.HasPrefix(key, "fink_d")
+
+			// PAYG has no burst threshold (it is strictly 1.0x).
+			if isPAYG {
+				fiveHLimit = 0
+			}
 		}
 
 		fiveHCredits := middleware.GetFiveHCreditsForKey(key)

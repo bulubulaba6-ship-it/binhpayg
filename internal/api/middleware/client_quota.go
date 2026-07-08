@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -179,9 +180,11 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 
 			// Resolve this key's 5H rate limit for multiplier calculation.
 			rateLimit := float64(liveCfg.DefaultAPIKeyLimit)
+			hasCustomLimit := false
 			if liveCfg.APIKeyLimits != nil {
 				if customLimit, ok := liveCfg.APIKeyLimits[apiKey]; ok {
 					rateLimit = float64(customLimit)
+					hasCustomLimit = true
 				}
 			}
 
@@ -190,6 +193,14 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 			if !exists {
 				entry = &PostPayUsageEntry{Timestamp: time.Now()}
 				postPayUsage[apiKey] = entry
+			}
+
+			// PAYG keys get exactly 1.0x multiplier. They have no 5H burst penalty because they pay raw cash.
+			if !hasCustomLimit {
+				isPAYG := strings.HasPrefix(apiKey, "fink_") && !strings.HasPrefix(apiKey, "fink_max_") && !strings.HasPrefix(apiKey, "fink_pro_") && !strings.HasPrefix(apiKey, "fink_d")
+				if isPAYG {
+					rateLimit = 0
+				}
 			}
 
 			// Reset the 5H rolling window when it has fully expired.
@@ -229,7 +240,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					entry.DailyRequests = make(map[string]int64)
 				}
 				entry.DailyRequests[today]++
-				entry.Sessions = append([]SessionSummary{{
+				newSession := SessionSummary{
 					SessionID:       record.SessionID,
 					Model:           record.Alias,
 					InputTokens:     record.Detail.InputTokens,
@@ -238,7 +249,10 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					ReasoningTokens: record.Detail.ReasoningTokens,
 					Timestamp:       time.Now(),
 					CreditsConsumed: billedCredits, // post-multiplier billed amount for dashboard
-				}}, entry.Sessions...)
+				}
+				entry.Sessions = append(entry.Sessions, SessionSummary{})
+				copy(entry.Sessions[1:], entry.Sessions)
+				entry.Sessions[0] = newSession
 				if len(entry.Sessions) > 100 {
 					entry.Sessions = entry.Sessions[:100]
 				}
@@ -419,9 +433,19 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				// Compares post-multiplier window spend (fiveHBilled) against the configured limit
 				// so burst pricing actually enforces the cap — not a pre-multiplier shortfall.
 				limit := liveCfg.DefaultAPIKeyLimit
+				hasCustomLimit := false
 				if liveCfg.APIKeyLimits != nil {
 					if customLimit, ok := liveCfg.APIKeyLimits[apiKey]; ok {
 						limit = customLimit
+						hasCustomLimit = true
+					}
+				}
+
+				// PAYG keys have NO 5h limit by default
+				if !hasCustomLimit {
+					isPAYG := strings.HasPrefix(apiKey, "fink_") && !strings.HasPrefix(apiKey, "fink_max_") && !strings.HasPrefix(apiKey, "fink_pro_") && !strings.HasPrefix(apiKey, "fink_d")
+					if isPAYG {
+						limit = 0
 					}
 				}
 				if limit > 0 {
@@ -452,10 +476,10 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					}
 				}
 
-				// Note: We deliberately do NOT attach internal billing multipliers 
+				// Note: We deliberately do NOT attach internal billing multipliers
 				// or burst-tier ratios to the end-user HTTP response headers.
-				// Exposing these details allows clients to reverse-engineer profit margins 
-				// and game the rate-limit boundaries. This data must remain isolated 
+				// Exposing these details allows clients to reverse-engineer profit margins
+				// and game the rate-limit boundaries. This data must remain isolated
 				// to the management API endpoints.
 
 				c.Next()
@@ -543,6 +567,17 @@ func GetPostPayCreditLimit(apiKey string) float64 {
 	return -1
 }
 
+// GetCreditsPurchasedForKey returns the total credits purchased for a given key.
+func GetCreditsPurchasedForKey(apiKey string) float64 {
+	postPayUsageMu.RLock()
+	entry := postPayUsage[apiKey]
+	postPayUsageMu.RUnlock()
+	if entry == nil {
+		return 0
+	}
+	return entry.CreditsPurchased
+}
+
 // GetBurnMultiplierForKey returns the current 5H rolling window burst multiplier
 // for the given post-pay API key. Looks up the key's rate limit from live config
 // so it scales correctly for every plan (1K, 10K, 40K CR limits).
@@ -552,17 +587,28 @@ func GetBurnMultiplierForKey(apiKey string) float64 {
 	cfg := globalConfig
 	liveCfgMu.RUnlock()
 	var rateLimit float64
+	hasCustomLimit := false
 	if cfg != nil {
 		rateLimit = float64(cfg.DefaultAPIKeyLimit)
 		if cfg.APIKeyLimits != nil {
 			if lim, ok := cfg.APIKeyLimits[apiKey]; ok {
 				rateLimit = float64(lim)
+				hasCustomLimit = true
 			}
 		}
 	}
+
 	postPayUsageMu.RLock()
 	entry := postPayUsage[apiKey]
 	postPayUsageMu.RUnlock()
+
+	if !hasCustomLimit {
+		isPAYG := strings.HasPrefix(apiKey, "fink_") && !strings.HasPrefix(apiKey, "fink_max_") && !strings.HasPrefix(apiKey, "fink_pro_") && !strings.HasPrefix(apiKey, "fink_d")
+		if isPAYG {
+			rateLimit = 0
+		}
+	}
+
 	return fiveHWindowBurnMultiplier(entry, rateLimit)
 }
 
@@ -817,6 +863,7 @@ func LoadLedgerFromPostgres(db *sql.DB) error {
 //	  "limit":         10000,
 //	  "fired_at":      "2026-07-06T03:57:00Z"
 //	}
+//
 // maskedKey returns a redacted version of the API key safe to include in
 // outbound webhook payloads. Only the last 8 characters are preserved so
 // operators can identify the key without exposing the full secret over a
@@ -982,39 +1029,32 @@ func ProcessDeposit(apiKey string, usdAmount float64, txnID string) (addedCredit
 
 // vndTierEntry describes one PAYG credit conversion tier based on VND amount.
 type vndTierEntry struct {
-	maxVND float64 // exclusive upper bound (0 = no upper bound)
-	rate   float64 // credits per VND
-	tier   int
+	maxVND     float64 // exclusive upper bound (0 = no upper bound)
+	pricePer1k float64 // VND price per 1000 credits
+	tier       int
 }
 
 // vndTiers defines the Pay-As-You-Go credit conversion tiers based on VND amount.
 // Strategic Decoy Pricing: Tier 6 (>2M) is cheaper than Max 20x to act as the ultimate trap.
-//
-//	Tier 1  < 50,000 VND    → 0.0667 cr/VND (15,000đ/1000cr)
-//	Tier 2  < 150,000 VND   → 0.0833 cr/VND (12,000đ/1000cr)
-//	Tier 3  < 300,000 VND   → 0.1000 cr/VND (10,000đ/1000cr)
-//	Tier 4  < 600,000 VND   → 0.1250 cr/VND (8,000đ/1000cr)
-//	Tier 5  < 2,000,000 VND → 0.2857 cr/VND (3,500đ/1000cr)
-//	Tier 6  ≥ 2,000,000 VND → 0.5882 cr/VND (1,700đ/1000cr) - ULTIMATE DECOY
 var vndTiers = []vndTierEntry{
-	{maxVND: 50_000, rate: 0.0667, tier: 1},
-	{maxVND: 150_000, rate: 0.0833, tier: 2},
-	{maxVND: 300_000, rate: 0.1000, tier: 3},
-	{maxVND: 600_000, rate: 0.1250, tier: 4},
-	{maxVND: 2_000_000, rate: 0.2857, tier: 5},
-	{maxVND: 0, rate: 0.5882, tier: 6}, // 0 = no upper bound
+	{maxVND: 50_000, pricePer1k: 15_000, tier: 1},
+	{maxVND: 150_000, pricePer1k: 12_000, tier: 2},
+	{maxVND: 300_000, pricePer1k: 10_000, tier: 3},
+	{maxVND: 600_000, pricePer1k: 8_000, tier: 4},
+	{maxVND: 2_000_000, pricePer1k: 3_500, tier: 5},
+	{maxVND: 0, pricePer1k: 1_700, tier: 6}, // 0 = no upper bound
 }
 
-// vndTierForAmount returns the rate (cr/VND) and tier number for a given VND amount.
-func vndTierForAmount(vndAmount float64) (rate float64, tier int) {
+// vndTierForAmount returns the pricePer1k and tier number for a given VND amount.
+func vndTierForAmount(vndAmount float64) (pricePer1k float64, tier int) {
 	for _, t := range vndTiers {
 		if t.maxVND == 0 || vndAmount < t.maxVND {
-			return t.rate, t.tier
+			return t.pricePer1k, t.tier
 		}
 	}
 	// Fallback to best tier
 	last := vndTiers[len(vndTiers)-1]
-	return last.rate, last.tier
+	return last.pricePer1k, last.tier
 }
 
 // ProcessDepositVND adds VND funds to an API key, converting them to credits
@@ -1043,8 +1083,10 @@ func ProcessDepositVND(apiKey string, vndAmount float64, txnID string) (addedCre
 	}
 
 	// Apply VND-based tier rate to compute credits
-	rate, tier := vndTierForAmount(vndAmount)
-	addedCredits = vndAmount * rate
+	pricePer1k, tier := vndTierForAmount(vndAmount)
+	addedCredits = (vndAmount / pricePer1k) * 1000
+	// Round to 3 decimal places to avoid standard floating point issues
+	addedCredits = math.Round(addedCredits*1000) / 1000
 	entry.CreditsPurchased += addedCredits
 	newTotalPurchased = entry.CreditsPurchased
 
