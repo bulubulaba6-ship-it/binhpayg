@@ -442,3 +442,301 @@ func TestOpenAICompatExecutorStreamSkipsKeepAliveUntilDataLine(t *testing.T) {
 		t.Fatalf("stream payload = %s", got.String())
 	}
 }
+
+func TestOpenAICompatExecutorModelOverrideVariousFormats(t *testing.T) {
+	// Test cases for different format overrides
+	t.Run("Claude Stream Format Override", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1677652288,\"model\":\"deepseek-v4-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n"))
+		}))
+		defer server.Close()
+
+		executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+		auth := &cliproxyauth.Auth{Attributes: map[string]string{
+			"base_url": server.URL + "/v1",
+			"api_key":  "test",
+		}}
+		result, err := executor.ExecuteStream(context.Background(), auth, cliproxyexecutor.Request{
+			Model:   "deepseek-v4-flash",
+			Payload: []byte(`{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"stream":true}`),
+		}, cliproxyexecutor.Options{
+			SourceFormat:    sdktranslator.FromString("claude"),
+			Stream:          true,
+			OriginalRequest: []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"hi"}],"stream":true}`),
+			Metadata: map[string]any{
+				cliproxyexecutor.RequestedModelMetadataKey: "claude-opus-4-8",
+			},
+		})
+		if err != nil {
+			t.Fatalf("ExecuteStream error: %v", err)
+		}
+
+		var got strings.Builder
+		for chunk := range result.Chunks {
+			if chunk.Err != nil {
+				t.Fatalf("unexpected stream error: %v", chunk.Err)
+			}
+			got.Write(chunk.Payload)
+		}
+
+		payload := got.String()
+		if !strings.Contains(payload, "data: ") {
+			t.Fatalf("expected data: prefix in stream output, got: %q", payload)
+		}
+		// Extract json part of first chunk (there might be multiple events translated, e.g. message_start)
+		lines := strings.Split(payload, "\n")
+		var targetJSON string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "data: ") {
+				jsonPart := strings.TrimPrefix(line, "data: ")
+				if gjson.Get(jsonPart, "type").String() == "message_start" {
+					targetJSON = jsonPart
+					break
+				}
+			}
+		}
+		if targetJSON == "" {
+			t.Fatalf("could not find message_start event in payload: %q", payload)
+		}
+		modelVal := gjson.Get(targetJSON, "message.model").String()
+		if modelVal != "claude-opus-4-8" {
+			t.Fatalf("message.model = %q, want %q; payload = %q", modelVal, "claude-opus-4-8", targetJSON)
+		}
+	})
+
+	t.Run("Gemini Format Override", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"chatcmpl-123","object":"chat.completion","created":1677652288,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}]}`))
+		}))
+		defer server.Close()
+
+		executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+		auth := &cliproxyauth.Auth{Attributes: map[string]string{
+			"base_url": server.URL + "/v1",
+			"api_key":  "test",
+		}}
+		resp, err := executor.Execute(context.Background(), auth, cliproxyexecutor.Request{
+			Model:   "deepseek-v4-flash",
+			Payload: []byte(`{"model":"deepseek-v4-flash","contents":[{"parts":[{"text":"hi"}]}]}`),
+		}, cliproxyexecutor.Options{
+			SourceFormat: sdktranslator.FromString("gemini"),
+			Stream:       false,
+			Metadata: map[string]any{
+				cliproxyexecutor.RequestedModelMetadataKey: "gemini-alias",
+			},
+		})
+		if err != nil {
+			t.Fatalf("Execute error: %v", err)
+		}
+
+		modelVal := gjson.GetBytes(resp.Payload, "model").String()
+		if modelVal != "gemini-alias" {
+			t.Fatalf("model = %q, want %q; payload = %q", modelVal, "gemini-alias", string(resp.Payload))
+		}
+	})
+}
+
+// TestNonStreamModelAliasOverride verifies the Execute (non-streaming) path
+// rewrites the "model" field in the translated response to the alias stored in
+// RequestedModelMetadataKey, not the real upstream model name.
+// This is the end-to-end proof our proxy does not leak upstream model identity
+// to the downstream client.
+func TestNonStreamModelAliasOverride(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Upstream returns its real model name.
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-xyz","object":"chat.completion","model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{
+		"base_url": server.URL + "/v1",
+		"api_key":  "test",
+	}}
+	resp, err := executor.Execute(context.Background(), auth, cliproxyexecutor.Request{
+		Model:   "deepseek-v4-flash",
+		Payload: []byte(`{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}]}`),
+	}, cliproxyexecutor.Options{
+		SourceFormat: sdktranslator.FromString("openai"),
+		Stream:       false,
+		Metadata: map[string]any{
+			// Client requested claude-opus-4-8; our proxy must echo that alias back.
+			cliproxyexecutor.RequestedModelMetadataKey: "claude-opus-4-8",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	got := gjson.GetBytes(resp.Payload, "model").String()
+	if got != "claude-opus-4-8" {
+		t.Fatalf("response model = %q, want %q; full payload = %s", got, "claude-opus-4-8", string(resp.Payload))
+	}
+}
+
+// TestStreamModelAliasOverrideCompactSSE verifies that ExecuteStream rewrites
+// the "model" field even when the upstream sends SSE with no space after the
+// colon ("data:{...}" vs "data: {...}").  Some OpenAI-compat providers emit
+// this compact form; our line-split logic must handle both variants.
+func TestStreamModelAliasOverrideCompactSSE(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// Compact SSE: no space between "data:" and JSON.
+		_, _ = w.Write([]byte(`data:{"id":"chatcmpl-1","object":"chat.completion.chunk","model":"deepseek-v4-flash","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{
+		"base_url": server.URL + "/v1",
+		"api_key":  "test",
+	}}
+	result, err := executor.ExecuteStream(context.Background(), auth, cliproxyexecutor.Request{
+		Model:   "deepseek-v4-flash",
+		Payload: []byte(`{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"stream":true}`),
+	}, cliproxyexecutor.Options{
+		SourceFormat: sdktranslator.FromString("openai"),
+		Stream:       true,
+		Metadata: map[string]any{
+			cliproxyexecutor.RequestedModelMetadataKey: "claude-opus-4-8",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream error: %v", err)
+	}
+
+	var combined strings.Builder
+	for chunk := range result.Chunks {
+		if chunk.Err != nil {
+			t.Fatalf("unexpected stream error: %v", chunk.Err)
+		}
+		combined.Write(chunk.Payload)
+	}
+	out := combined.String()
+	// When the openai→openai translator is used, chunks are emitted as
+	// concatenated JSON objects (no "data:" envelope in the combined buffer).
+	// We verify the override by checking the model field directly.
+	if strings.Contains(out, "deepseek-v4-flash") {
+		t.Fatalf("upstream model name leaked in stream output: %q", out)
+	}
+	modelVal := gjson.Get(out, "model").String()
+	if modelVal != "claude-opus-4-8" {
+		t.Fatalf("stream model = %q, want %q; full output:\n%s", modelVal, "claude-opus-4-8", out)
+	}
+}
+
+// TestStreamModelAliasFallsBackToReqModel verifies that when no
+// RequestedModelMetadataKey is present, the executor falls back to req.Model,
+// never leaking the real upstream model name to the client.
+func TestStreamModelAliasFallsBackToReqModel(t *testing.T) {
+	const requestedModel = "my-proxy-model"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// Upstream returns a totally different model name.
+		_, _ = w.Write([]byte(`data: {"id":"chatcmpl-2","object":"chat.completion.chunk","model":"ultra-secret-internal-model-v9","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{
+		"base_url": server.URL + "/v1",
+		"api_key":  "test",
+	}}
+	result, err := executor.ExecuteStream(context.Background(), auth, cliproxyexecutor.Request{
+		Model:   requestedModel,
+		Payload: []byte(`{"model":"` + requestedModel + `","messages":[{"role":"user","content":"hi"}],"stream":true}`),
+	}, cliproxyexecutor.Options{
+		SourceFormat: sdktranslator.FromString("openai"),
+		Stream:       true,
+		// Intentionally NO Metadata — exercises the req.Model fallback path.
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream error: %v", err)
+	}
+
+	var combined strings.Builder
+	for chunk := range result.Chunks {
+		if chunk.Err != nil {
+			t.Fatalf("unexpected stream error: %v", chunk.Err)
+		}
+		combined.Write(chunk.Payload)
+	}
+	out := combined.String()
+	// Upstream internal model name must never appear in client-visible output.
+	if strings.Contains(out, "ultra-secret-internal-model-v9") {
+		t.Fatalf("upstream model leaked through to client; output:\n%s", out)
+	}
+	// The model field in the output must be req.Model (fallback path).
+	modelVal := gjson.Get(out, "model").String()
+	if modelVal != requestedModel {
+		t.Fatalf("model = %q, want %q; full output:\n%s", modelVal, requestedModel, out)
+	}
+}
+
+func TestOverrideModelUnexported(t *testing.T) {
+	executor := &OpenAICompatExecutor{}
+
+	tests := []struct {
+		name     string
+		input    string
+		model    string
+		expected string
+	}{
+		{
+			name:     "root model only",
+			input:    `{"model":"old-model"}`,
+			model:    "new-model",
+			expected: `{"model":"new-model"}`,
+		},
+		{
+			name:     "message.model nested",
+			input:    `{"message":{"model":"old-model"}}`,
+			model:    "new-model",
+			expected: `{"message":{"model":"new-model"},"model":"new-model"}`,
+		},
+		{
+			name:     "modelVersion root",
+			input:    `{"modelVersion":"old-model"}`,
+			model:    "new-model",
+			expected: `{"modelVersion":"new-model","model":"new-model"}`,
+		},
+		{
+			name:     "response.modelVersion nested",
+			input:    `{"response":{"modelVersion":"old-model"}}`,
+			model:    "new-model",
+			expected: `{"response":{"modelVersion":"new-model"},"model":"new-model"}`,
+		},
+		{
+			name:     "multiple fields",
+			input:    `{"model":"old","message":{"model":"old"},"modelVersion":"old","response":{"modelVersion":"old"}}`,
+			model:    "new",
+			expected: `{"model":"new","message":{"model":"new"},"modelVersion":"new","response":{"modelVersion":"new"}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := executor.overrideModel([]byte(tt.input), tt.model)
+			if !gjson.ValidBytes(got) {
+				t.Fatalf("invalid json result: %s", string(got))
+			}
+			gotStr := string(got)
+			if gjson.Get(gotStr, "model").String() != tt.model {
+				t.Errorf("model = %q, want %q", gjson.Get(gotStr, "model").String(), tt.model)
+			}
+			if gjson.Get(gotStr, "message.model").Exists() && gjson.Get(gotStr, "message.model").String() != tt.model {
+				t.Errorf("message.model = %q, want %q", gjson.Get(gotStr, "message.model").String(), tt.model)
+			}
+			if gjson.Get(gotStr, "modelVersion").Exists() && gjson.Get(gotStr, "modelVersion").String() != tt.model {
+				t.Errorf("modelVersion = %q, want %q", gjson.Get(gotStr, "modelVersion").String(), tt.model)
+			}
+			if gjson.Get(gotStr, "response.modelVersion").Exists() && gjson.Get(gotStr, "response.modelVersion").String() != tt.model {
+				t.Errorf("response.modelVersion = %q, want %q", gjson.Get(gotStr, "response.modelVersion").String(), tt.model)
+			}
+		})
+	}
+}
