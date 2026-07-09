@@ -138,7 +138,7 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	translated = e.overrideModel(translated, targetModel)
 	finalModel = targetModel
 	translated = helps.TranslateImagePayloadIfNeeded(finalModel, translated)
-	log.Printf("DEBUG [Execute] baseModel=%s, finalModel=%s, targetModel=%s, payload model=%s", baseModel, finalModel, targetModel, gjson.GetBytes(translated, "model").String())
+	helps.LogWithRequestID(ctx).Debugf("openai compat executor: model routing baseModel=%s finalModel=%s targetModel=%s", baseModel, finalModel, targetModel)
 
 	url := strings.TrimSuffix(baseURL, "/") + endpoint
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(translated))
@@ -461,15 +461,38 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 				modelAlias = req.Model
 			}
 			for i := range chunks {
-				if bytes.HasPrefix(chunks[i], []byte("data: ")) {
-					jsonPart := bytes.TrimPrefix(chunks[i], []byte("data: "))
-					if !bytes.Equal(bytes.TrimSpace(jsonPart), []byte("[DONE]")) && gjson.ValidBytes(jsonPart) {
-						jsonPart = e.overrideModel(jsonPart, modelAlias)
-						chunks[i] = append([]byte("data: "), jsonPart...)
+				lines := bytes.Split(chunks[i], []byte("\n"))
+				anyDataLine := false
+				for j := range lines {
+					var dataPart []byte
+					hasData := false
+					if bytes.HasPrefix(lines[j], []byte("data: ")) {
+						dataPart = bytes.TrimPrefix(lines[j], []byte("data: "))
+						hasData = true
+					} else if bytes.HasPrefix(lines[j], []byte("data:")) {
+						dataPart = bytes.TrimPrefix(lines[j], []byte("data:"))
+						hasData = true
+					}
+					if hasData {
+						anyDataLine = true
+						trimmedData := bytes.TrimSpace(dataPart)
+						if !bytes.Equal(trimmedData, []byte("[DONE]")) && gjson.ValidBytes(trimmedData) {
+							overridden := e.overrideModel(trimmedData, modelAlias)
+							lines[j] = append([]byte("data: "), overridden...)
+						}
+					}
+				}
+				updatedChunk := bytes.Join(lines, []byte("\n"))
+				// Fallback: some translators (e.g. openai→openai passthrough) emit
+				// raw JSON without a "data:" prefix. Apply the model override
+				// directly to the whole chunk in that case.
+				if !anyDataLine {
+					if trimmed := bytes.TrimSpace(updatedChunk); gjson.ValidBytes(trimmed) {
+						updatedChunk = e.overrideModel(trimmed, modelAlias)
 					}
 				}
 				select {
-				case out <- cliproxyexecutor.StreamChunk{Payload: chunks[i]}:
+				case out <- cliproxyexecutor.StreamChunk{Payload: updatedChunk}:
 				case <-ctx.Done():
 					return
 				}
@@ -860,6 +883,15 @@ func (e *OpenAICompatExecutor) overrideModel(payload []byte, model string) []byt
 		return payload
 	}
 	payload, _ = sjson.SetBytes(payload, "model", model)
+	if gjson.GetBytes(payload, "message.model").Exists() {
+		payload, _ = sjson.SetBytes(payload, "message.model", model)
+	}
+	if gjson.GetBytes(payload, "modelVersion").Exists() {
+		payload, _ = sjson.SetBytes(payload, "modelVersion", model)
+	}
+	if gjson.GetBytes(payload, "response.modelVersion").Exists() {
+		payload, _ = sjson.SetBytes(payload, "response.modelVersion", model)
+	}
 	return payload
 }
 
