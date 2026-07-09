@@ -215,7 +215,7 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		out = e.overrideModel(out, modelAlias)
 	}
 
-	resp = cliproxyexecutor.Response{Payload: out, Headers: httpResp.Header.Clone()}
+	resp = cliproxyexecutor.Response{Payload: out, Headers: stripModelDisclosureHeaders(httpResp.Header.Clone())}
 	return resp, nil
 }
 
@@ -423,6 +423,12 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 		scanner := bufio.NewScanner(httpResp.Body)
 		scanner.Buffer(nil, 52_428_800) // 50MB
 		var param any
+		// Resolve model alias once for the entire stream; it is constant
+		// per-request and must not be re-evaluated on every SSE chunk.
+		modelAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
+		if modelAlias == "" {
+			modelAlias = req.Model
+		}
 		for scanner.Scan() {
 			line := scanner.Bytes()
 			helps.AppendAPIResponseChunk(ctx, e.cfg, line)
@@ -455,11 +461,6 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 			// OpenAI-compatible streams must use SSE data lines.
 			chunks := sdktranslator.TranslateStream(ctx, to, from, req.Model, opts.OriginalRequest, translated, bytes.Clone(trimmedLine), &param)
 
-			// Rewrite model alias in every SSE chunk.
-			modelAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
-			if modelAlias == "" {
-				modelAlias = req.Model
-			}
 			for i := range chunks {
 				lines := bytes.Split(chunks[i], []byte("\n"))
 				anyDataLine := false
@@ -521,7 +522,7 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 		// Ensure we record the request if no usage chunk was ever seen
 		reporter.EnsurePublished(ctx)
 	}()
-	return &cliproxyexecutor.StreamResult{Headers: httpResp.Header.Clone(), Chunks: out}, nil
+	return &cliproxyexecutor.StreamResult{Headers: stripModelDisclosureHeaders(httpResp.Header.Clone()), Chunks: out}, nil
 }
 
 func (e *OpenAICompatExecutor) executeImagesStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, endpointPath string) (_ *cliproxyexecutor.StreamResult, err error) {
@@ -876,6 +877,24 @@ func (e *OpenAICompatExecutor) mapModelToName(auth *cliproxyauth.Auth, reqModel 
 		}
 	}
 	return reqModel
+}
+
+// stripModelDisclosureHeaders removes response headers that some upstream
+// providers use to expose the actual model served (e.g. OpenRouter's
+// X-Openrouter-Model or Together AI's X-Model-ID).  Forwarding these headers
+// would bypass the body-level model alias rewrite and leak the real upstream
+// model identity to the client.
+func stripModelDisclosureHeaders(h http.Header) http.Header {
+	for _, hdr := range []string{
+		"X-Model-Id",
+		"X-Openrouter-Model",
+		"X-Actual-Model",
+		"X-Served-By-Model",
+		"Openrouter-Model",
+	} {
+		h.Del(hdr)
+	}
+	return h
 }
 
 func (e *OpenAICompatExecutor) overrideModel(payload []byte, model string) []byte {
