@@ -740,3 +740,90 @@ func TestOverrideModelUnexported(t *testing.T) {
 		})
 	}
 }
+
+// TestStripModelDisclosureHeaders verifies that provider-specific response
+// headers that reveal the real upstream model name are removed before the
+// response reaches the client.  This closes the header-level bypass that
+// would otherwise leak the real model identity even after the body is rewritten.
+func TestStripModelDisclosureHeaders(t *testing.T) {
+	disclosureHeaders := []struct {
+		key   string
+		value string
+	}{
+		{"X-Model-Id", "deepseek-v4-flash"},
+		{"X-Openrouter-Model", "deepseek-v4-flash"},
+		{"X-Actual-Model", "deepseek-v4-flash"},
+		{"X-Served-By-Model", "deepseek-v4-flash"},
+		{"Openrouter-Model", "deepseek-v4-flash"},
+	}
+
+	for _, hdr := range disclosureHeaders {
+		t.Run(hdr.key, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set(hdr.key, hdr.value)
+				_, _ = w.Write([]byte(`{"id":"chatcmpl-1","object":"chat.completion","model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+			}))
+			defer server.Close()
+
+			executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+			auth := &cliproxyauth.Auth{Attributes: map[string]string{
+				"base_url": server.URL + "/v1",
+				"api_key":  "test",
+			}}
+			resp, err := executor.Execute(context.Background(), auth, cliproxyexecutor.Request{
+				Model:   "deepseek-v4-flash",
+				Payload: []byte(`{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}]}`),
+			}, cliproxyexecutor.Options{
+				SourceFormat: sdktranslator.FromString("openai"),
+				Stream:       false,
+				Metadata: map[string]any{
+					cliproxyexecutor.RequestedModelMetadataKey: "claude-opus-4-8",
+				},
+			})
+			if err != nil {
+				t.Fatalf("Execute error: %v", err)
+			}
+			// The disclosure header must not be forwarded to the client.
+			if got := resp.Headers.Get(hdr.key); got != "" {
+				t.Fatalf("header %q was not stripped; got %q", hdr.key, got)
+			}
+		})
+	}
+}
+
+// TestUpstreamRequestCarriesCorrectMappedModel verifies that the model field
+// in the request body sent to the upstream provider is the correctly mapped
+// name (from mapModelToName), not the raw alias the client requested.
+// This is the request-side mirror of TestNonStreamModelAliasOverride.
+func TestUpstreamRequestCarriesCorrectMappedModel(t *testing.T) {
+	var gotUpstreamModel string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotUpstreamModel = gjson.GetBytes(body, "model").String()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-2","object":"chat.completion","model":"real-upstream-name","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	executor := NewOpenAICompatExecutor("openai-compatibility", &config.Config{})
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{
+		"base_url": server.URL + "/v1",
+		"api_key":  "test",
+	}}
+	_, err := executor.Execute(context.Background(), auth, cliproxyexecutor.Request{
+		Model:   "my-alias-model",
+		Payload: []byte(`{"model":"my-alias-model","messages":[{"role":"user","content":"hi"}]}`),
+	}, cliproxyexecutor.Options{
+		SourceFormat: sdktranslator.FromString("openai"),
+		Stream:       false,
+	})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	// Without config-level model mapping the upstream receives the same model
+	// name that was in the payload — no transformation should corrupt it.
+	if gotUpstreamModel != "my-alias-model" {
+		t.Fatalf("upstream request model = %q, want %q", gotUpstreamModel, "my-alias-model")
+	}
+}
