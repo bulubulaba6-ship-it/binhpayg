@@ -146,13 +146,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		}
 	}
 
-	// 5H rolling window burst multiplier — progressive tiers based on ratio of
-	// 5H credits consumed vs. key's rate limit:
-	//   0–20% → x1.0 | 20–40% → x1.2 | 40–60% → x1.4 | 60–80% → x1.7 | ≥80% → x1.8–2.0 (random)
-	burnMultiplier := middleware.GetBurnMultiplierForKey(principal)
-	fiveHCreditsWindow := middleware.GetFiveHCreditsForKey(principal)
 	fiveHWindowStart := middleware.GetFiveHWindowStartForKey(principal)
-	dailyBurnToday := middleware.GetDailyBurnForKey(principal)
 
 	// Compute window expiry for client display (zero time when no active window).
 	var windowExpiresAt interface{}
@@ -160,12 +154,6 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		windowExpiresAt = fiveHWindowStart.Add(5 * time.Hour).UTC().Format(time.RFC3339)
 	} else {
 		windowExpiresAt = nil
-	}
-
-	// Burn ratio = how far through the 5H window the user is (0.0 – 1.0+).
-	var burnRatio float64
-	if rateLimit5h > 0 {
-		burnRatio = fiveHCreditsWindow / float64(rateLimit5h)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -187,12 +175,6 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			"window_expires_at":  windowExpiresAt, // ISO8601 or null when no active window
 			"recent_sessions":    sessions,
 		},
-		// 5H rolling window burst-pricing fields — exposed for dashboard transparency.
-		"burn_multiplier":     burnMultiplier,     // current x factor: 1.0/1.2/1.4/1.7/1.8–2.0
-		"burn_ratio":          burnRatio,          // 0.0–1.0+ fraction of 5H window consumed
-		"five_h_credits":      fiveHCreditsWindow, // credits billed in the current 5H window
-		"five_h_window_start": fiveHWindowStart,   // UTC start of current window (zero when idle)
-		"daily_burn_today":    dailyBurnToday,     // cumulative today (UTC) — historical only
 		"api_key":             redactKey(strings.TrimSpace(principal)),
 		"status":              "active",
 		"message":             fmt.Sprintf("Your current API usage is $%.4f (assuming 1,000 credits = $1.00 USD).", totalCredits/1000.0),

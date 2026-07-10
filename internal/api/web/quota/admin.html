@@ -394,7 +394,10 @@ const admin = (() => {
         </td>
         <td class="mono">${fmtCr(k.daily_burn_today)}<span style="color:var(--muted);font-size:0.7rem">/day</span></td>
         <td><span class="mult ${multClass}">×${k.burn_multiplier.toFixed(1)}</span></td>
-        <td class="mono">${k.five_h_limit.toLocaleString()}</td>
+        <td class="mono">
+          <div style="font-weight:600">${fmtCr(k.five_h_credits)}</div>
+          <div style="color:var(--muted);font-size:0.7rem">/ ${k.five_h_limit.toLocaleString()}</div>
+        </td>
         <td style="color:${expColor};font-size:0.78rem">${exp}</td>
         <td class="mono">${(k.total_requests||0).toLocaleString()}</td>
         <td>

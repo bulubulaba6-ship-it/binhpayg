@@ -427,12 +427,26 @@ func (s *Server) setupRoutes() {
 		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
-	s.engine.StaticFS("/dashboard", http.FS(quota.FS))
+	dashboardGroup := s.engine.Group("/dashboard")
+	dashboardGroup.Use(func(c *gin.Context) {
+		if strings.HasSuffix(c.Request.URL.Path, "admin.html") {
+			if s.cfg == nil || s.cfg.Home.Enabled || s.cfg.RemoteManagement.DisableControlPanel || !s.managementRoutesEnabled.Load() {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+		}
+		c.Next()
+	})
+	dashboardGroup.StaticFS("", http.FS(quota.FS))
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
 
 	// Admin billing dashboard shortcut
 	s.engine.GET("/admin", func(c *gin.Context) {
+		if s.cfg == nil || s.cfg.Home.Enabled || s.cfg.RemoteManagement.DisableControlPanel || !s.managementRoutesEnabled.Load() {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 		data, err := quota.FS.ReadFile("admin.html")
 		if err != nil {
 			c.AbortWithStatus(http.StatusNotFound)
