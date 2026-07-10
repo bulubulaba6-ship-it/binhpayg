@@ -277,7 +277,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	if authManager != nil {
 		authManager.SetRetryConfig(cfg.RequestRetry, time.Duration(cfg.MaxRetryInterval)*time.Second, cfg.MaxRetryCredentials)
 	}
-	managementasset.SetCurrentConfig(cfg)
+	config.SetGlobalConfig(cfg)
 	auth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 	applySignatureCacheConfig(nil, cfg)
 	// Initialize management handler
@@ -862,7 +862,22 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		}
 	}
 
-	c.File(filePath)
+	// Read the file and inject our burn monitoring UI
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	injection := `<script src="/dashboard/burn-monitor.js"></script>`
+	content := string(data)
+	if strings.Contains(content, "</body>") {
+		content = strings.Replace(content, "</body>", injection+"</body>", 1)
+	} else {
+		content += injection
+	}
+
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(content))
 }
 
 func (s *Server) enableKeepAlive(timeout time.Duration, onTimeout func()) {
@@ -1556,7 +1571,7 @@ func (s *Server) UpdateClients(cfg *config.Config) {
 	if oldCfg != nil && s.wsAuthChanged != nil && oldCfg.WebsocketAuth != cfg.WebsocketAuth {
 		s.wsAuthChanged(oldCfg.WebsocketAuth, cfg.WebsocketAuth)
 	}
-	managementasset.SetCurrentConfig(cfg)
+	config.SetGlobalConfig(cfg)
 	// Save YAML snapshot for next comparison
 	s.oldConfigYaml, _ = yaml.Marshal(cfg)
 

@@ -104,6 +104,11 @@ func (w *Watcher) reloadConfig() bool {
 	w.config = newConfig
 	w.clientsMutex.Unlock()
 
+	// Immediately update the global configuration pointer so that any
+	// concurrent operations relying on util.GetProviderName or global
+	// aliases receive the up-to-date configuration during hot-reload.
+	config.SetGlobalConfig(newConfig)
+
 	var affectedOAuthProviders []string
 	if oldConfig != nil {
 		_, affectedOAuthProviders = diff.DiffOAuthExcludedModelChanges(oldConfig.OAuthExcludedModels, newConfig.OAuthExcludedModels)

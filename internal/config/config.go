@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -178,6 +179,24 @@ type PostPayBillingConfig struct {
 type PostPayBillingClientCfg struct {
 	CreditLimit float64   `yaml:"credit-limit" json:"credit-limit"`
 	ExpiresAt   time.Time `yaml:"expires-at,omitempty" json:"expires-at,omitempty"`
+}
+
+var (
+	globalConfigPtr atomic.Pointer[Config]
+)
+
+// SetGlobalConfig stores the latest configuration snapshot globally.
+func SetGlobalConfig(cfg *Config) {
+	if cfg == nil {
+		globalConfigPtr.Store(nil)
+		return
+	}
+	globalConfigPtr.Store(cfg)
+}
+
+// GetGlobalConfig retrieves the latest configuration snapshot globally.
+func GetGlobalConfig() *Config {
+	return globalConfigPtr.Load()
 }
 
 // ModelPricingEntry defines the virtual credit cost per 1M tokens for a specific model alias.

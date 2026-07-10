@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
@@ -825,5 +826,46 @@ func TestUpstreamRequestCarriesCorrectMappedModel(t *testing.T) {
 	// name that was in the payload — no transformation should corrupt it.
 	if gotUpstreamModel != "my-alias-model" {
 		t.Fatalf("upstream request model = %q, want %q", gotUpstreamModel, "my-alias-model")
+	}
+}
+
+// TestAliasResolutionFor502Prevention verifies that the refactored GetProviderName
+// correctly reads from the global config snapshot to resolve an aliased model.
+// This prevents 502 Bad Gateway errors where the relay fails to locate the backend
+// provider for models defined only in the OpenAICompatibility block.
+func TestAliasResolutionFor502Prevention(t *testing.T) {
+	// Set up a mock global configuration that defines an alias "gpt-5.5" mapped to "mock-compat" provider
+	cfg := &config.Config{
+		OpenAICompatibility: []config.OpenAICompatibility{
+			{
+				Name: "mock-compat",
+				Models: []config.OpenAICompatibilityModel{
+					{
+						Alias: "gpt-5.5",
+						Name:  "real-upstream-model",
+					},
+				},
+			},
+		},
+	}
+	config.SetGlobalConfig(cfg)
+	defer config.SetGlobalConfig(nil) // Cleanup
+
+	// The util package should be able to resolve "gpt-5.5" to "mock-compat"
+	providers := util.GetProviderName("gpt-5.5")
+	if len(providers) == 0 {
+		t.Fatalf("expected at least one provider for aliased model gpt-5.5, got 0")
+	}
+
+	found := false
+	for _, p := range providers {
+		if p == "mock-compat" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected provider 'mock-compat' in resolved providers %v", providers)
 	}
 }

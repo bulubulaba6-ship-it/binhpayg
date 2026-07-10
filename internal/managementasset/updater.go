@@ -40,20 +40,10 @@ const ManagementFileName = managementAssetName
 var (
 	lastUpdateCheckMu   sync.Mutex
 	lastUpdateCheckTime time.Time
-	currentConfigPtr    atomic.Pointer[config.Config]
 	schedulerOnce       sync.Once
 	schedulerConfigPath atomic.Value
 	sfGroup             singleflight.Group
 )
-
-// SetCurrentConfig stores the latest configuration snapshot for management asset decisions.
-func SetCurrentConfig(cfg *config.Config) {
-	if cfg == nil {
-		currentConfigPtr.Store(nil)
-		return
-	}
-	currentConfigPtr.Store(cfg)
-}
 
 // StartAutoUpdater launches a background goroutine that periodically ensures the management asset is up to date.
 // It respects the disable-control-panel flag on every iteration and supports hot-reloaded configurations.
@@ -80,7 +70,7 @@ func runAutoUpdater(ctx context.Context) {
 	defer ticker.Stop()
 
 	runOnce := func() {
-		cfg := currentConfigPtr.Load()
+		cfg := config.GetGlobalConfig()
 		if reason, skip := autoUpdateSkipReason(cfg); skip {
 			log.Debugf("management asset auto-updater skipped: %s", reason)
 			return

@@ -52,6 +52,16 @@ func GetProviderName(modelName string) []string {
 		appendProvider(provider)
 	}
 
+	cfg := config.GetGlobalConfig()
+	if cfg != nil {
+		if compat, _ := GetOpenAICompatibilityConfig(modelName, cfg); compat != nil {
+			providerKey := strings.ToLower(strings.TrimSpace(compat.Name))
+			if providerKey != "" {
+				appendProvider(providerKey)
+			}
+		}
+	}
+
 	if len(providers) > 0 {
 		return providers
 	}

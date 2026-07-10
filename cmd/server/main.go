@@ -504,7 +504,7 @@ func main() {
 	} else {
 		cfg.AuthDir = resolvedAuthDir
 	}
-	managementasset.SetCurrentConfig(cfg)
+	config.SetGlobalConfig(cfg)
 
 	// Create login options to be used in authentication flows.
 	options := &cmd.LoginOptions{
