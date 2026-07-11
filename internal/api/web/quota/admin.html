@@ -164,7 +164,6 @@
     <div class="sum-card"><div class="sum-label">Exhausted</div><div class="sum-val orange" id="sumExhausted">—</div></div>
     <div class="sum-card"><div class="sum-label">Total Purchased</div><div class="sum-val" id="sumPurchased">—</div></div>
     <div class="sum-card"><div class="sum-label">Total Consumed</div><div class="sum-val yellow" id="sumConsumed">—</div></div>
-    <div class="sum-card"><div class="sum-label">Revenue (VND)</div><div class="sum-val green" id="sumRevenue">—</div><div class="revenue" id="sumRevenueUSD"></div></div>
   </div>
 
   <div id="errorBanner" class="error-banner" style="display:none;"></div>
@@ -322,9 +321,6 @@ const admin = (() => {
     document.getElementById('sumExhausted').textContent = d.exhausted_keys ?? '—';
     document.getElementById('sumPurchased').textContent = fmtCr(d.total_purchased);
     document.getElementById('sumConsumed').textContent = fmtCr(d.total_consumed);
-    const rev = d.total_revenue_vnd || 0;
-    document.getElementById('sumRevenue').textContent = fmtVND(rev);
-    document.getElementById('sumRevenueUSD').textContent = '≈ $' + (rev / 25000).toFixed(0) + ' USD';
   }
 
   async function loadKeys() {
