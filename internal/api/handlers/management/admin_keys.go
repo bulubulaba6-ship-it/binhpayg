@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,6 +120,12 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 				var createdRaw sql.NullString
 				if errScan := rows.Scan(&keyHash, &email, &createdRaw); errScan == nil {
 					emailByKey[keyHash] = email
+					if createdRaw.Valid && createdRaw.String != "" {
+						if ts, err := strconv.ParseInt(createdRaw.String, 10, 64); err == nil {
+							t := time.Unix(ts, 0)
+							createdByKey[keyHash] = &t
+						}
+					}
 				}
 			}
 		}

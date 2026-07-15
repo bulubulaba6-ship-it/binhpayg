@@ -353,6 +353,8 @@ post-pay-billing:
       credit-limit: 250000
     test_fink_pro_1234567890abcdef_test:
       credit-limit: 1000000
+      # DEACTIVATED — test key, never for production use
+      expires-at: "2026-07-15T00:00:00Z"
     fink_max_123fd87f9250a4b09330961a32ec667f:
       credit-limit: 0
     fink_max_c3364424fcd368f00115d004323e9522:
@@ -475,6 +477,10 @@ api-key-limits:
   fink_max_c3364424fcd368f00115d004323e9522: 10000
   fink_max_d11f5a1d2398e12e3136f4fab2de4f40: 10000
   fink_max_d2a4d733db88e0dda50eddbdef8cb28c: 10000
+  # PAYG (deactivated) — limit=0 means no 5H cap, but they are blocked by expires-at
+  fink_6db8bcc04240f16a34398b9319d5a1da: 0
+  fink_54a9733e264f5e61949735a2098cfb70: 0
   fink_pro_03cefeb9f45eeda0295f308a30f62ffd: 2000
+  # day1 keys (deactivated) — limit was 1000/5H while active
   fink_eb6924786c88368ab2ef52d99d749f65: 1000
   fink_547a2dd57b7c148f09478206be8f4755: 1000

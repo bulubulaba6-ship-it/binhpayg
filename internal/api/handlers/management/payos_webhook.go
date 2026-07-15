@@ -224,7 +224,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		credits = 1000000
 		limit = 40000
 		isSubscription = true
-		daysValid = 31 // 30 days + 1 grace day
+		daysValid = 30 // 30 days + 1 grace day
 	} else if strings.Contains(descLower, "max") || amountFloat >= 650000 {
 		tier = "max"
 		displayPlan = "MAX 5x"
@@ -284,47 +284,52 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 
 	// 4. Save to Postgres FIRST to ensure idempotency and prevent ghost keys
 	db := getWebhookDB()
+	if db == nil {
+		// DB unavailable — return 500 so payOS retries after 60s.
+		// Without the idempotency check we could create duplicate keys.
+		log.Errorf("payos webhook: DB unavailable for order %s — returning 500 to trigger retry", orderCode)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database temporarily unavailable"})
+		return
+	}
 	userEmail := ""
-	if db != nil {
-		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))
+	keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))
 
-		// 4a. Retrieve the email from payment_orders
-		row := db.QueryRow("SELECT email FROM payment_orders WHERE order_code = $1", orderCode)
-		_ = row.Scan(&userEmail)
+	// 4a. Retrieve the email from payment_orders
+	row := db.QueryRow("SELECT email FROM payment_orders WHERE order_code = $1", orderCode)
+	_ = row.Scan(&userEmail)
 
-		// 4b. Idempotency check — if we already provisioned a key for this order, return OK immediately.
-		// This handles payOS retries (it retries on any non-2xx response, up to 3 times at 60s intervals).
-		// Returning 200 here prevents the retry loop and avoids duplicate key creation.
-		var existingID int
-		errCheck := db.QueryRow("SELECT id FROM api_keys WHERE order_code = $1", orderCode).Scan(&existingID)
-		if errCheck == nil && existingID > 0 {
-			log.Infof("payos webhook ignored duplicate order: %v", orderCode)
-			c.JSON(http.StatusOK, gin.H{"error": 0, "message": "Duplicate order ignored", "data": nil})
-			return
-		}
-		if errCheck != nil && errCheck != sql.ErrNoRows {
-			log.Errorf("failed to check existing api key: %v", errCheck)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
+	// 4b. Idempotency check — if we already provisioned a key for this order, return OK immediately.
+	// This handles payOS retries (it retries on any non-2xx response, up to 3 times at 60s intervals).
+	// Returning 200 here prevents the retry loop and avoids duplicate key creation.
+	var existingID int
+	errCheck := db.QueryRow("SELECT id FROM api_keys WHERE order_code = $1", orderCode).Scan(&existingID)
+	if errCheck == nil && existingID > 0 {
+		log.Infof("payos webhook ignored duplicate order: %v", orderCode)
+		c.JSON(http.StatusOK, gin.H{"error": 0, "message": "Duplicate order ignored", "data": nil})
+		return
+	}
+	if errCheck != nil && errCheck != sql.ErrNoRows {
+		log.Errorf("failed to check existing api key: %v", errCheck)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
 
-		// 4c. Insert the new API key.
-		// - Pass created_at as time.Now().Unix() (int64) because the production DB column
-		//   is actually a BIGINT, not a TIMESTAMPTZ.
-		// - Pass "name" = displayPlan to satisfy the legacy NOT NULL constraint on the production DB.
-		_, errInsert := db.Exec(`
+	// 4c. Insert the new API key.
+	// - Pass created_at as time.Now().Unix() (int64) because the production DB column
+	//   is actually a BIGINT, not a TIMESTAMPTZ.
+	// - Pass "name" = displayPlan to satisfy the legacy NOT NULL constraint on the production DB.
+	_, errInsert := db.Exec(`
 			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
 			VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
 		`, displayPlan, keyHash, prefix, userEmail, displayPlan, orderCode, time.Now().Unix())
-		if errInsert != nil {
-			log.Errorf("failed to insert api key to postgres: %v", errInsert)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		// 4d. Mark order as paid
-		_, _ = db.Exec("UPDATE payment_orders SET status = 'paid' WHERE order_code = $1", orderCode)
+	if errInsert != nil {
+		log.Errorf("failed to insert api key to postgres: %v", errInsert)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
 	}
+
+	// 4d. Mark order as paid
+	_, _ = db.Exec("UPDATE payment_orders SET status = 'paid' WHERE order_code = $1", orderCode)
 
 	// 5. Commit Key to Config (Ghost keys prevented by DB check above)
 	h.mu.Lock()
@@ -360,11 +365,9 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	}
 	h.mu.Unlock()
 
-	// 6. Seed Credits to Ledger
+	// 6. Seed Credits to Ledger (subscription only — PAYG returns early above)
 	if isSubscription {
 		_, _, _ = middleware.ProcessDepositCredits(newKey, credits, orderCode)
-	} else {
-		_, _, _, _ = middleware.ProcessDepositVND(newKey, amountFloat, orderCode)
 	}
 
 	liveCfg := middleware.GetLiveConfig()
