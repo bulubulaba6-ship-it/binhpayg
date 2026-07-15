@@ -223,6 +223,12 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 		}
 
 		created := createdByKey[keyHash]
+		if created == nil && expiresAt != nil {
+			// Infer the creation date for older keys that aren't fully mapped in the DB
+			// assuming standard 30-day subscriptions for PRO/MAX.
+			t := expiresAt.Add(-30 * 24 * time.Hour)
+			created = &t
+		}
 
 		result = append(result, AdminKeyInfo{
 			KeyPrefix:        planFromKey(key),
