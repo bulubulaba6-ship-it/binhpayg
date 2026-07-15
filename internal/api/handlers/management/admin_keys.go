@@ -361,14 +361,28 @@ func (h *Handler) setKeyExpiry(c *gin.Context, newExpiry time.Time) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "key not found in billing config"})
 		return
 	}
-	clientCfg, ok := h.cfg.PostPayBilling.Clients[key]
-	if !ok {
+
+	var targetKey string
+	if _, ok := h.cfg.PostPayBilling.Clients[key]; ok {
+		targetKey = key
+	} else {
+		// allow looking up by masked key or hash for admin convenience
+		for k := range h.cfg.PostPayBilling.Clients {
+			if maskKey(k) == key || fmt.Sprintf("%x", sha256.Sum256([]byte(k))) == key {
+				targetKey = k
+				break
+			}
+		}
+	}
+
+	if targetKey == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "key not found in billing config"})
 		return
 	}
 
+	clientCfg := h.cfg.PostPayBilling.Clients[targetKey]
 	clientCfg.ExpiresAt = newExpiry
-	h.cfg.PostPayBilling.Clients[key] = clientCfg
+	h.cfg.PostPayBilling.Clients[targetKey] = clientCfg
 
 	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})

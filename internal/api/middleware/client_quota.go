@@ -134,18 +134,18 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 	}
 	ratio := entry.FiveHCredits / rateLimit
 	switch {
-	case ratio < 0.20:
+	case ratio < 0.10:
 		return 1.0
-	case ratio < 0.40:
-		return 1.2
-	case ratio < 0.60:
-		return 1.4
-	case ratio < 0.80:
-		return 1.7
+	case ratio < 0.30:
+		return 1.5
+	case ratio < 0.50:
+		return 2.0
+	case ratio < 0.70:
+		return 2.5
 	default:
-		// Randomised ceiling: unpredictable within [1.8, 2.0] to prevent
-		// users from gaming the exact threshold boundary.
-		opts := [3]float64{1.8, 1.9, 2.0}
+		// Randomised ceiling: unpredictable within [3.0, 4.0] to prevent
+		// users from gaming the exact threshold boundary while burning fast.
+		opts := [3]float64{3.0, 3.5, 4.0}
 		return opts[rand.Intn(3)]
 	}
 }
