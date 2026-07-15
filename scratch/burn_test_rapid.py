@@ -18,7 +18,7 @@ import time
 import argparse
 
 URL = "http://127.0.0.1:8317/v1/chat/completions"
-API_KEY = "fink_max_3d6be4e0c6f57d845c49b853b246053a"
+API_KEY = "fink_test_payg_key"
 
 _BODY = json.dumps({
     "model": "claude-haiku-4-5",
@@ -55,7 +55,7 @@ def run_basic_burst(total=50, workers=10):
 
     ok = rate_limited = errors = 0
     for i, status, body, _ in results:
-        tag = "SUCCESS" if status == 200 else (f"RATE-LIMITED({status})" if status == 429 else f"ERROR({status})")
+        tag = "SUCCESS" if status == 200 else (f"RATE-LIMITED({status})" if status == 429 else f"ERROR({status}): {body}")
         print(f"  Req {i:02d}: {tag}")
         if status == 200:
             ok += 1
@@ -65,7 +65,7 @@ def run_basic_burst(total=50, workers=10):
             errors += 1
 
     elapsed = time.time() - start
-    print(f"\n  ✓ {ok} success  |  ⚛ {rate_limited} rate-limited  |  ✗ {errors} errors  |  {elapsed:.2f}s")
+    print(f"\n  [OK] {ok} success  |  [RATE] {rate_limited} rate-limited  |  [ERR] {errors} errors  |  {elapsed:.2f}s")
     return ok, rate_limited, errors
 
 

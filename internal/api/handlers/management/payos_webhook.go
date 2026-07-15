@@ -224,21 +224,21 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		credits = 1000000
 		limit = 40000
 		isSubscription = true
-		daysValid = 30 // 30 days + 1 grace day
+		daysValid = 30
 	} else if strings.Contains(descLower, "max") || amountFloat >= 650000 {
 		tier = "max"
 		displayPlan = "MAX 5x"
 		credits = 250000
 		limit = 10000
 		isSubscription = true
-		daysValid = 31 // 30 days + 1 grace day
+		daysValid = 30
 	} else if strings.Contains(descLower, "pro") || amountFloat >= 350000 {
 		tier = "pro"
 		displayPlan = "PRO"
 		credits = 50000
 		limit = 2000
 		isSubscription = true
-		daysValid = 31 // 30 days + 1 grace day
+		daysValid = 30
 	} else if strings.Contains(descLower, "day7") {
 		// 7-day short-term subscription: 30,000 fixed credits.
 		// Detected by description only — amount-based detection is deliberately omitted
@@ -248,7 +248,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		credits = 30000
 		limit = 1500
 		isSubscription = true
-		daysValid = 8 // 7 days + 1 day grace buffer
+		daysValid = 7 // 7 days + 1 day grace buffer
 	} else if strings.Contains(descLower, "day1") {
 		// 1-day short-term subscription: 4,000 fixed credits.
 		// Detected by description only — amount-based detection is deliberately omitted
@@ -258,7 +258,7 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		credits = 4000
 		limit = 1000
 		isSubscription = true
-		daysValid = 2 // 1 day + 1 day grace buffer
+		daysValid = 1 // 1 day + 1 day grace buffer
 	} else {
 		// Unknown plan — reject rather than silently creating an unmanaged key.
 		// This prevents ghost keys from malformed or test webhooks.

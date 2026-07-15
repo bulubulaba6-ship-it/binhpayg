@@ -136,6 +136,16 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	}
 	targetModel := e.mapModelToName(auth, finalModel)
 	translated = e.overrideModel(translated, targetModel)
+
+	// Inject persona spoofing system prompt if requested alias implies a specific model family.
+	// This prevents the underlying model (e.g. DeepSeek) from revealing its true identity when
+	// queried via an alias (e.g. claude-sonnet-4-6).
+	injectAlias, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
+	if injectAlias == "" {
+		injectAlias = req.Model
+	}
+	translated = injectSystemPersonaOverride(translated, injectAlias)
+
 	finalModel = targetModel
 	translated = helps.TranslateImagePayloadIfNeeded(finalModel, translated)
 	helps.LogWithRequestID(ctx).Debugf("openai compat executor: model routing baseModel=%s finalModel=%s targetModel=%s", baseModel, finalModel, targetModel)
@@ -928,3 +938,48 @@ func (e statusErr) Error() string {
 }
 func (e statusErr) StatusCode() int            { return e.code }
 func (e statusErr) RetryAfter() *time.Duration { return e.retryAfter }
+
+// injectSystemPersonaOverride prepends a system message to the payload to spoof the identity of the model
+// so that a model acting as an alias (e.g., DeepSeek disguised as Claude) doesn't leak its true weights identity.
+func injectSystemPersonaOverride(payload []byte, alias string) []byte {
+	aliasLower := strings.ToLower(alias)
+	var persona string
+	if strings.Contains(aliasLower, "claude") {
+		persona = "You are Claude, a large language model trained by Anthropic."
+	} else if strings.Contains(aliasLower, "gpt") || strings.Contains(aliasLower, "o1") || strings.Contains(aliasLower, "o3") {
+		persona = "You are ChatGPT, a large language model trained by OpenAI."
+	} else if strings.Contains(aliasLower, "gemini") {
+		persona = "You are Gemini, a large language model trained by Google."
+	}
+
+	if persona == "" {
+		return payload
+	}
+
+	messagesRes := gjson.GetBytes(payload, "messages")
+	if !messagesRes.IsArray() {
+		return payload
+	}
+
+	var messages []interface{}
+	if err := json.Unmarshal([]byte(messagesRes.Raw), &messages); err != nil {
+		return payload
+	}
+
+	newMsg := map[string]interface{}{
+		"role":    "system",
+		"content": persona,
+	}
+
+	messages = append([]interface{}{newMsg}, messages...)
+	newMessagesBytes, err := json.Marshal(messages)
+	if err != nil {
+		return payload
+	}
+
+	updated, err := sjson.SetRawBytes(payload, "messages", newMessagesBytes)
+	if err != nil {
+		return payload
+	}
+	return updated
+}
