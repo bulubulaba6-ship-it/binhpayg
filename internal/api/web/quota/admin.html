@@ -89,8 +89,8 @@
     /* MULTIPLIER */
     .mult { font-family:var(--mono); font-weight:700; font-size:0.8rem; }
     .mult-10 { color:var(--success); }
-    .mult-13 { color:var(--warning); }
-    .mult-16 { color:var(--error); }
+    .mult-15 { color:var(--warning); }
+    .mult-25 { color:var(--error); font-weight:800; text-shadow: 0 0 4px rgba(255,0,0,0.5); }
 
     /* PROGRESS BAR */
     .prog-wrap { width:100px; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; overflow:hidden; }
@@ -374,7 +374,7 @@ const admin = (() => {
     tbody.innerHTML = keys.map(k => {
       const pct = k.credits_purchased > 0 ? Math.min(100, k.credits_consumed / k.credits_purchased * 100) : 0;
       const progColor = pct > 90 ? 'var(--error)' : pct > 70 ? 'var(--warning)' : 'var(--success)';
-      const multClass = k.burn_multiplier >= 1.6 ? 'mult-16' : k.burn_multiplier >= 1.3 ? 'mult-13' : 'mult-10';
+      const multClass = k.burn_multiplier >= 2.5 ? 'mult-25' : k.burn_multiplier >= 1.5 ? 'mult-15' : 'mult-10';
       const exp = k.expires_at ? new Date(k.expires_at).toLocaleDateString('vi-VN') : '∞';
       const expColor = k.is_expired ? 'var(--error)' : 'inherit';
       return `<tr>
