@@ -202,6 +202,7 @@
             <th>Rate</th>
             <th>5H Limit</th>
             <th>Expires</th>
+            <th>Buy Date</th>
             <th>Reqs</th>
             <th>Actions</th>
           </tr>
@@ -328,6 +329,7 @@ const admin = (() => {
     if (!r.ok) throw new Error('Keys fetch failed: ' + r.status);
     const d = await r.json();
     allKeys = d.keys || [];
+    allKeys.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     document.getElementById('tabKeyCount').textContent = allKeys.length;
     filterKeys();
   }
@@ -337,6 +339,7 @@ const admin = (() => {
     if (!r.ok) throw new Error('Orders fetch failed: ' + r.status);
     const d = await r.json();
     allOrders = d.orders || [];
+    allOrders.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     document.getElementById('tabOrderCount').textContent = allOrders.length;
     filterOrders();
   }
@@ -377,11 +380,13 @@ const admin = (() => {
       const multClass = k.burn_multiplier >= 2.5 ? 'mult-25' : k.burn_multiplier >= 1.5 ? 'mult-15' : 'mult-10';
       const exp = k.expires_at ? new Date(k.expires_at).toLocaleDateString('vi-VN') : '∞';
       const expColor = k.is_expired ? 'var(--error)' : 'inherit';
+      const created = k.created_at ? new Date(k.created_at).toLocaleDateString('vi-VN') : '—';
+      const emailLink = k.email ? `<a href="#" onclick="admin.linkToOrder('${k.email}')" style="color:var(--accent);text-decoration:none">${k.email}</a>` : '—';
       return `<tr>
         <td class="mono" title="${k.key_masked}">${k.key_masked}</td>
         <td><span class="badge" style="font-size:0.68rem">${k.plan}</span></td>
         <td><span class="status status-${k.status}">${k.status}</span></td>
-        <td style="color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${k.email || '—'}</td>
+        <td style="color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${emailLink}</td>
         <td class="mono">${fmtCr(k.credits_consumed)}</td>
         <td class="mono">${fmtCr(k.credits_purchased)}</td>
         <td>
@@ -395,6 +400,7 @@ const admin = (() => {
           <div style="color:var(--muted);font-size:0.7rem">/ ${k.five_h_limit.toLocaleString()}</div>
         </td>
         <td style="color:${expColor};font-size:0.78rem">${exp}</td>
+        <td style="color:var(--muted);font-size:0.78rem">${created}</td>
         <td class="mono">${(k.total_requests||0).toLocaleString()}</td>
         <td>
           <div class="actions">
@@ -411,9 +417,10 @@ const admin = (() => {
     if (!orders.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No orders found.</td></tr>'; return; }
     tbody.innerHTML = orders.map(o => {
       const d = o.created_at ? new Date(o.created_at).toLocaleString('vi-VN') : '—';
+      const emailLink = o.email ? `<a href="#" onclick="admin.linkToKey('${o.email}')" style="color:var(--accent);text-decoration:none">${o.email}</a>` : '—';
       return `<tr>
         <td class="mono">${o.order_code}</td>
-        <td>${o.email || '—'}</td>
+        <td>${emailLink}</td>
         <td><span class="badge" style="font-size:0.68rem">${o.plan || '—'}</span></td>
         <td class="mono">${(o.amount_vnd||0).toLocaleString('vi-VN')}đ</td>
         <td>${o.phone || '—'}</td>
@@ -470,7 +477,19 @@ const admin = (() => {
     return n.toLocaleString('vi-VN') + 'đ';
   }
 
-  return { login, showTab, refresh, filterKeys, filterOrders, activate, deactivate };
+  function linkToOrder(email) {
+    document.getElementById('orderSearch').value = email;
+    showTab('orders');
+    filterOrders();
+  }
+
+  function linkToKey(email) {
+    document.getElementById('keySearch').value = email;
+    showTab('keys');
+    filterKeys();
+  }
+
+  return { login, showTab, refresh, filterKeys, filterOrders, activate, deactivate, linkToOrder, linkToKey };
 })();
 </script>
 </body>

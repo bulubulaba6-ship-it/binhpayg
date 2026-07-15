@@ -401,7 +401,7 @@ func (h *Handler) setKeyExpiry(c *gin.Context, newExpiry time.Time) {
 		if newExpiry.IsZero() {
 			dbStatus = "active"
 		}
-		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(key)))
+		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(targetKey)))
 		_, _ = db.ExecContext(c.Request.Context(),
 			`UPDATE api_keys SET status = $1 WHERE key_hash = $2`, dbStatus, keyHash)
 	}

@@ -1,0 +1,4 @@
+CLIProxyAPI Version: dev, Commit: none, BuiltAt: unknown
+[2026-07-10 20:11:34] [--------] [info ] [main.go:330] postgres-backed token store enabled, workspace path: C:\gitroot\backup\pgstore
+API server started successfully on: :8317
+server clients and configuration updated: 4 clients (2 auth entries + 0 Gemini API keys + 0 Claude API keys + 0 Codex keys + 0 Vertex-compat + 2 OpenAI-compat)
