@@ -18,7 +18,7 @@ type AdminKeyInfo struct {
 	KeyPrefix        string     `json:"key_prefix"`
 	KeyMasked        string     `json:"key_masked"` // e.g. "fink_max_a1b2****c3d4"
 	Plan             string     `json:"plan"`
-	Status           string     `json:"status"` // "active" | "inactive" | "expired"
+	Status           string     `json:"status"` // "active" | "inactive" | "expired" | "config_error"
 	Email            string     `json:"email"`
 	CreditsConsumed  float64    `json:"credits_consumed"`
 	CreditsPurchased float64    `json:"credits_purchased"`
@@ -34,6 +34,11 @@ type AdminKeyInfo struct {
 	CreatedAt        *time.Time `json:"created_at,omitempty"`
 	TotalRequests    int64      `json:"total_requests"`
 	TotalTokens      int64      `json:"total_tokens"`
+	// InBilling is false when this key is in api-keys but missing from
+	// post-pay-billing.clients. Such keys bypass the credit ceiling entirely
+	// and must be added to the billing section or removed.
+	InBilling   bool   `json:"in_billing"`
+	ConfigError string `json:"config_error,omitempty"`
 }
 
 // AdminOrderInfo is the response shape for a payment order.
@@ -81,6 +86,9 @@ func planFromKey(key string) string {
 }
 
 // GetAdminKeys returns full info for all post-pay API keys.
+// It unions post-pay-billing.clients AND api-keys so keys that are in api-keys
+// but missing from billing (bypassing the credit ceiling) are always surfaced
+// with status "config_error" and in_billing=false.
 // GET /v0/management/admin/keys
 // Protected by management group middleware.
 func (h *Handler) GetAdminKeys(c *gin.Context) {
@@ -116,10 +124,23 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 		}
 	}
 
-	now := time.Now().UTC()
-	result := make([]AdminKeyInfo, 0, len(clients))
+	// Build the union of all keys: billing clients + raw api-keys.
+	// Keys present in api-keys but absent from billing clients bypass the
+	// credit-ceiling kill-switch — expose them with status "config_error"
+	// so operators can correct the configuration immediately.
+	allKeys := make(map[string]struct{}, len(clients)+len(cfg.APIKeys))
+	for key := range clients {
+		allKeys[key] = struct{}{}
+	}
+	for _, key := range cfg.APIKeys {
+		allKeys[key] = struct{}{}
+	}
 
-	for key, clientCfg := range clients {
+	now := time.Now().UTC()
+	result := make([]AdminKeyInfo, 0, len(allKeys))
+
+	for key := range allKeys {
+		clientCfg, inBilling := clients[key]
 		entry := ledger[key]
 
 		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(key)))
@@ -141,7 +162,7 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 
 		isExpired := false
 		var expiresAt *time.Time
-		if !clientCfg.ExpiresAt.IsZero() {
+		if inBilling && !clientCfg.ExpiresAt.IsZero() {
 			t := clientCfg.ExpiresAt
 			expiresAt = &t
 			if now.After(clientCfg.ExpiresAt) {
@@ -149,10 +170,16 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 			}
 		}
 
+		var configErr string
 		status := "active"
-		if isExpired {
+		switch {
+		case !inBilling:
+			// Key is active on the proxy but bypasses all billing controls.
+			status = "config_error"
+			configErr = "missing from post-pay-billing.clients — key bypasses credit ceiling"
+		case isExpired:
 			status = "expired"
-		} else if remaining <= 0 && purchased > 0 {
+		case remaining <= 0 && purchased > 0:
 			status = "exhausted"
 		}
 
@@ -210,6 +237,8 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 			CreatedAt:        created,
 			TotalRequests:    totalReq,
 			TotalTokens:      totalTokens,
+			InBilling:        inBilling,
+			ConfigError:      configErr,
 		})
 	}
 

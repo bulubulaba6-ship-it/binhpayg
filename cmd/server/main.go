@@ -498,6 +498,11 @@ func main() {
 	// Set the log level based on the configuration.
 	util.SetLogLevel(cfg)
 
+	// Validate that api-keys and post-pay-billing.clients are in sync.
+	// Any key present in one section but absent from the other is a configuration
+	// error: api-keys-only keys bypass billing; billing-only keys always 401.
+	validateBillingKeyConsistency(cfg)
+
 	if resolvedAuthDir, errResolveAuthDir := util.ResolveAuthDir(cfg.AuthDir); errResolveAuthDir != nil {
 		log.Errorf("failed to resolve auth directory: %v", errResolveAuthDir)
 		return
@@ -650,5 +655,61 @@ func main() {
 			}
 			cmd.StartService(cfg, configFilePath, password)
 		}
+	}
+}
+
+// validateBillingKeyConsistency logs warnings for configuration mismatches between
+// api-keys and post-pay-billing.clients when billing is enabled.
+//   - api-keys-only keys bypass all credit controls in commercial mode (billing blind spot)
+//   - billing-only keys are tracked but always return 401 (unreachable, wasted config)
+func validateBillingKeyConsistency(cfg *config.Config) {
+	if cfg == nil || !cfg.PostPayBilling.Enabled || cfg.PostPayBilling.Clients == nil {
+		return
+	}
+	apiKeySet := make(map[string]struct{}, len(cfg.APIKeys))
+	for _, k := range cfg.APIKeys {
+		apiKeySet[k] = struct{}{}
+	}
+	missingFromBilling := 0
+	for _, key := range cfg.APIKeys {
+		if _, ok := cfg.PostPayBilling.Clients[key]; !ok {
+			pfx := key
+			if len(pfx) > 12 {
+				pfx = pfx[:12]
+			}
+			sfx := ""
+			if len(key) > 4 {
+				sfx = key[len(key)-4:]
+			}
+			log.Warnf("CONFIG: api-key %s...%s is NOT in post-pay-billing.clients — "+
+				"key bypasses credit ceiling and expiry in commercial mode", pfx, sfx)
+			missingFromBilling++
+		}
+	}
+	missingFromAPIKeys := 0
+	for key := range cfg.PostPayBilling.Clients {
+		if _, ok := apiKeySet[key]; !ok {
+			pfx := key
+			if len(pfx) > 12 {
+				pfx = pfx[:12]
+			}
+			sfx := ""
+			if len(key) > 4 {
+				sfx = key[len(key)-4:]
+			}
+			log.Warnf("CONFIG: billing client %s...%s is NOT in api-keys — "+
+				"key is tracked but will always return 401 (never authenticated)", pfx, sfx)
+			missingFromAPIKeys++
+		}
+	}
+	if missingFromBilling > 0 {
+		log.Errorf("CONFIG: %d api-key(s) missing from post-pay-billing.clients — "+
+			"these keys bypass ALL billing controls. Add them to billing or remove them from api-keys.",
+			missingFromBilling)
+	}
+	if missingFromAPIKeys > 0 {
+		log.Warnf("CONFIG: %d post-pay-billing client(s) not in api-keys — "+
+			"these billing entries are unreachable.",
+			missingFromAPIKeys)
 	}
 }

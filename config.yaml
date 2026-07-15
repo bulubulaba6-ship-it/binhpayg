@@ -18,8 +18,14 @@ api-keys:
   - fink_max_966bf870eae82218eaac72e2de1a87aa
   - test_fink_pro_1234567890abcdef_test
   - fink_max_123fd87f9250a4b09330961a32ec667f
-  - fink_max_3d6be4e0c6f57d845c49b853b246053a
-  - fink_test_payg_key
+  - fink_max_c3364424fcd368f00115d004323e9522
+  - fink_max_d11f5a1d2398e12e3136f4fab2de4f40
+  - fink_max_d2a4d733db88e0dda50eddbdef8cb28c
+  - fink_6db8bcc04240f16a34398b9319d5a1da
+  - fink_54a9733e264f5e61949735a2098cfb70
+  - fink_pro_03cefeb9f45eeda0295f308a30f62ffd
+  - fink_eb6924786c88368ab2ef52d99d749f65
+  - fink_547a2dd57b7c148f09478206be8f4755
 api-key-models:
   "fink_pro_5d41402abc4b2a76b9719d911017c592":
     claude:
@@ -169,7 +175,7 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
-  fink_max_3d6be4e0c6f57d845c49b853b246053a:
+  fink_max_c3364424fcd368f00115d004323e9522:
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
@@ -184,7 +190,97 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
-  fink_test_payg_key:
+  fink_max_d11f5a1d2398e12e3136f4fab2de4f40:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_max_d2a4d733db88e0dda50eddbdef8cb28c:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_6db8bcc04240f16a34398b9319d5a1da:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_54a9733e264f5e61949735a2098cfb70:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_pro_03cefeb9f45eeda0295f308a30f62ffd:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_eb6924786c88368ab2ef52d99d749f65:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
+  fink_547a2dd57b7c148f09478206be8f4755:
     claude:
       - claude-opus-4-8
       - claude-opus-4-7
@@ -239,8 +335,10 @@ post-pay-billing:
       credit-limit: 50000
     "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
       credit-limit: 50000
+    # DEACTIVATED — mank18fpter, MAX plan expired 15/7/2026 (30d from 15/6/2026)
     "fink_max_cfacc7472333305910a0176c82e951d8":
       credit-limit: 0
+      expires-at: "2026-07-15T00:00:00Z"
     "fink_pro_0e6f8568c58418d2569b5879fb4d9c72":
       credit-limit: 0
     "fink_pro_b54e2ebaca28b22e32345a2872f6be9d":
@@ -254,13 +352,33 @@ post-pay-billing:
     fink_max_966bf870eae82218eaac72e2de1a87aa:
       credit-limit: 250000
     test_fink_pro_1234567890abcdef_test:
-      credit-limit: 1e+06
+      credit-limit: 1000000
     fink_max_123fd87f9250a4b09330961a32ec667f:
       credit-limit: 0
-    fink_max_3d6be4e0c6f57d845c49b853b246053a:
-      credit-limit: 200000
-    fink_test_payg_key:
+    fink_max_c3364424fcd368f00115d004323e9522:
       credit-limit: 0
+    fink_max_d11f5a1d2398e12e3136f4fab2de4f40:
+      credit-limit: 0
+    fink_max_d2a4d733db88e0dda50eddbdef8cb28c:
+      credit-limit: 0
+    # DEACTIVATED — PAYG suspended (no credits ever deposited)
+    fink_6db8bcc04240f16a34398b9319d5a1da:
+      credit-limit: 0
+      expires-at: "2026-07-15T00:00:00Z"
+    # DEACTIVATED — PAYG suspended (no credits ever deposited)
+    fink_54a9733e264f5e61949735a2098cfb70:
+      credit-limit: 0
+      expires-at: "2026-07-15T00:00:00Z"
+    fink_pro_03cefeb9f45eeda0295f308a30f62ffd:
+      credit-limit: 0
+    # DEACTIVATED — day1 pass expired
+    fink_eb6924786c88368ab2ef52d99d749f65:
+      credit-limit: 0
+      expires-at: "2026-07-15T00:00:00Z"
+    # DEACTIVATED — day1 pass expired
+    fink_547a2dd57b7c148f09478206be8f4755:
+      credit-limit: 0
+      expires-at: "2026-07-15T00:00:00Z"
   markup-rates:
     "claude-opus-4-8":
       input: 1400
@@ -354,4 +472,9 @@ api-key-limits:
   fink_max_966bf870eae82218eaac72e2de1a87aa: 10000
   test_fink_pro_1234567890abcdef_test: 10000
   fink_max_123fd87f9250a4b09330961a32ec667f: 10000
-  fink_max_3d6be4e0c6f57d845c49b853b246053a: 10000
+  fink_max_c3364424fcd368f00115d004323e9522: 10000
+  fink_max_d11f5a1d2398e12e3136f4fab2de4f40: 10000
+  fink_max_d2a4d733db88e0dda50eddbdef8cb28c: 10000
+  fink_pro_03cefeb9f45eeda0295f308a30f62ffd: 2000
+  fink_eb6924786c88368ab2ef52d99d749f65: 1000
+  fink_547a2dd57b7c148f09478206be8f4755: 1000

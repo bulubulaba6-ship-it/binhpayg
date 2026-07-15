@@ -487,6 +487,24 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 			}
 		}
 
+		// Commercial-mode billing guard: if billing is enabled and this key is NOT
+		// enrolled in post-pay-billing.clients, it would silently bypass all credit
+		// controls (balance ceiling, expiry, 5H burst limit). Block it immediately
+		// so operators are forced to enrol the key in billing before it can be used.
+		// This prevents manually-added api-keys from becoming free-tier loopholes.
+		if liveCfg.CommercialMode {
+			if _, ok := liveCfg.PostPayBilling.Clients[apiKey]; !ok {
+				c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
+					"error": gin.H{
+						"message": "no_billing_account: This API key has no billing configuration. Please contact support to activate your key.",
+						"type":    "no_billing_account",
+						"code":    "no_billing_account",
+					},
+				})
+				return
+			}
+		}
+
 		// Standard volatile kill switch (also reads live config)
 		limit := liveCfg.DefaultAPIKeyLimit
 		if liveCfg.APIKeyLimits != nil {
@@ -1048,7 +1066,7 @@ var vndTiers = []vndTierEntry{
 // vndTierForAmount returns the pricePer1k and tier number for a given VND amount.
 func vndTierForAmount(vndAmount float64) (pricePer1k float64, tier int) {
 	for _, t := range vndTiers {
-		if t.maxVND == 0 || vndAmount < t.maxVND {
+		if t.maxVND == 0 || vndAmount <= t.maxVND {
 			return t.pricePer1k, t.tier
 		}
 	}

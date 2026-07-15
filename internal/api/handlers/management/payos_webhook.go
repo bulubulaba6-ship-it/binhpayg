@@ -207,30 +207,38 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 	descLower := strings.ToLower(description)
 
 	if strings.Contains(descLower, "payg") {
-		// Explicit PAYG orders bypass amount-based subscription upgrades.
-		tier = "payg"
-		displayPlan = "Pay-As-You-Go"
-		credits = 0
-		limit = 0
-		isSubscription = false
+		// PAYG temporarily disabled — all 50k VND orders are now treated as
+		// day1 subscriptions (1-day pass with 4,000 credits + 1 grace day).
+		// This prevents the unlimited-credit loophole from PAYG keys with
+		// credit-limit:0 that bypass balance enforcement.
+		// TODO: Re-enable PAYG once deposit-top-up is stable.
+		c.JSON(http.StatusOK, gin.H{
+			"error":   0,
+			"message": "PAYG plan is temporarily unavailable. Please purchase a 1-Day or PRO plan instead.",
+			"data":    nil,
+		})
+		return
 	} else if strings.Contains(descLower, "max_20x") || amountFloat >= 1800000 {
 		tier = "max"
 		displayPlan = "MAX 20x"
 		credits = 1000000
 		limit = 40000
 		isSubscription = true
+		daysValid = 31 // 30 days + 1 grace day
 	} else if strings.Contains(descLower, "max") || amountFloat >= 650000 {
 		tier = "max"
 		displayPlan = "MAX 5x"
 		credits = 250000
 		limit = 10000
 		isSubscription = true
+		daysValid = 31 // 30 days + 1 grace day
 	} else if strings.Contains(descLower, "pro") || amountFloat >= 350000 {
 		tier = "pro"
 		displayPlan = "PRO"
 		credits = 50000
 		limit = 2000
 		isSubscription = true
+		daysValid = 31 // 30 days + 1 grace day
 	} else if strings.Contains(descLower, "day7") {
 		// 7-day short-term subscription: 30,000 fixed credits.
 		// Detected by description only — amount-based detection is deliberately omitted
@@ -252,14 +260,16 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 		isSubscription = true
 		daysValid = 2 // 1 day + 1 day grace buffer
 	} else {
-		tier = "payg"
-		displayPlan = "Pay-As-You-Go"
-		credits = 0
-
-		// PAYG has NO 5H limit (unlimited burst) because the base credit price is higher.
-		limit = 0
-
-		isSubscription = false
+		// Unknown plan — reject rather than silently creating an unmanaged key.
+		// This prevents ghost keys from malformed or test webhooks.
+		log.Warnf("payos webhook: unrecognised plan in order %s description=%q amount=%.0f — rejected",
+			orderCode, description, amountFloat)
+		c.JSON(http.StatusOK, gin.H{
+			"error":   0,
+			"message": "Unrecognised plan. No key created.",
+			"data":    nil,
+		})
+		return
 	}
 
 	// We only provision a new key if it's a known plan, otherwise we might deposit to existing.
