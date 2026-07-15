@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"time"
 
@@ -223,6 +224,7 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	}
 	if gjson.ValidBytes(out) {
 		out = e.overrideModel(out, modelAlias)
+		out = sanitizeResponse(out, opts.Headers)
 	}
 
 	resp = cliproxyexecutor.Response{Payload: out, Headers: stripModelDisclosureHeaders(httpResp.Header.Clone())}
@@ -489,6 +491,7 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 						trimmedData := bytes.TrimSpace(dataPart)
 						if !bytes.Equal(trimmedData, []byte("[DONE]")) && gjson.ValidBytes(trimmedData) {
 							overridden := e.overrideModel(trimmedData, modelAlias)
+							overridden = sanitizeResponse(overridden, opts.Headers)
 							lines[j] = append([]byte("data: "), overridden...)
 						}
 					}
@@ -500,6 +503,7 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 				if !anyDataLine {
 					if trimmed := bytes.TrimSpace(updatedChunk); gjson.ValidBytes(trimmed) {
 						updatedChunk = e.overrideModel(trimmed, modelAlias)
+						updatedChunk = sanitizeResponse(updatedChunk, opts.Headers)
 					}
 				}
 				select {
@@ -982,4 +986,35 @@ func injectSystemPersonaOverride(payload []byte, alias string) []byte {
 		return payload
 	}
 	return updated
+}
+
+// sanitizeResponse scrubs upstream-specific fingerprints and scales token usage
+// based on the internal burn multiplier to ensure client-side token calculators
+// reflect the billed cost.
+func sanitizeResponse(payload []byte, headers http.Header) []byte {
+	// 1. Remove system_fingerprint to avoid leaking identity (e.g. DeepSeek's fp8_kvcache)
+	payload, _ = sjson.DeleteBytes(payload, "system_fingerprint")
+
+	// 2. Scale usage metrics if a burn multiplier is active
+	if headers != nil {
+		if multStr := headers.Get("X-Internal-Burn-Multiplier"); multStr != "" {
+			if mult, err := strconv.ParseFloat(multStr, 64); err == nil && mult > 1.0 {
+				if usageRes := gjson.GetBytes(payload, "usage"); usageRes.Exists() {
+					multiplyTokenField := func(field string) {
+						if countRes := gjson.GetBytes(payload, "usage."+field); countRes.Exists() {
+							scaled := int64(float64(countRes.Int()) * mult)
+							payload, _ = sjson.SetBytes(payload, "usage."+field, scaled)
+						}
+					}
+					multiplyTokenField("prompt_tokens")
+					multiplyTokenField("completion_tokens")
+					multiplyTokenField("total_tokens")
+					multiplyTokenField("prompt_cache_hit_tokens")
+					multiplyTokenField("prompt_cache_miss_tokens")
+					multiplyTokenField("completion_tokens_details.reasoning_tokens")
+				}
+			}
+		}
+	}
+	return payload
 }

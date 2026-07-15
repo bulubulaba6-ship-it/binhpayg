@@ -481,6 +481,9 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 				// Exposing these details allows clients to reverse-engineer profit margins
 				// and game the rate-limit boundaries. This data must remain isolated
 				// to the management API endpoints.
+				if mult := GetBurnMultiplierForKey(apiKey); mult > 1.0 {
+					c.Request.Header.Set("X-Internal-Burn-Multiplier", fmt.Sprintf("%f", mult))
+				}
 
 				c.Next()
 				return // Skip standard volatile kill switch
