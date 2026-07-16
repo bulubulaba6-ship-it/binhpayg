@@ -80,29 +80,9 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		}
 	}
 
-	// 5h window credits: sum credits only from sessions within the last 5 hours.
-	// Uses billableInput (input - cache) to match the actual billing formula,
-	// so the 5H gauge burns at the same rate as the user's credit balance.
-	fiveHCutoff := time.Now().Add(-5 * time.Hour)
 	var fiveHCredits float64
-	// We use the per-session markup rates from live config for accuracy.
-	liveCfg := middleware.GetLiveConfig()
-	for _, s := range sessions {
-		if s.Timestamp.After(fiveHCutoff) {
-			if liveCfg != nil {
-				if pricing, ok := liveCfg.PostPayBilling.MarkupRates[s.Model]; ok {
-					billableInput := s.InputTokens - s.CachedTokens
-					if billableInput < 0 {
-						billableInput = 0
-					}
-					fiveHCredits += float64(billableInput) * pricing.Input / 1_000_000.0
-					fiveHCredits += float64(s.OutputTokens) * pricing.Output / 1_000_000.0
-					fiveHCredits += float64(s.CachedTokens) * pricing.Cache / 1_000_000.0
-					// Reasoning tokens billed at output rate (mirrors client_quota.go).
-					fiveHCredits += float64(s.ReasoningTokens) * pricing.Output / 1_000_000.0
-				}
-			}
-		}
+	if entry != nil && !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour {
+		fiveHCredits = entry.FiveHCredits
 	}
 
 	// RPM: sessions in last 30 minutes ÷ 30.
@@ -136,6 +116,7 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 		tier = 2
 	}
 
+	liveCfg := middleware.GetLiveConfig()
 	rateLimit5h := 0
 	if liveCfg != nil {
 		rateLimit5h = liveCfg.DefaultAPIKeyLimit
