@@ -139,44 +139,42 @@ func (h *Handler) PostProvisionKey(c *gin.Context) {
 	//    persistLocked writes the spool file → fsnotify detects change →
 	//    persistConfigAsync() → PersistConfig(ctx) → saved to Postgres (PGSTORE_DSN).
 	h.mu.Lock()
+	latestCfg, err := config.LoadConfig(h.configFilePath)
+	if err == nil {
+		latestCfg.APIKeys = append(latestCfg.APIKeys, newKey)
 
-	// 4a. api-keys: grant proxy access
-	h.cfg.APIKeys = append(h.cfg.APIKeys, newKey)
+		if latestCfg.APIKeyModels == nil {
+			latestCfg.APIKeyModels = make(map[string]map[string][]string)
+		}
+		latestCfg.APIKeyModels[newKey] = map[string][]string{
+			"claude": AllowedClaude,
+			"openai": AllowedOpenAI,
+		}
 
-	// 4b. api-key-models: restrict to the allowed model set
-	if h.cfg.APIKeyModels == nil {
-		h.cfg.APIKeyModels = make(map[string]map[string][]string)
-	}
-	h.cfg.APIKeyModels[newKey] = map[string][]string{
-		"claude": AllowedClaude,
-		"openai": AllowedOpenAI,
-	}
+		if latestCfg.PostPayBilling.Clients == nil {
+			latestCfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
+		}
 
-	// 4c. post-pay-billing.clients: enrol key with zero overdraft.
-	//     effectiveLimit = creditsPurchased + credit-limit(0) = credits only.
-	//     Key is blocked the moment credits_consumed >= credits_purchased.
-	if h.cfg.PostPayBilling.Clients == nil {
-		h.cfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
-	}
+		clientCfg := config.PostPayBillingClientCfg{
+			CreditLimit: 0, // no overdraft — strict enforcement
+		}
+		if req.DaysValid > 0 {
+			clientCfg.ExpiresAt = time.Now().UTC().AddDate(0, 0, req.DaysValid)
+		}
+		latestCfg.PostPayBilling.Clients[newKey] = clientCfg
 
-	clientCfg := config.PostPayBillingClientCfg{
-		CreditLimit: 0, // no overdraft — strict enforcement
-	}
-	if req.DaysValid > 0 {
-		clientCfg.ExpiresAt = time.Now().UTC().AddDate(0, 0, req.DaysValid)
-	}
-	h.cfg.PostPayBilling.Clients[newKey] = clientCfg
+		if latestCfg.APIKeyLimits == nil {
+			latestCfg.APIKeyLimits = make(map[string]int)
+		}
+		latestCfg.APIKeyLimits[newKey] = req.FiveHLimit
 
-	// 4d. api-key-limits: per-5h rolling-window rate limit. per-5h rolling-window rate limit.
-	//     Standard volatile kill-switch; resets automatically after 5 hours.
-	if h.cfg.APIKeyLimits == nil {
-		h.cfg.APIKeyLimits = make(map[string]int)
-	}
-	h.cfg.APIKeyLimits[newKey] = req.FiveHLimit
-
-	// 4e. Persist everything in one write → auto-synced to Postgres via watcher
-	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
+		if err := config.SaveConfigPreserveComments(h.configFilePath, latestCfg); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
+			h.mu.Unlock()
+			return
+		}
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load config: " + err.Error()})
 		h.mu.Unlock()
 		return
 	}

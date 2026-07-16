@@ -386,12 +386,18 @@ func (h *Handler) setKeyExpiry(c *gin.Context, newExpiry time.Time) {
 		return
 	}
 
-	clientCfg := h.cfg.PostPayBilling.Clients[targetKey]
-	clientCfg.ExpiresAt = newExpiry
-	h.cfg.PostPayBilling.Clients[targetKey] = clientCfg
+	latestCfg, err := config.LoadConfig(h.configFilePath)
+	if err == nil {
+		clientCfg := latestCfg.PostPayBilling.Clients[targetKey]
+		clientCfg.ExpiresAt = newExpiry
+		latestCfg.PostPayBilling.Clients[targetKey] = clientCfg
 
-	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
+		if err := config.SaveConfigPreserveComments(h.configFilePath, latestCfg); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
+			return
+		}
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load config: " + err.Error()})
 		return
 	}
 

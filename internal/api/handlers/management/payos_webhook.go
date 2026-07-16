@@ -333,35 +333,40 @@ func (h *Handler) PostPayOSWebhook(c *gin.Context) {
 
 	// 5. Commit Key to Config (Ghost keys prevented by DB check above)
 	h.mu.Lock()
-	h.cfg.APIKeys = append(h.cfg.APIKeys, newKey)
+	latestCfg, err := config.LoadConfig(h.configFilePath)
+	if err == nil {
+		latestCfg.APIKeys = append(latestCfg.APIKeys, newKey)
 
-	if h.cfg.APIKeyModels == nil {
-		h.cfg.APIKeyModels = make(map[string]map[string][]string)
-	}
-	h.cfg.APIKeyModels[newKey] = map[string][]string{
-		"claude": AllowedClaude,
-		"openai": AllowedOpenAI,
-	}
+		if latestCfg.APIKeyModels == nil {
+			latestCfg.APIKeyModels = make(map[string]map[string][]string)
+		}
+		latestCfg.APIKeyModels[newKey] = map[string][]string{
+			"claude": AllowedClaude,
+			"openai": AllowedOpenAI,
+		}
 
-	if h.cfg.PostPayBilling.Clients == nil {
-		h.cfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
-	}
-	clientCfg := config.PostPayBillingClientCfg{CreditLimit: 0}
-	if daysValid > 0 {
-		// Time-based kill switch: key is hard-expired after daysValid days.
-		// This is a secondary guard on top of credit exhaustion — prevents
-		// hoarding a day1/day7 key and using it weeks later.
-		clientCfg.ExpiresAt = time.Now().UTC().AddDate(0, 0, daysValid)
-	}
-	h.cfg.PostPayBilling.Clients[newKey] = clientCfg
+		if latestCfg.PostPayBilling.Clients == nil {
+			latestCfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
+		}
+		clientCfg := config.PostPayBillingClientCfg{CreditLimit: 0}
+		if daysValid > 0 {
+			// Time-based kill switch: key is hard-expired after daysValid days.
+			// This is a secondary guard on top of credit exhaustion — prevents
+			// hoarding a day1/day7 key and using it weeks later.
+			clientCfg.ExpiresAt = time.Now().UTC().AddDate(0, 0, daysValid)
+		}
+		latestCfg.PostPayBilling.Clients[newKey] = clientCfg
 
-	if h.cfg.APIKeyLimits == nil {
-		h.cfg.APIKeyLimits = make(map[string]int)
-	}
-	h.cfg.APIKeyLimits[newKey] = limit
+		if latestCfg.APIKeyLimits == nil {
+			latestCfg.APIKeyLimits = make(map[string]int)
+		}
+		latestCfg.APIKeyLimits[newKey] = limit
 
-	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); err != nil {
-		log.Errorf("failed to save config on payos webhook: %v", err)
+		if err := config.SaveConfigPreserveComments(h.configFilePath, latestCfg); err != nil {
+			log.Errorf("failed to save config on payos webhook: %v", err)
+		}
+	} else {
+		log.Errorf("failed to load latest config on payos webhook: %v", err)
 	}
 	h.mu.Unlock()
 

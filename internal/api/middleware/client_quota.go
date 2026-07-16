@@ -1193,6 +1193,14 @@ func SwapKeyInConfigMemory(oldKey, newKey string) {
 		}
 	}
 
+	// Swap in APIKeyModels map
+	if globalConfig.APIKeyModels != nil {
+		if models, ok := globalConfig.APIKeyModels[oldKey]; ok {
+			globalConfig.APIKeyModels[newKey] = models
+			delete(globalConfig.APIKeyModels, oldKey)
+		}
+	}
+
 	// Swap in post-pay clients map
 	if globalConfig.PostPayBilling.Clients != nil {
 		if client, ok := globalConfig.PostPayBilling.Clients[oldKey]; ok {

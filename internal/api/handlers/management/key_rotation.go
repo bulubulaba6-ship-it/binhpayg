@@ -14,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -165,35 +164,10 @@ func (h *Handler) PostVerifyRotation(c *gin.Context) {
 		// The new key works for the current server lifetime but may revert on restart.
 	}
 
-	// Also register the new key's model access + rate limit into h.cfg memory
-	// (SwapKeyInConfigMemory only moves the key string in APIKeys list, it does NOT
-	// copy over the api-key-models or api-key-limits entries, so we must do that here)
-	h.mu.Lock()
-	if h.cfg.APIKeyModels == nil {
-		h.cfg.APIKeyModels = make(map[string]map[string][]string)
-	}
-	h.cfg.APIKeyModels[newKey] = map[string][]string{
-		"claude": AllowedClaude,
-		"openai": AllowedOpenAI,
-	}
-	if h.cfg.PostPayBilling.Clients == nil {
-		h.cfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
-	}
-	// Copy old key's credit limit to new key, then remove old entry
-	if oldCfg, ok := h.cfg.PostPayBilling.Clients[req.WorkspaceKey]; ok {
-		h.cfg.PostPayBilling.Clients[newKey] = oldCfg
-		delete(h.cfg.PostPayBilling.Clients, req.WorkspaceKey)
-	} else {
-		h.cfg.PostPayBilling.Clients[newKey] = config.PostPayBillingClientCfg{CreditLimit: 0}
-	}
-	if h.cfg.APIKeyLimits != nil {
-		if oldLimit, ok := h.cfg.APIKeyLimits[req.WorkspaceKey]; ok {
-			h.cfg.APIKeyLimits[newKey] = oldLimit
-			delete(h.cfg.APIKeyLimits, req.WorkspaceKey)
-		}
-	}
-	_ = config.SaveConfigPreserveComments(h.configFilePath, h.cfg)
-	h.mu.Unlock()
+	// Note: We do NOT call SaveConfigPreserveComments here because migrateKeyInFiles
+	// already used bytes.ReplaceAll to rename oldKey to newKey everywhere in the config file
+	// (including api-key-models and api-key-limits). If we saved h.cfg here, we would
+	// overwrite the file with stale memory from startup.
 
 	// Email the new key
 	go sendAPIKeyEmail(email, newKey, plan)
