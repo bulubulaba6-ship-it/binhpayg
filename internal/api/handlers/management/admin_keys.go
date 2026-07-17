@@ -487,3 +487,144 @@ func (h *Handler) GetAdminSummary(c *gin.Context) {
 		"as_of":             now,
 	})
 }
+
+// adminKeyRegisterRequest is the payload for PostAdminKeyRegister.
+type adminKeyRegisterRequest struct {
+	Key     string  `json:"key"`               // full plaintext API key (required)
+	Email   string  `json:"email"`             // owner email — shown in admin dashboard
+	Credits float64 `json:"credits"`           // credits to seed into the ledger (plan allowance)
+	TxnID   string  `json:"txn_id,omitempty"`  // optional idempotency token
+}
+
+// PostAdminKeyRegister backfills the DB and ledger for a key that was added manually to
+// config.yaml without going through the PayOS/provision flow.
+//
+// It performs two actions that the manual config edit skips:
+//
+//  1. DB: inserts a row into api_keys (key_hash, prefix, email, plan, status, order_code)
+//     so the key shows up with correct metadata in the admin dashboard.
+//  2. Ledger: calls ProcessDepositCredits to set creditsPurchased = credits, which makes
+//     balance enforcement and tier calculations correct from day one.
+//
+// Idempotent: if the DB row already exists (UNIQUE constraint on key_hash) it skips the
+// insert and just re-seeds the ledger (also idempotent via txn_id dedup).
+//
+// POST /v0/management/admin/keys/register
+// Protected by management group middleware.
+func (h *Handler) PostAdminKeyRegister(c *gin.Context) {
+	var req adminKeyRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Key) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "body must have {\"key\": \"<full api key>\", \"email\": \"...\", \"credits\": <number>}"})
+		return
+	}
+	key := strings.TrimSpace(req.Key)
+	credits := req.Credits
+
+	// Validate key is present in live config — refuse to register unknown keys.
+	liveCfg := middleware.GetLiveConfig()
+	if liveCfg == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config not available"})
+		return
+	}
+	keyInConfig := false
+	for _, k := range liveCfg.APIKeys {
+		if k == key {
+			keyInConfig = true
+			break
+		}
+	}
+	if !keyInConfig {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key not found in api-keys config — add it to config first"})
+		return
+	}
+	if _, inBilling := liveCfg.PostPayBilling.Clients[key]; !inBilling {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key not found in post-pay-billing.clients — add it to billing config first"})
+		return
+	}
+
+	plan := planFromKey(key)
+	prefix := ""
+	switch {
+	case strings.HasPrefix(key, "fink_max_"):
+		prefix = "fink_max_"
+	case strings.HasPrefix(key, "fink_pro_"):
+		prefix = "fink_pro_"
+	default:
+		prefix = "fink_"
+	}
+
+	keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(key)))
+
+	// Step 1: Insert into DB api_keys (idempotent — skip if key_hash already exists).
+	dbRegistered := false
+	dbSkipped := false
+	db := getWebhookDB()
+	if db != nil {
+		// Use a synthetic order_code for manually registered keys so the UNIQUE constraint is satisfied.
+		syntheticOrder := fmt.Sprintf("manual-admin-%s", keyHash[:12])
+		_, errInsert := db.ExecContext(c.Request.Context(), `
+			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
+			VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+			ON CONFLICT (key_hash) DO NOTHING
+		`, plan, keyHash, prefix, req.Email, plan, syntheticOrder, time.Now().Unix())
+		if errInsert != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "db insert failed: " + errInsert.Error()})
+			return
+		}
+
+		// Check whether the row was actually inserted or skipped (ON CONFLICT DO NOTHING).
+		var existingID int
+		errCheck := db.QueryRowContext(c.Request.Context(),
+			`SELECT id FROM api_keys WHERE key_hash = $1`, keyHash).Scan(&existingID)
+		if errCheck == nil && existingID > 0 {
+			dbRegistered = true
+		}
+	} else {
+		// No DB configured — this is fine, ledger-only registration still works.
+		dbSkipped = true
+	}
+
+	// Step 2: Seed creditsPurchased in the in-memory ledger via ProcessDepositCredits.
+	// Use a deterministic txn_id based on key hash to prevent double-seeding on retries.
+	txnID := req.TxnID
+	if txnID == "" {
+		txnID = fmt.Sprintf("manual-register-%s", keyHash[:16])
+	}
+	var addedCredits, newTotal float64
+	var isDuplicate bool
+	if credits > 0 {
+		addedCredits, newTotal, isDuplicate = middleware.ProcessDepositCredits(key, credits, txnID)
+	} else {
+		// credits=0 means caller just wants DB registration without touching the ledger.
+		snapshot := middleware.GetPostPaySnapshot()
+		if e, ok := snapshot[key]; ok {
+			newTotal = e.CreditsPurchased
+		}
+	}
+
+	// Step 3: Flush ledger to disk + Postgres immediately.
+	if liveCfg.PostPayBilling.LedgerFile != "" {
+		fullPath := liveCfg.AuthDir + "/" + liveCfg.PostPayBilling.LedgerFile
+		_ = middleware.SavePostPayUsage(fullPath)
+	}
+
+	result := gin.H{
+		"status":          "ok",
+		"key":             maskKey(key),
+		"plan":            plan,
+		"email":           req.Email,
+		"credits_seeded":  addedCredits,
+		"total_purchased": newTotal,
+		"duplicate_txn":   isDuplicate,
+		"db_registered":   dbRegistered,
+		"db_skipped_no_db": dbSkipped,
+	}
+
+	if isDuplicate {
+		result["status"] = "duplicate_txn"
+		result["note"] = "ledger already seeded with this txn_id — use a different txn_id to force re-seed"
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+

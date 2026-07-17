@@ -418,7 +418,12 @@ func ClientQuotaMiddleware(cfg *config.Config) gin.HandlerFunc {
 					effectiveLimit += clientCfg.CreditLimit
 				}
 
-				if creditsConsumed >= effectiveLimit {
+				// Only enforce when effectiveLimit > 0. A zero effectiveLimit means the key has
+				// no credit-limit configured AND no credits purchased yet — this can happen on
+				// first startup if the ledger failed to load (e.g. ephemeral FS + Postgres down).
+				// Treating 0 as "exhausted" would instantly block all active keys; treat it as
+				// "no ceiling" instead. Keys with real balances will enforce once the ledger loads.
+				if effectiveLimit > 0 && creditsConsumed >= effectiveLimit {
 					c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
 						"error": gin.H{
 							"message": "insufficient_balance: You have exhausted your credit limit. Please deposit funds to continue.",

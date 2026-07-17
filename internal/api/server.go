@@ -817,17 +817,19 @@ func (s *Server) registerManagementRoutes() {
 		// Admin billing & key management dashboard routes.
 		// Protected by management middleware + internal admin secret validation.
 		// GET  /v0/management/admin/summary           → high-level fleet summary
-		// GET  /v0/management/admin/keys              → all post-pay keys with status & balance
-		// GET  /v0/management/admin/orders?status=all → payment orders from DB
-		// POST /v0/management/admin/keys/activate     → re-activate an expired key
-		// POST /v0/management/admin/keys/deactivate   → instantly block a key
-		// POST /v0/management/admin/keys/expire       → hard-expire a key now
+		// GET  /v0/management/admin/keys                → all post-pay keys with status & balance
+		// GET  /v0/management/admin/orders?status=all   → payment orders from DB
+		// POST /v0/management/admin/keys/activate       → re-activate an expired key
+		// POST /v0/management/admin/keys/deactivate     → instantly block a key
+		// POST /v0/management/admin/keys/expire         → hard-expire a key now
+		// POST /v0/management/admin/keys/register       → backfill DB + ledger for manually-added keys
 		mgmt.GET("/admin/summary", s.mgmt.GetAdminSummary)
 		mgmt.GET("/admin/keys", s.mgmt.GetAdminKeys)
 		mgmt.GET("/admin/orders", s.mgmt.GetAdminOrders)
 		mgmt.POST("/admin/keys/activate", s.mgmt.PostAdminKeyActivate)
 		mgmt.POST("/admin/keys/deactivate", s.mgmt.PostAdminKeyDeactivate)
 		mgmt.POST("/admin/keys/expire", s.mgmt.PostAdminKeyExpireNow)
+		mgmt.POST("/admin/keys/register", s.mgmt.PostAdminKeyRegister)
 	}
 }
 
