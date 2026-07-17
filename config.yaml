@@ -26,6 +26,8 @@ api-keys:
   - fink_pro_03cefeb9f45eeda0295f308a30f62ffd
   - fink_eb6924786c88368ab2ef52d99d749f65
   - fink_547a2dd57b7c148f09478206be8f4755
+  - fink_pro_310b0ede5c1d3c3b96abb85323d785d5
+  - fink_max_3e5e19628f2cbcc3c02c40d151876a3b
 api-key-models:
   "fink_pro_5d41402abc4b2a76b9719d911017c592":
     claude:
@@ -295,6 +297,30 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
+  fink_pro_310b0ede5c1d3c3b96abb85323d785d5:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-fable-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+  fink_max_3e5e19628f2cbcc3c02c40d151876a3b:
+    claude:
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
 debug: false
 pprof:
   enable: false
@@ -334,6 +360,8 @@ post-pay-billing:
     "fink_pro_5d41402abc4b2a76b9719d911017c592":
       credit-limit: 50000
     "fink_pro_e2fc714c4727ee9395f324cd2e7f331f":
+      credit-limit: 50000
+    fink_pro_310b0ede5c1d3c3b96abb85323d785d5:
       credit-limit: 50000
     # DEACTIVATED — mank18fpter, MAX plan expired 15/7/2026 (30d from 15/6/2026)
     "fink_max_cfacc7472333305910a0176c82e951d8":
@@ -381,6 +409,10 @@ post-pay-billing:
     fink_547a2dd57b7c148f09478206be8f4755:
       credit-limit: 0
       expires-at: "2026-07-15T00:00:00Z"
+    # MAX 20x plan — active until 2026-08-16
+    fink_max_3e5e19628f2cbcc3c02c40d151876a3b:
+      credit-limit: 250000
+      expires-at: "2026-08-16T02:56:59Z"
   markup-rates:
     "claude-opus-4-8":
       input: 1400
@@ -465,6 +497,7 @@ default-api-key-limit: 2000
 api-key-limits:
   "fink_pro_5d41402abc4b2a76b9719d911017c592": 2000
   "fink_pro_e2fc714c4727ee9395f324cd2e7f331f": 2000
+  fink_pro_310b0ede5c1d3c3b96abb85323d785d5: 2000
   "fink_max_cfacc7472333305910a0176c82e951d8": 10000
   "fink_pro_0e6f8568c58418d2569b5879fb4d9c72": 2000
   "fink_pro_b54e2ebaca28b22e32345a2872f6be9d": 2000
@@ -484,3 +517,4 @@ api-key-limits:
   # day1 keys (deactivated) — limit was 1000/5H while active
   fink_eb6924786c88368ab2ef52d99d749f65: 1000
   fink_547a2dd57b7c148f09478206be8f4755: 1000
+  fink_max_3e5e19628f2cbcc3c02c40d151876a3b: 10000
