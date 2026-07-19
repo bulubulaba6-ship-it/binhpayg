@@ -214,6 +214,7 @@ func (e *CodexWebsocketsExecutor) Execute(ctx context.Context, auth *cliproxyaut
 		body = ensureImageGenerationTool(body, baseModel, auth)
 	}
 	body = sanitizeOpenAIResponsesReasoningEncryptedContent(ctx, "codex websockets executor", body)
+	body = normalizeCodexWebsocketParallelToolCalls(body, opts.Headers)
 
 	httpURL := strings.TrimSuffix(baseURL, "/") + "/responses"
 	wsURL, err := buildCodexResponsesWebsocketURL(httpURL)
@@ -419,6 +420,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 		body = ensureImageGenerationTool(body, baseModel, auth)
 	}
 	body = sanitizeOpenAIResponsesReasoningEncryptedContent(ctx, "codex websockets executor", body)
+	body = normalizeCodexWebsocketParallelToolCalls(body, opts.Headers)
 
 	httpURL := strings.TrimSuffix(baseURL, "/") + "/responses"
 	wsURL, err := buildCodexResponsesWebsocketURL(httpURL)
@@ -678,6 +680,14 @@ func writeCodexWebsocketMessage(sess *codexWebsocketSession, conn *websocket.Con
 		return fmt.Errorf("codex websockets executor: websocket conn is nil")
 	}
 	return conn.WriteMessage(websocket.TextMessage, payload)
+}
+
+func normalizeCodexWebsocketParallelToolCalls(body []byte, headers http.Header) []byte {
+	if !isCodexResponsesLiteRequest(body, headers) {
+		return body
+	}
+	body, _ = sjson.SetBytes(body, "parallel_tool_calls", false)
+	return body
 }
 
 func buildCodexWebsocketRequestBody(body []byte) []byte {

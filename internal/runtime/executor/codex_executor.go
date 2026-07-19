@@ -286,6 +286,7 @@ func (e *CodexExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, re
 		body = ensureImageGenerationTool(body, baseModel, auth)
 	}
 	body = sanitizeOpenAIResponsesReasoningEncryptedContent(ctx, "codex executor", body)
+	body = normalizeCodexParallelToolCalls(body, opts.Headers)
 	reporter.SetTranslatedReasoningEffort(body, to.String())
 
 	url := strings.TrimSuffix(baseURL, "/") + "/responses"
@@ -445,6 +446,7 @@ func (e *CodexExecutor) executeCompact(ctx context.Context, auth *cliproxyauth.A
 		body = ensureImageGenerationTool(body, baseModel, auth)
 	}
 	body = sanitizeOpenAIResponsesReasoningEncryptedContent(ctx, "codex executor", body)
+	body = normalizeCodexParallelToolCalls(body, opts.Headers)
 	reporter.SetTranslatedReasoningEffort(body, to.String())
 
 	url := strings.TrimSuffix(baseURL, "/") + "/responses/compact"
@@ -549,6 +551,7 @@ func (e *CodexExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.Au
 		body = ensureImageGenerationTool(body, baseModel, auth)
 	}
 	body = sanitizeOpenAIResponsesReasoningEncryptedContent(ctx, "codex executor", body)
+	body = normalizeCodexParallelToolCalls(body, opts.Headers)
 	reporter.SetTranslatedReasoningEffort(body, to.String())
 
 	url := strings.TrimSuffix(baseURL, "/") + "/responses"
@@ -1021,6 +1024,45 @@ func normalizeCodexInstructions(body []byte) []byte {
 
 var imageGenToolJSON = []byte(`{"type":"image_generation","output_format":"png"}`)
 var imageGenToolArrayJSON = []byte(`[{"type":"image_generation","output_format":"png"}]`)
+
+const (
+	codexResponsesLiteHeader   = "X-OpenAI-Internal-Codex-Responses-Lite"
+	codexResponsesLiteMetadata = "client_metadata.ws_request_header_x_openai_internal_codex_responses_lite"
+)
+
+func isCodexResponsesLiteRequest(body []byte, headers http.Header) bool {
+	if strings.EqualFold(strings.TrimSpace(headers.Get(codexResponsesLiteHeader)), "true") {
+		return true
+	}
+	value := gjson.GetBytes(body, codexResponsesLiteMetadata)
+	if !value.Exists() {
+		return false
+	}
+	return value.Type == gjson.True || value.Type == gjson.String && strings.EqualFold(strings.TrimSpace(value.String()), "true")
+}
+
+func normalizeCodexParallelToolCalls(body []byte, headers http.Header) []byte {
+	if isCodexResponsesLiteRequest(body, headers) {
+		body, _ = sjson.SetBytes(body, "parallel_tool_calls", false)
+		return body
+	}
+	return normalizeCodexParallelToolCallsForTools(body)
+}
+
+func normalizeCodexParallelToolCallsForTools(body []byte) []byte {
+	if !gjson.GetBytes(body, "parallel_tool_calls").Exists() {
+		return body
+	}
+
+	tools := gjson.GetBytes(body, "tools")
+	hasTools := tools.Exists() && tools.IsArray() && len(tools.Array()) > 0
+	if hasTools {
+		return body
+	}
+
+	body, _ = sjson.DeleteBytes(body, "parallel_tool_calls")
+	return body
+}
 
 func isCodexFreePlanAuth(auth *cliproxyauth.Auth) bool {
 	if auth == nil || auth.Attributes == nil {

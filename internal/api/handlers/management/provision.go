@@ -2,7 +2,9 @@ package management
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	log "github.com/sirupsen/logrus"
 )
 
 // ProvisionRequest is the payload sent by shop.web after a successful payOS payment.
@@ -179,6 +182,34 @@ func (h *Handler) PostProvisionKey(c *gin.Context) {
 		return
 	}
 	h.mu.Unlock()
+
+	// Insert into Postgres DB
+	db := getWebhookDB()
+	if db != nil {
+		keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))
+		displayPlan := req.Tier
+		if req.Tier == "payg" {
+			displayPlan = "Pay-As-You-Go"
+		} else if req.Tier == "pro" {
+			displayPlan = "PRO"
+		} else if req.Tier == "max" {
+			displayPlan = "MAX"
+		}
+
+		orderCode := req.TxnID
+		if orderCode == "" {
+			orderCode = fmt.Sprintf("provision-%s", keyHash[:12])
+		}
+
+		_, errInsert := db.ExecContext(c.Request.Context(), `
+			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
+			VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+			ON CONFLICT (key_hash) DO NOTHING
+		`, displayPlan, keyHash, prefix, req.Email, displayPlan, orderCode, time.Now().Unix())
+		if errInsert != nil {
+			log.Errorf("PostProvisionKey: failed to insert api key to postgres: %v", errInsert)
+		}
+	}
 
 	// 5. Seed the exact plan credit amount directly into the post-pay ledger.
 	//    ProcessDepositCredits bypasses any USD/VND conversion — credits are written
