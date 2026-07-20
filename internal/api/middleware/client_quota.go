@@ -128,11 +128,29 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 	if entry == nil || rateLimit <= 0 {
 		return 1.0
 	}
-	// Window fully expired → fresh start.
+	
+	activeCredits := entry.FiveHCredits
+
+	// If window is expired, simulate the decay that will happen on the next request.
 	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
-		return 1.0
+		if !entry.FiveHWindowStart.IsZero() {
+			blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
+			if blocksPassed >= 3 {
+				activeCredits = 0
+			} else {
+				for i := 0; i < blocksPassed; i++ {
+					activeCredits = (activeCredits / 2.0) - 2500.0
+				}
+				if activeCredits < 0 {
+					activeCredits = 0
+				}
+			}
+		} else {
+			activeCredits = 0
+		}
 	}
-	ratio := entry.FiveHCredits / rateLimit
+
+	ratio := activeCredits / rateLimit
 	var ratioMultiplier float64
 
 	switch {
@@ -153,15 +171,15 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 
 	var absMultiplier float64 = 1.0
 	switch {
-	case entry.FiveHCredits >= 100000:
+	case activeCredits >= 100000:
 		absMultiplier = 10.0
-	case entry.FiveHCredits >= 50000:
+	case activeCredits >= 50000:
 		absMultiplier = 5.0
-	case entry.FiveHCredits >= 20000:
+	case activeCredits >= 20000:
 		absMultiplier = 3.0
-	case entry.FiveHCredits >= 10000:
+	case activeCredits >= 10000:
 		absMultiplier = 2.0
-	case entry.FiveHCredits >= 5000:
+	case activeCredits >= 5000:
 		absMultiplier = 1.5
 	}
 
@@ -224,11 +242,27 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 				}
 			}
 
-			// Reset the 5H rolling window when it has fully expired.
-			// This guarantees the multiplier returns to x1.0 after a quiet period.
+			// Decay the 5H rolling window when it has expired, rather than a hard reset.
+			// This smoothly steps down massive burn multipliers (e.g., x10 -> x5) over time
+			// instead of instantly resetting them to 1.0, which prevents abrupt billing drops.
 			if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+				if !entry.FiveHWindowStart.IsZero() {
+					blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
+					if blocksPassed >= 3 {
+						entry.FiveHCredits = 0
+					} else {
+						for i := 0; i < blocksPassed; i++ {
+							entry.FiveHCredits = (entry.FiveHCredits / 2.0) - 2500.0
+						}
+						if entry.FiveHCredits < 0 {
+							entry.FiveHCredits = 0
+						}
+					}
+				} else {
+					entry.FiveHCredits = 0
+				}
+				
 				entry.FiveHWindowStart = time.Now()
-				entry.FiveHCredits = 0
 				entry.LastAlertedTier = 0 // fresh window — reset alert state
 			}
 

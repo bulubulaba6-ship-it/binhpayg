@@ -81,8 +81,24 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 	}
 
 	var fiveHCredits float64
-	if entry != nil && !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour {
+	if entry != nil && !entry.FiveHWindowStart.IsZero() {
 		fiveHCredits = entry.FiveHCredits
+		
+		// If window is expired, simulate the decay that will happen on the next request
+		// so the UI accurately reflects the user's lingering burst penalty.
+		if time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+			blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
+			if blocksPassed >= 3 {
+				fiveHCredits = 0
+			} else {
+				for i := 0; i < blocksPassed; i++ {
+					fiveHCredits = (fiveHCredits / 2.0) - 2500.0
+				}
+				if fiveHCredits < 0 {
+					fiveHCredits = 0
+				}
+			}
+		}
 	}
 
 	// RPM: sessions in last 30 minutes ÷ 30.
