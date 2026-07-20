@@ -130,23 +130,29 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 	}
 	
 	activeCredits := entry.FiveHCredits
+	activeWindowStart := entry.FiveHWindowStart
 
 	// If window is expired, simulate the decay that will happen on the next request.
-	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
-		if !entry.FiveHWindowStart.IsZero() {
-			blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
+	if activeWindowStart.IsZero() || time.Since(activeWindowStart) > 5*time.Hour {
+		if !activeWindowStart.IsZero() {
+			blocksPassed := int(time.Since(activeWindowStart) / (5 * time.Hour))
 			if blocksPassed >= 3 {
 				activeCredits = 0
+				activeWindowStart = time.Now()
 			} else {
 				for i := 0; i < blocksPassed; i++ {
 					activeCredits = (activeCredits / 2.0) - 2500.0
 				}
 				if activeCredits < 0 {
 					activeCredits = 0
+					activeWindowStart = time.Now()
+				} else {
+					activeWindowStart = activeWindowStart.Add(time.Duration(blocksPassed) * 5 * time.Hour)
 				}
 			}
 		} else {
 			activeCredits = 0
+			activeWindowStart = time.Now()
 		}
 	}
 
@@ -250,19 +256,23 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 					blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
 					if blocksPassed >= 3 {
 						entry.FiveHCredits = 0
+						entry.FiveHWindowStart = time.Now()
 					} else {
 						for i := 0; i < blocksPassed; i++ {
 							entry.FiveHCredits = (entry.FiveHCredits / 2.0) - 2500.0
 						}
 						if entry.FiveHCredits < 0 {
 							entry.FiveHCredits = 0
+							entry.FiveHWindowStart = time.Now()
+						} else {
+							entry.FiveHWindowStart = entry.FiveHWindowStart.Add(time.Duration(blocksPassed) * 5 * time.Hour)
 						}
 					}
 				} else {
 					entry.FiveHCredits = 0
+					entry.FiveHWindowStart = time.Now()
 				}
 				
-				entry.FiveHWindowStart = time.Now()
 				entry.LastAlertedTier = 0 // fresh window — reset alert state
 			}
 
