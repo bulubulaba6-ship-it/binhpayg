@@ -129,12 +129,12 @@ type clientQuotaPlugin struct{}
 // This model captures burst abuse (100 requests in 5 minutes) that a daily threshold
 // completely misses, while remaining fair to steady, low-frequency heavy users.
 func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) float64 {
-	if entry == nil || rateLimit <= 0 {
+	if entry == nil {
 		return 1.0
 	}
 	
 	ratioMultiplier := 1.0
-	if !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour {
+	if !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour && rateLimit > 0 {
 		ratio := entry.FiveHCredits / rateLimit
 		switch {
 		case ratio < 0.10:
