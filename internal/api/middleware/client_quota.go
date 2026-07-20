@@ -141,9 +141,9 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 				activeWindowStart = time.Now()
 			} else {
 				for i := 0; i < blocksPassed; i++ {
-					activeCredits = (activeCredits / 2.0) - 2500.0
+					activeCredits = activeCredits / 2.0
 				}
-				if activeCredits < 0 {
+				if activeCredits < 5000 {
 					activeCredits = 0
 					activeWindowStart = time.Now()
 				} else {
@@ -181,9 +181,9 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 		absMultiplier = 10.0
 	case activeCredits >= 50000:
 		absMultiplier = 5.0
-	case activeCredits >= 20000:
+	case activeCredits >= 25000:
 		absMultiplier = 3.0
-	case activeCredits >= 10000:
+	case activeCredits >= 12500:
 		absMultiplier = 2.0
 	case activeCredits >= 5000:
 		absMultiplier = 1.5
@@ -259,9 +259,9 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 						entry.FiveHWindowStart = time.Now()
 					} else {
 						for i := 0; i < blocksPassed; i++ {
-							entry.FiveHCredits = (entry.FiveHCredits / 2.0) - 2500.0
+							entry.FiveHCredits = entry.FiveHCredits / 2.0
 						}
-						if entry.FiveHCredits < 0 {
+						if entry.FiveHCredits < 5000 {
 							entry.FiveHCredits = 0
 							entry.FiveHWindowStart = time.Now()
 						} else {

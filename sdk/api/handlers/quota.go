@@ -94,9 +94,9 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 				fiveHWindowStart = time.Now()
 			} else {
 				for i := 0; i < blocksPassed; i++ {
-					fiveHCredits = (fiveHCredits / 2.0) - 2500.0
+					fiveHCredits = fiveHCredits / 2.0
 				}
-				if fiveHCredits < 0 {
+				if fiveHCredits < 5000 {
 					fiveHCredits = 0
 					fiveHWindowStart = time.Now()
 				} else {
