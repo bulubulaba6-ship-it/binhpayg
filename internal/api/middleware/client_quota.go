@@ -60,6 +60,10 @@ type PostPayUsageEntry struct {
 	FiveHWindowStart time.Time `json:"FiveHWindowStart,omitempty"`
 	FiveHCredits     float64   `json:"FiveHCredits,omitempty"`
 
+	// AbsDecayCredits tracks the massive burn multiplier (e.g. 10x) and decays slowly
+	// instead of hard resetting, preventing abrupt drops for heavy PAYG users.
+	AbsDecayCredits float64 `json:"AbsDecayCredits,omitempty"`
+
 	// LastAlertedTier tracks the highest burst tier for which an alert has
 	// already been fired in this window, to prevent duplicate webhook POSTs.
 	// 0 = no alert sent yet; 4 = ceiling tier already alerted.
@@ -129,63 +133,57 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 		return 1.0
 	}
 	
-	activeCredits := entry.FiveHCredits
-	activeWindowStart := entry.FiveHWindowStart
-
-	// If window is expired, simulate the decay that will happen on the next request.
-	if activeWindowStart.IsZero() || time.Since(activeWindowStart) > 5*time.Hour {
-		if !activeWindowStart.IsZero() {
-			blocksPassed := int(time.Since(activeWindowStart) / (5 * time.Hour))
-			if blocksPassed >= 3 {
-				activeCredits = 0
-				activeWindowStart = time.Now()
-			} else {
-				for i := 0; i < blocksPassed; i++ {
-					activeCredits = activeCredits / 2.0
-				}
-				if activeCredits < 5000 {
-					activeCredits = 0
-					activeWindowStart = time.Now()
-				} else {
-					activeWindowStart = activeWindowStart.Add(time.Duration(blocksPassed) * 5 * time.Hour)
-				}
-			}
-		} else {
-			activeCredits = 0
-			activeWindowStart = time.Now()
+	ratioMultiplier := 1.0
+	if !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour {
+		ratio := entry.FiveHCredits / rateLimit
+		switch {
+		case ratio < 0.10:
+			ratioMultiplier = 1.0
+		case ratio < 0.30:
+			ratioMultiplier = 1.5
+		case ratio < 0.50:
+			ratioMultiplier = 2.0
+		case ratio < 0.70:
+			ratioMultiplier = 2.5
+		default:
+			opts := [3]float64{3.0, 3.5, 4.0}
+			ratioMultiplier = opts[rand.Intn(3)]
 		}
 	}
 
-	ratio := activeCredits / rateLimit
-	var ratioMultiplier float64
-
-	switch {
-	case ratio < 0.10:
-		ratioMultiplier = 1.0
-	case ratio < 0.30:
-		ratioMultiplier = 1.5
-	case ratio < 0.50:
-		ratioMultiplier = 2.0
-	case ratio < 0.70:
-		ratioMultiplier = 2.5
-	default:
-		// Randomised ceiling: unpredictable within [3.0, 4.0] to prevent
-		// users from gaming the exact threshold boundary while burning fast.
-		opts := [3]float64{3.0, 3.5, 4.0}
-		ratioMultiplier = opts[rand.Intn(3)]
+	activeAbsCredits := entry.AbsDecayCredits
+	// If window is expired, simulate the decay that will happen on the next request.
+	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+		if !entry.FiveHWindowStart.IsZero() {
+			blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
+			if blocksPassed >= 3 {
+				activeAbsCredits = 0
+			} else {
+				for i := 0; i < blocksPassed; i++ {
+					activeAbsCredits = activeAbsCredits / 2.0
+				}
+				if activeAbsCredits < 5000 {
+					activeAbsCredits = 0
+				}
+			}
+		} else {
+			activeAbsCredits = 0
+		}
 	}
+
+
 
 	var absMultiplier float64 = 1.0
 	switch {
-	case activeCredits >= 100000:
+	case activeAbsCredits >= 100000:
 		absMultiplier = 10.0
-	case activeCredits >= 50000:
+	case activeAbsCredits >= 50000:
 		absMultiplier = 5.0
-	case activeCredits >= 25000:
+	case activeAbsCredits >= 25000:
 		absMultiplier = 3.0
-	case activeCredits >= 12500:
+	case activeAbsCredits >= 12500:
 		absMultiplier = 2.0
-	case activeCredits >= 5000:
+	case activeAbsCredits >= 5000:
 		absMultiplier = 1.5
 	}
 
@@ -252,27 +250,32 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 			// This smoothly steps down massive burn multipliers (e.g., x10 -> x5) over time
 			// instead of instantly resetting them to 1.0, which prevents abrupt billing drops.
 			if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
+				// Decay AbsDecayCredits smoothly across window blocks
+				blocksPassed := 0
 				if !entry.FiveHWindowStart.IsZero() {
-					blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
+					blocksPassed = int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
 					if blocksPassed >= 3 {
-						entry.FiveHCredits = 0
-						entry.FiveHWindowStart = time.Now()
+						entry.AbsDecayCredits = 0
 					} else {
 						for i := 0; i < blocksPassed; i++ {
-							entry.FiveHCredits = entry.FiveHCredits / 2.0
+							entry.AbsDecayCredits = entry.AbsDecayCredits / 2.0
 						}
-						if entry.FiveHCredits < 5000 {
-							entry.FiveHCredits = 0
-							entry.FiveHWindowStart = time.Now()
-						} else {
-							entry.FiveHWindowStart = entry.FiveHWindowStart.Add(time.Duration(blocksPassed) * 5 * time.Hour)
+						if entry.AbsDecayCredits < 5000 {
+							entry.AbsDecayCredits = 0
 						}
 					}
 				} else {
-					entry.FiveHCredits = 0
-					entry.FiveHWindowStart = time.Now()
+					entry.AbsDecayCredits = 0
 				}
 				
+				// Normal reset for ratio credits
+				entry.FiveHCredits = 0
+				
+				if !entry.FiveHWindowStart.IsZero() && blocksPassed < 3 {
+					entry.FiveHWindowStart = entry.FiveHWindowStart.Add(time.Duration(blocksPassed) * 5 * time.Hour)
+				} else {
+					entry.FiveHWindowStart = time.Now()
+				}
 				entry.LastAlertedTier = 0 // fresh window — reset alert state
 			}
 
@@ -287,6 +290,7 @@ func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Re
 
 			// Accumulate 5H window credits (drives next-request multiplier).
 			entry.FiveHCredits += billedCredits
+			entry.AbsDecayCredits += billedCredits
 
 			// Also track daily burn for historical stats / admin analytics.
 			today := time.Now().UTC().Format("2006-01-02")

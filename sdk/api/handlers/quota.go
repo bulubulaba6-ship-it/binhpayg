@@ -82,28 +82,8 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 
 	var fiveHCredits float64
 	fiveHWindowStart := middleware.GetFiveHWindowStartForKey(principal)
-	if entry != nil && !fiveHWindowStart.IsZero() {
+	if entry != nil && !fiveHWindowStart.IsZero() && time.Since(fiveHWindowStart) <= 5*time.Hour {
 		fiveHCredits = entry.FiveHCredits
-		
-		// If window is expired, simulate the decay that will happen on the next request
-		// so the UI accurately reflects the user's lingering burst penalty.
-		if time.Since(fiveHWindowStart) > 5*time.Hour {
-			blocksPassed := int(time.Since(fiveHWindowStart) / (5 * time.Hour))
-			if blocksPassed >= 3 {
-				fiveHCredits = 0
-				fiveHWindowStart = time.Now()
-			} else {
-				for i := 0; i < blocksPassed; i++ {
-					fiveHCredits = fiveHCredits / 2.0
-				}
-				if fiveHCredits < 5000 {
-					fiveHCredits = 0
-					fiveHWindowStart = time.Now()
-				} else {
-					fiveHWindowStart = fiveHWindowStart.Add(time.Duration(blocksPassed) * 5 * time.Hour)
-				}
-			}
-		}
 	}
 
 	// RPM: sessions in last 30 minutes ÷ 30.
@@ -147,8 +127,6 @@ func (h *BaseAPIHandler) GetPostPayQuota(c *gin.Context) {
 			}
 		}
 	}
-
-	// fiveHWindowStart is now calculated above with simulated decay
 
 	// Compute window expiry for client display (zero time when no active window).
 	var windowExpiresAt interface{}
