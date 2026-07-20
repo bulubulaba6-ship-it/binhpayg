@@ -434,17 +434,21 @@ const app = {
 
       // Reset timer
       const exp = data.quota.window_expires_at;
-      if (exp && exp !== '0001-01-01T00:00:00Z') {
-        const diffMs = new Date(exp) - new Date();
-        if (diffMs > 0) {
-          const h = Math.floor(diffMs / 3600000);
-          const m = Math.floor((diffMs % 3600000) / 60000);
-          app.setText('valResetText', 'Resets in ' + h + 'h ' + m + 'm');
+      const currentMode = document.getElementById('creditToggle') ? document.getElementById('creditToggle').value : '5h';
+      
+      if (currentMode === '5h') {
+        if (exp && exp !== '0001-01-01T00:00:00Z') {
+          const diffMs = new Date(exp) - new Date();
+          if (diffMs > 0) {
+            const h = Math.floor(diffMs / 3600000);
+            const m = Math.floor((diffMs % 3600000) / 60000);
+            app.setText('valResetText', 'Resets in ' + h + 'h ' + m + 'm');
+          } else {
+            app.setText('valResetText', 'Resetting shortly…');
+          }
         } else {
-          app.setText('valResetText', 'Resetting shortly…');
+          app.setText('valResetText', 'Cumulative session limit');
         }
-      } else {
-        app.setText('valResetText', 'Cumulative session limit');
       }
 
       // Charts + ledger

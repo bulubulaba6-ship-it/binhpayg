@@ -133,21 +133,42 @@ func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) floa
 		return 1.0
 	}
 	ratio := entry.FiveHCredits / rateLimit
+	var ratioMultiplier float64
+
 	switch {
 	case ratio < 0.10:
-		return 1.0
+		ratioMultiplier = 1.0
 	case ratio < 0.30:
-		return 1.5
+		ratioMultiplier = 1.5
 	case ratio < 0.50:
-		return 2.0
+		ratioMultiplier = 2.0
 	case ratio < 0.70:
-		return 2.5
+		ratioMultiplier = 2.5
 	default:
 		// Randomised ceiling: unpredictable within [3.0, 4.0] to prevent
 		// users from gaming the exact threshold boundary while burning fast.
 		opts := [3]float64{3.0, 3.5, 4.0}
-		return opts[rand.Intn(3)]
+		ratioMultiplier = opts[rand.Intn(3)]
 	}
+
+	var absMultiplier float64 = 1.0
+	switch {
+	case entry.FiveHCredits >= 100000:
+		absMultiplier = 10.0
+	case entry.FiveHCredits >= 50000:
+		absMultiplier = 5.0
+	case entry.FiveHCredits >= 20000:
+		absMultiplier = 3.0
+	case entry.FiveHCredits >= 10000:
+		absMultiplier = 2.0
+	case entry.FiveHCredits >= 5000:
+		absMultiplier = 1.5
+	}
+
+	if absMultiplier > ratioMultiplier {
+		return absMultiplier
+	}
+	return ratioMultiplier
 }
 
 func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Record) {
