@@ -164,6 +164,10 @@ func (h *Handler) GetAdminKeys(c *gin.Context) {
 			totalTokens = entry.TotalTokens
 		}
 
+		if inBilling && purchased == 0 && clientCfg.CreditLimit > 0 {
+			purchased = float64(clientCfg.CreditLimit)
+		}
+
 		remaining := purchased - consumed
 		if remaining < 0 {
 			remaining = 0
