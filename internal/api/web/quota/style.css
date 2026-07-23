@@ -449,86 +449,101 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 /* ── Auth / Welcome / Checkout Modal ─────────────────────────── */
 .welcome-state {
   position: fixed; inset: 0; z-index: 999;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(8px);
+  background: #5b6270;
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .welcome-card {
-  background: var(--surface-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
+  background: #ffffff;
+  border: none;
+  border-radius: 20px;
   max-width: 450px;
   width: 90%;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.3);
   animation: slideUp 0.3s ease;
+  color: #0f172a;
 }
 @keyframes slideUp { from{opacity:0; transform:translateY(20px);} to{opacity:1; transform:translateY(0);} }
 
-.welcome-left { padding: var(--sp-lg); border-bottom: 1px solid var(--border); text-align: center; }
-.welcome-left h2 { font-family: var(--font-display); font-size: 1.8rem; margin-bottom: 8px; }
+.welcome-left { padding: var(--sp-lg); border-bottom: 1px solid #e2e8f0; text-align: center; color: #0f172a; }
+.welcome-left h2 { font-family: var(--font-display); font-size: 1.8rem; margin-bottom: 8px; color: #0f172a; }
 
-.welcome-right { padding: var(--sp-lg); }
+.welcome-right { padding: var(--sp-lg); color: #0f172a; }
 
 .welcome-right input {
   width: 100%;
-  background: rgba(0,0,0,0.3);
-  border: 1px solid var(--border);
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
   padding: 12px 14px;
-  border-radius: var(--r-md);
-  color: var(--foreground);
+  border-radius: 10px;
+  color: #0f172a;
   font-family: var(--font-mono);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   margin-bottom: var(--sp-sm);
 }
-.welcome-right input:focus { border-color: var(--primary); }
+.welcome-right input:focus { border-color: #ff7900; background: #ffffff; box-shadow: 0 0 0 3px rgba(255,121,0,0.15); }
 
 .auth-btn {
   width: 100%;
-  background: var(--primary);
-  color: #000;
+  background: #e06d53;
+  color: #ffffff;
   border: none;
-  padding: 12px;
-  border-radius: var(--r-md);
+  padding: 14px;
+  border-radius: 10px;
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.1s, opacity 0.2s;
+  box-shadow: 0 4px 14px rgba(224, 109, 83, 0.35);
+  transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
 }
-.auth-btn:hover { opacity: 0.9; transform: scale(1.02); }
+.auth-btn:hover { opacity: 0.95; transform: translateY(-1px); background: #d35f45; }
 
 /* ── Welcome overlay — wide two-column layout ─────────────────── */
 .welcome-card--wide {
-  max-width: 840px;
+  max-width: 860px;
   width: 94%;
   display: flex;
   flex-direction: row;
   overflow: hidden;
-  border-radius: var(--r-xl);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.35);
 }
 
 .welcome-left--hero {
   flex: 0 0 46%;
-  background: linear-gradient(160deg, oklch(0.11 0.014 290), oklch(0.07 0.010 270));
-  border-right: 1px solid var(--border);
+  background: #f3e6f6;
+  border-right: 1px solid rgba(0,0,0,0.06);
   padding: var(--sp-xl) var(--sp-lg);
   display: flex;
   flex-direction: column;
   justify-content: center;
   border-bottom: none;
   text-align: left;
+  color: #0f172a;
+}
+.welcome-left--hero h2 {
+  color: #0f172a !important;
+  font-weight: 800 !important;
 }
 
 .welcome-right--auth {
   flex: 1;
+  background: #ffffff;
   padding: var(--sp-xl) var(--sp-lg);
   display: flex;
   flex-direction: column;
   justify-content: center;
+  color: #0f172a;
+}
+.welcome-right--auth h3 {
+  color: #0f172a !important;
+  font-weight: 800 !important;
 }
 
 /* Feature pills */
@@ -543,14 +558,15 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255,121,0,0.08);
-  border: 1px solid rgba(255,121,0,0.18);
-  color: var(--primary);
-  font-size: 0.72rem;
-  font-family: var(--font-mono);
-  padding: 4px 10px;
+  background: #ebdcf2;
+  border: 1px solid #dfc7e7;
+  color: #c2533c;
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  padding: 6px 12px;
   border-radius: var(--r-pill);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 /* Stats row */
@@ -558,9 +574,9 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   display: flex;
   align-items: center;
   gap: 0;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  background: #ebdcf2;
+  border: 1px solid #dfc7e7;
+  border-radius: 12px;
   padding: 14px 0;
   margin-top: auto;
 }
@@ -576,14 +592,16 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .welcome-stat-val {
   font-family: var(--font-display);
   font-size: 1.5rem;
-  color: var(--foreground);
+  color: #0f172a;
+  font-weight: 800;
   line-height: 1;
 }
 
 .welcome-stat-label {
   font-size: 0.65rem;
   font-family: var(--font-mono);
-  color: var(--muted);
+  color: #64748b;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -591,7 +609,7 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .welcome-stat-divider {
   width: 1px;
   height: 36px;
-  background: var(--border);
+  background: #d8bfe1;
   flex-shrink: 0;
 }
 
