@@ -378,8 +378,10 @@ const admin = (() => {
     const tbody = document.getElementById('keysBody');
     if (!keys.length) { tbody.innerHTML = '<tr><td colspan="13" class="empty">No keys found.</td></tr>'; return; }
     tbody.innerHTML = keys.map(k => {
-      const pct = k.credits_purchased > 0 ? Math.min(100, k.credits_consumed / k.credits_purchased * 100) : 0;
-      const progColor = pct > 90 ? 'var(--error)' : pct > 70 ? 'var(--warning)' : 'var(--success)';
+      const consumed = k.credits_consumed || 0;
+      const purchased = k.credits_purchased || 0;
+      const pctRemaining = purchased > 0 ? Math.max(0, Math.min(100, ((purchased - consumed) / purchased) * 100)) : 0;
+      const progColor = pctRemaining < 10 ? 'var(--error)' : pctRemaining < 30 ? 'var(--warning)' : 'var(--success)';
       const multClass = k.burn_multiplier >= 2.5 ? 'mult-25' : k.burn_multiplier >= 1.5 ? 'mult-15' : 'mult-10';
       const exp = k.expires_at ? new Date(k.expires_at).toLocaleDateString('vi-VN') : '∞';
       const expColor = k.is_expired ? 'var(--error)' : 'inherit';
@@ -393,8 +395,8 @@ const admin = (() => {
         <td class="mono">${fmtCr(k.credits_consumed)}</td>
         <td class="mono">${fmtCr(k.credits_purchased)}</td>
         <td>
-          <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:${progColor}"></div></div>
-          <span style="font-size:0.72rem;color:var(--muted)">${pct.toFixed(0)}%</span>
+          <div class="prog-wrap"><div class="prog-fill" style="width:${pctRemaining.toFixed(1)}%;background:${progColor}"></div></div>
+          <span style="font-size:0.72rem;color:var(--muted)">${pctRemaining.toFixed(0)}%</span>
         </td>
         <td class="mono">${fmtCr(k.daily_burn_today)}<span style="color:var(--muted);font-size:0.7rem">/day</span></td>
         <td><span class="mult ${multClass}">×${k.burn_multiplier.toFixed(1)}</span></td>
