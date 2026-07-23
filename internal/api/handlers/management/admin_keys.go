@@ -694,6 +694,7 @@ func (h *Handler) PostAdminKeyGenerate(c *gin.Context) {
 		h.mu.Unlock()
 		return
 	}
+	h.cfg = latestCfg
 	h.mu.Unlock()
 
 	keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))

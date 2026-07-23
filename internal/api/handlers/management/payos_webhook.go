@@ -46,6 +46,12 @@ func getWebhookDB() *sql.DB {
 		if dsn == "" {
 			dsn = os.Getenv("DATABASE_URL")
 		}
+		if dsn == "" {
+			dsn = os.Getenv("PGSTORE_URL")
+		}
+		if dsn == "" {
+			dsn = os.Getenv("POSTGRES_URL")
+		}
 		if dsn != "" {
 			if db, err := sql.Open("pgx", dsn); err == nil {
 				// Initialize the schema for api_keys

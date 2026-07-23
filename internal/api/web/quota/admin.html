@@ -212,6 +212,36 @@
       </div>
     </div>
 
+    <!-- SHOW GENERATED KEY SUCCESS MODAL -->
+    <div id="showKeyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:999;align-items:center;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:480px;max-width:95vw;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <div style="width:38px;height:38px;border-radius:50%;background:rgba(34,197,94,0.15);color:#22c55e;display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:bold;">✓</div>
+          <div>
+            <h3 style="font-size:1.1rem;margin:0;">API Key Generated</h3>
+            <p style="font-size:0.78rem;color:var(--muted);margin:2px 0 0 0;">Saved to server config & synced to database</p>
+          </div>
+        </div>
+        
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:6px;">Full API Key (Save this now!)</label>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <input id="showKeySecret" type="text" readonly style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--primary);font-family:monospace;font-size:0.88rem;font-weight:bold;outline:none;">
+          <button id="copyKeyBtn" class="btn btn-primary" onclick="admin.copyGeneratedKey()" style="white-space:nowrap;padding:0 16px;">📋 Copy</button>
+        </div>
+
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:0.82rem;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><span style="color:var(--muted);">Plan:</span> <strong id="showKeyPlan" style="color:var(--fg)">—</strong></div>
+          <div><span style="color:var(--muted);">Email:</span> <strong id="showKeyEmail" style="color:var(--fg)">—</strong></div>
+          <div><span style="color:var(--muted);">DB Status:</span> <span id="showKeyDbs" class="status status-active">Pushed to DB</span></div>
+          <div><span style="color:var(--muted);">Credits:</span> <strong id="showKeyCredits" style="color:var(--fg)">—</strong></div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="admin.closeShowKeyModal()" style="padding:8px 24px;">Done</button>
+        </div>
+      </div>
+    </div>
+
     <div class="table-wrap">
 
       <table>
@@ -507,6 +537,47 @@ const admin = (() => {
     document.getElementById('createKeyModal').style.display = 'none';
   }
 
+  function openShowKeyModal(data) {
+    document.getElementById('showKeySecret').value = data.key || '';
+    document.getElementById('showKeyPlan').textContent = data.plan || 'MAX';
+    document.getElementById('showKeyEmail').textContent = data.email || '—';
+    document.getElementById('showKeyCredits').textContent = data.total_purchased ? fmtCr(data.total_purchased) : '2.00M (Limit)';
+    const dbEl = document.getElementById('showKeyDbs');
+    if (data.db_registered) {
+      dbEl.textContent = 'Pushed to DB';
+      dbEl.className = 'status status-active';
+    } else if (data.db_skipped_no_db) {
+      dbEl.textContent = 'Config Only';
+      dbEl.className = 'status status-pending';
+    } else {
+      dbEl.textContent = 'Pushed to DB';
+      dbEl.className = 'status status-active';
+    }
+    const btn = document.getElementById('copyKeyBtn');
+    btn.textContent = '📋 Copy';
+    document.getElementById('showKeyModal').style.display = 'flex';
+  }
+
+  function closeShowKeyModal() {
+    document.getElementById('showKeyModal').style.display = 'none';
+  }
+
+  async function copyGeneratedKey() {
+    const input = document.getElementById('showKeySecret');
+    try {
+      await navigator.clipboard.writeText(input.value);
+      const btn = document.getElementById('copyKeyBtn');
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+    } catch(e) {
+      input.select();
+      document.execCommand('copy');
+      const btn = document.getElementById('copyKeyBtn');
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+    }
+  }
+
   async function submitCreateKey() {
     const plan = document.getElementById('createPlanInput').value;
     const email = document.getElementById('createEmailInput').value.trim();
@@ -523,12 +594,11 @@ const admin = (() => {
       if (!res.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
       closeCreateModal();
       await refresh();
-      // Optionally show the full generated key to the user
-      alert('Key generated successfully:\n\n' + data.key);
+      openShowKeyModal(data);
     } catch(e) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; }
   }
 
-  return { login, showTab, refresh, filterKeys, activate, deactivate, linkToKey, openCreateModal, closeCreateModal, submitCreateKey };
+  return { login, showTab, refresh, filterKeys, activate, deactivate, linkToKey, openCreateModal, closeCreateModal, submitCreateKey, openShowKeyModal, closeShowKeyModal, copyGeneratedKey };
 
 })();
 </script>
