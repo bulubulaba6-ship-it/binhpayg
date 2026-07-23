@@ -7,8 +7,8 @@
   --surface-card: #252420;
   
   /* Brand & Accent */
-  --primary: #d08770;
-  --primary-hover: #D97757;
+  --primary: #ff7900;
+  --primary-hover: #e66d00;
   --muted: oklch(0.55 0.015 90);
   --border: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.1);
@@ -139,9 +139,9 @@ body {
 }
 
 .nav-item.active {
-  background: rgba(236,168,214,0.1);
+  background: rgba(255,121,0,0.1);
   color: var(--primary);
-  border-color: rgba(236,168,214,0.2);
+  border-color: rgba(255,121,0,0.2);
 }
 
 .nav-icon { width: 18px; height: 18px; }
@@ -230,7 +230,7 @@ body {
 
 .stat-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(236,168,214,0.3);
+  border-color: rgba(255,121,0,0.3);
 }
 
 .stat-title {
@@ -343,7 +343,7 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 
 .badge-cost {
   display: inline-block;
-  background: rgba(236,168,214,0.1);
+  background: rgba(255,121,0,0.1);
   color: var(--primary);
   padding: 4px 10px;
   border-radius: var(--r-pill);
@@ -378,12 +378,12 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 
 .store-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(236,168,214,0.3);
+  border-color: rgba(255,121,0,0.3);
 }
 
 .store-card.popular {
   border-color: var(--primary);
-  box-shadow: 0 0 30px rgba(236,168,214,0.15);
+  box-shadow: 0 0 30px rgba(255,121,0,0.15);
   transform: scale(1.05);
   z-index: 10;
 }
@@ -421,8 +421,8 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 }
 
 .store-card .discount {
-  background: rgba(236,168,214,0.1);
-  border: 1px solid rgba(236,168,214,0.3);
+  background: rgba(255,121,0,0.1);
+  border: 1px solid rgba(255,121,0,0.3);
   color: var(--primary);
   font-size: 11px;
   font-family: var(--font-mono);
@@ -543,8 +543,8 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(236,168,214,0.08);
-  border: 1px solid rgba(236,168,214,0.18);
+  background: rgba(255,121,0,0.08);
+  border: 1px solid rgba(255,121,0,0.18);
   color: var(--primary);
   font-size: 0.72rem;
   font-family: var(--font-mono);
@@ -622,7 +622,7 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .welcome-buy-btn {
   background: transparent !important;
   color: var(--primary) !important;
-  border: 1.5px solid rgba(236,168,214,0.4) !important;
+  border: 1.5px solid rgba(255,121,0,0.4) !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -632,7 +632,7 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 }
 
 .welcome-buy-btn:hover {
-  background: rgba(236,168,214,0.08) !important;
+  background: rgba(255,121,0,0.08) !important;
   border-color: var(--primary) !important;
   opacity: 1 !important;
   transform: scale(1.015) !important;
@@ -691,9 +691,9 @@ td               { font-weight: 500; font-size: 0.93rem; }
   flex-shrink: 0;
 }
 .theme-toggle:hover {
-  background: rgba(236,168,214,0.12);
+  background: rgba(255,121,0,0.12);
   color: var(--primary);
-  border-color: rgba(236,168,214,0.35);
+  border-color: rgba(255,121,0,0.35);
 }
 
 /* ── Light Theme ─────────────────────────────────────────────── */

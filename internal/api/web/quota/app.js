@@ -195,14 +195,14 @@ const app = {
           datasets: [{
             label: 'Requests',
             data: days.map(d => dayCounts[d] || 0),
-            borderColor: '#eca8d6', // Brand pink
-            backgroundColor: 'rgba(236,168,214,0.1)',
-            borderWidth: 2,
+            borderColor: '#ff7900', // Vibrant Orange
+            backgroundColor: 'rgba(255,121,0,0.12)',
+            borderWidth: 2.5,
             fill: true,
             tension: 0.45,
-            pointRadius: 2.5,
+            pointRadius: 3,
             pointHitRadius: 10,
-            pointBackgroundColor: '#eca8d6'
+            pointBackgroundColor: '#ff7900'
           }]
         },
         options: {
@@ -238,7 +238,7 @@ const app = {
           labels: chartLabels,
           datasets: [{
             data: chartValues,
-            backgroundColor: ['#d97757', '#3b82f6', '#10b981', '#f59e0b', '#6366f1'],
+            backgroundColor: ['#ff7900', '#3b82f6', '#10b981', '#f59e0b', '#6366f1'],
             borderWidth: 0,
             hoverOffset: 6
           }]
