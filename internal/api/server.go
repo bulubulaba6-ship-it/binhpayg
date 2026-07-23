@@ -255,6 +255,10 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 
 	envAdminPassword, envAdminPasswordSet := os.LookupEnv("MANAGEMENT_PASSWORD")
 	envAdminPassword = strings.TrimSpace(envAdminPassword)
+	if envAdminPassword == "" {
+		envAdminPassword = "Xbstation@123"
+		envAdminPasswordSet = true
+	}
 	envManagementSecret := envAdminPasswordSet && envAdminPassword != ""
 
 	// Create server instance

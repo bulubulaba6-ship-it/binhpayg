@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/rand"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -129,68 +129,9 @@ type clientQuotaPlugin struct{}
 // This model captures burst abuse (100 requests in 5 minutes) that a daily threshold
 // completely misses, while remaining fair to steady, low-frequency heavy users.
 func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) float64 {
-	if entry == nil {
-		return 1.0
-	}
-	
-	ratioMultiplier := 1.0
-	if !entry.FiveHWindowStart.IsZero() && time.Since(entry.FiveHWindowStart) <= 5*time.Hour && rateLimit > 0 {
-		ratio := entry.FiveHCredits / rateLimit
-		switch {
-		case ratio < 0.10:
-			ratioMultiplier = 1.0
-		case ratio < 0.30:
-			ratioMultiplier = 1.5
-		case ratio < 0.50:
-			ratioMultiplier = 2.0
-		case ratio < 0.70:
-			ratioMultiplier = 2.5
-		default:
-			opts := [3]float64{3.0, 3.5, 4.0}
-			ratioMultiplier = opts[rand.Intn(3)]
-		}
-	}
-
-	activeAbsCredits := entry.AbsDecayCredits
-	// If window is expired, simulate the decay that will happen on the next request.
-	if entry.FiveHWindowStart.IsZero() || time.Since(entry.FiveHWindowStart) > 5*time.Hour {
-		if !entry.FiveHWindowStart.IsZero() {
-			blocksPassed := int(time.Since(entry.FiveHWindowStart) / (5 * time.Hour))
-			if blocksPassed >= 3 {
-				activeAbsCredits = 0
-			} else {
-				for i := 0; i < blocksPassed; i++ {
-					activeAbsCredits = activeAbsCredits / 2.0
-				}
-				if activeAbsCredits < 5000 {
-					activeAbsCredits = 0
-				}
-			}
-		} else {
-			activeAbsCredits = 0
-		}
-	}
-
-
-
-	var absMultiplier float64 = 1.0
-	switch {
-	case activeAbsCredits >= 100000:
-		absMultiplier = 10.0
-	case activeAbsCredits >= 50000:
-		absMultiplier = 5.0
-	case activeAbsCredits >= 25000:
-		absMultiplier = 3.0
-	case activeAbsCredits >= 12500:
-		absMultiplier = 2.0
-	case activeAbsCredits >= 5000:
-		absMultiplier = 1.5
-	}
-
-	if absMultiplier > ratioMultiplier {
-		return absMultiplier
-	}
-	return ratioMultiplier
+	// Temporarily disabled for monitoring on forxb branch.
+	// Users will accumulate absolute decay credits, but will not be penalized with multipliers.
+	return 1.0
 }
 
 func (p *clientQuotaPlugin) HandleUsage(ctx context.Context, record coreusage.Record) {

@@ -2,17 +2,17 @@
 
 :root {
   /* Canvas & Surfaces */
-  --background: oklch(0.06 0.008 260);
+  --background: #1A1915;
   --foreground: oklch(0.94 0.005 90);
-  --surface-card: oklch(0.09 0.008 260);
+  --surface-card: #252420;
   
   /* Brand & Accent */
-  --primary: #eca8d6;
-  --primary-hover: #f3c2e3;
+  --primary: #d08770;
+  --primary-hover: #D97757;
   --muted: oklch(0.55 0.015 90);
-  --border: oklch(0.18 0.008 260);
+  --border: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.1);
-  --success: #5db8a6;
+  --success: #34d399;
   --error: #ef4444;
 
   /* Typography */
