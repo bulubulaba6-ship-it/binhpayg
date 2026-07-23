@@ -834,6 +834,7 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.POST("/admin/keys/deactivate", s.mgmt.PostAdminKeyDeactivate)
 		mgmt.POST("/admin/keys/expire", s.mgmt.PostAdminKeyExpireNow)
 		mgmt.POST("/admin/keys/register", s.mgmt.PostAdminKeyRegister)
+		mgmt.POST("/admin/keys/generate", s.mgmt.PostAdminKeyGenerate)
 	}
 }
 

@@ -191,10 +191,15 @@
     <!-- CREATE KEY MODAL -->
     <div id="createKeyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;align-items:center;justify-content:center;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:420px;max-width:95vw;">
-        <h3 style="margin-bottom:16px;font-size:1.1rem;">Register Key</h3>
-        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:16px;">Key must already exist in <code>api-keys</code> and <code>post-pay-billing.clients</code> in config.</p>
-        <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Full API Key</label>
-        <input id="createKeyInput" type="text" placeholder="fink_max_..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-family:monospace;font-size:0.85rem;">
+        <h3 style="margin-bottom:16px;font-size:1.1rem;">Generate New API Key</h3>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:16px;">This will automatically generate a new key and save it to config.</p>
+        <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Plan</label>
+        <select id="createPlanInput" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-size:0.85rem;">
+          <option value="MAX">MAX</option>
+          <option value="PRO">PRO</option>
+          <option value="DAYPASS">DAYPASS</option>
+          <option value="PAYG">PAYG</option>
+        </select>
         <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Email (optional)</label>
         <input id="createEmailInput" type="email" placeholder="user@example.com" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-size:0.85rem;">
         <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Credits Purchased</label>
@@ -202,7 +207,7 @@
         <div id="createKeyError" style="color:#ef4444;font-size:0.82rem;margin-bottom:12px;display:none;"></div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button class="btn" onclick="admin.closeCreateModal()" style="background:transparent;border:1px solid var(--border);">Cancel</button>
-          <button class="btn btn-primary" onclick="admin.submitCreateKey()">Register</button>
+          <button class="btn btn-primary" onclick="admin.submitCreateKey()">Generate & Save</button>
         </div>
       </div>
     </div>
@@ -511,7 +516,7 @@ const admin = (() => {
   }
 
   function openCreateModal() {
-    document.getElementById('createKeyInput').value = '';
+    document.getElementById('createPlanInput').value = 'MAX';
     document.getElementById('createEmailInput').value = '';
     document.getElementById('createCreditsInput').value = '0';
     document.getElementById('createKeyError').style.display = 'none';
@@ -524,22 +529,23 @@ const admin = (() => {
   }
 
   async function submitCreateKey() {
-    const key = document.getElementById('createKeyInput').value.trim();
+    const plan = document.getElementById('createPlanInput').value;
     const email = document.getElementById('createEmailInput').value.trim();
     const credits = parseFloat(document.getElementById('createCreditsInput').value) || 0;
     const errEl = document.getElementById('createKeyError');
     errEl.style.display = 'none';
-    if (!key) { errEl.textContent = 'API key is required'; errEl.style.display = 'block'; return; }
     try {
-      const res = await fetch('/v0/management/admin/keys/register', {
+      const res = await fetch('/v0/management/admin/keys/generate?plan=' + encodeURIComponent(plan), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.adminKey },
-        body: JSON.stringify({ key, email, credits })
+        body: JSON.stringify({ email, credits })
       });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
       closeCreateModal();
       await refresh();
+      // Optionally show the full generated key to the user
+      alert('Key generated successfully:\n\n' + data.key);
     } catch(e) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; }
   }
 

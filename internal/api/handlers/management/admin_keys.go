@@ -1,8 +1,10 @@
 package management
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -628,3 +630,121 @@ func (h *Handler) PostAdminKeyRegister(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// PostAdminKeyGenerate generates a new API key and updates config.yaml directly,
+// initializing it with models and billing settings.
+func (h *Handler) PostAdminKeyGenerate(c *gin.Context) {
+	var req adminKeyRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	plan := strings.ToUpper(strings.TrimSpace(c.Query("plan")))
+	if plan == "" {
+		plan = "MAX"
+	}
+	prefix := ""
+	switch plan {
+	case "PRO":
+		prefix = "fink_pro_"
+	case "MAX":
+		prefix = "fink_max_"
+	default:
+		prefix = "fink_"
+		plan = "PAYG"
+	}
+
+	raw := make([]byte, 16)
+	if _, errRand := rand.Read(raw); errRand != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "key generation failed"})
+		return
+	}
+	newKey := prefix + hex.EncodeToString(raw)
+
+	// Update Config
+	h.mu.Lock()
+	latestCfg, err := config.LoadConfig(h.configFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load config: " + err.Error()})
+		h.mu.Unlock()
+		return
+	}
+
+	latestCfg.APIKeys = append(latestCfg.APIKeys, newKey)
+	if latestCfg.APIKeyModels == nil {
+		latestCfg.APIKeyModels = make(map[string]map[string][]string)
+	}
+	latestCfg.APIKeyModels[newKey] = map[string][]string{
+		"claude": AllowedClaude,
+		"openai": AllowedOpenAI,
+	}
+
+	if latestCfg.PostPayBilling.Clients == nil {
+		latestCfg.PostPayBilling.Clients = make(map[string]config.PostPayBillingClientCfg)
+	}
+	latestCfg.PostPayBilling.Clients[newKey] = config.PostPayBillingClientCfg{
+		CreditLimit: 2e6,
+	}
+
+	if err := config.SaveConfigPreserveComments(h.configFilePath, latestCfg); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
+		h.mu.Unlock()
+		return
+	}
+	h.mu.Unlock()
+
+	keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))
+
+	// Insert into Postgres DB
+	dbRegistered := false
+	dbSkipped := false
+	db := getWebhookDB()
+	if db != nil {
+		syntheticOrder := fmt.Sprintf("manual-gen-%s", keyHash[:12])
+		_, errInsert := db.ExecContext(c.Request.Context(), `
+			INSERT INTO api_keys (name, key_hash, key_prefix, email, plan, status, order_code, created_at)
+			VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+			ON CONFLICT (key_hash) DO NOTHING
+		`, plan, keyHash, prefix, req.Email, plan, syntheticOrder, time.Now().Unix())
+		if errInsert == nil {
+			var existingID int
+			errCheck := db.QueryRowContext(c.Request.Context(),
+				`SELECT id FROM api_keys WHERE key_hash = $1`, keyHash).Scan(&existingID)
+			if errCheck == nil && existingID > 0 {
+				dbRegistered = true
+			}
+		}
+	} else {
+		dbSkipped = true
+	}
+
+	// Process Credits in Ledger
+	txnID := fmt.Sprintf("manual-gen-%s", keyHash[:16])
+	var addedCredits, newTotal float64
+	var isDuplicate bool
+	if req.Credits > 0 {
+		addedCredits, newTotal, isDuplicate = middleware.ProcessDepositCredits(newKey, req.Credits, txnID)
+	} else {
+		snapshot := middleware.GetPostPaySnapshot()
+		if e, ok := snapshot[newKey]; ok {
+			newTotal = e.CreditsPurchased
+		}
+	}
+
+	// Flush Ledger
+	if latestCfg.PostPayBilling.LedgerFile != "" {
+		fullPath := latestCfg.AuthDir + "/" + latestCfg.PostPayBilling.LedgerFile
+		_ = middleware.SavePostPayUsage(fullPath)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":          "ok",
+		"key":             newKey,
+		"plan":            plan,
+		"email":           req.Email,
+		"credits_seeded":  addedCredits,
+		"total_purchased": newTotal,
+		"duplicate_txn":   isDuplicate,
+		"db_registered":   dbRegistered,
+		"db_skipped_no_db": dbSkipped,
+	})
+}
