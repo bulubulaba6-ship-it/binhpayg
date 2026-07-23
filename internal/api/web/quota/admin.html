@@ -514,9 +514,9 @@ const admin = (() => {
     const errEl = document.getElementById('createKeyError');
     errEl.style.display = 'none';
     try {
-      const res = await fetch('/v0/management/admin/keys/generate?plan=' + encodeURIComponent(plan), {
+      const res = await fetch(getBase() + '/v0/management/admin/keys/generate?plan=' + encodeURIComponent(plan), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.adminKey },
+        headers: headers(),
         body: JSON.stringify({ email, credits })
       });
       const data = await res.json();
