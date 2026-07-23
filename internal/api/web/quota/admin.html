@@ -185,8 +185,30 @@
         <option value="PAYG">PAYG</option>
       </select>
       <span class="filter-count" id="keyFilterCount"></span>
+      <button class="btn btn-primary" style="margin-left:auto;" onclick="admin.openCreateModal()">＋ Create Key</button>
     </div>
+
+    <!-- CREATE KEY MODAL -->
+    <div id="createKeyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;align-items:center;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:420px;max-width:95vw;">
+        <h3 style="margin-bottom:16px;font-size:1.1rem;">Register Key</h3>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:16px;">Key must already exist in <code>api-keys</code> and <code>post-pay-billing.clients</code> in config.</p>
+        <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Full API Key</label>
+        <input id="createKeyInput" type="text" placeholder="fink_max_..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-family:monospace;font-size:0.85rem;">
+        <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Email (optional)</label>
+        <input id="createEmailInput" type="email" placeholder="user@example.com" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-size:0.85rem;">
+        <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Credits Purchased</label>
+        <input id="createCreditsInput" type="number" placeholder="0" value="0" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:20px;font-size:0.85rem;">
+        <div id="createKeyError" style="color:#ef4444;font-size:0.82rem;margin-bottom:12px;display:none;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn" onclick="admin.closeCreateModal()" style="background:transparent;border:1px solid var(--border);">Cancel</button>
+          <button class="btn btn-primary" onclick="admin.submitCreateKey()">Register</button>
+        </div>
+      </div>
+    </div>
+
     <div class="table-wrap">
+
       <table>
         <thead>
           <tr>
@@ -488,7 +510,41 @@ const admin = (() => {
     filterKeys();
   }
 
-  return { login, showTab, refresh, filterKeys, filterOrders, activate, deactivate, linkToOrder, linkToKey };
+  function openCreateModal() {
+    document.getElementById('createKeyInput').value = '';
+    document.getElementById('createEmailInput').value = '';
+    document.getElementById('createCreditsInput').value = '0';
+    document.getElementById('createKeyError').style.display = 'none';
+    const m = document.getElementById('createKeyModal');
+    m.style.display = 'flex';
+  }
+
+  function closeCreateModal() {
+    document.getElementById('createKeyModal').style.display = 'none';
+  }
+
+  async function submitCreateKey() {
+    const key = document.getElementById('createKeyInput').value.trim();
+    const email = document.getElementById('createEmailInput').value.trim();
+    const credits = parseFloat(document.getElementById('createCreditsInput').value) || 0;
+    const errEl = document.getElementById('createKeyError');
+    errEl.style.display = 'none';
+    if (!key) { errEl.textContent = 'API key is required'; errEl.style.display = 'block'; return; }
+    try {
+      const res = await fetch('/v0/management/admin/keys/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.adminKey },
+        body: JSON.stringify({ key, email, credits })
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
+      closeCreateModal();
+      await refresh();
+    } catch(e) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; }
+  }
+
+  return { login, showTab, refresh, filterKeys, filterOrders, activate, deactivate, linkToOrder, linkToKey, openCreateModal, closeCreateModal, submitCreateKey };
+
 })();
 </script>
 </body>
