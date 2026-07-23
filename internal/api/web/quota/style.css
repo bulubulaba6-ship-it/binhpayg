@@ -701,8 +701,8 @@ td               { font-weight: 500; font-size: 0.93rem; }
   --background:    #f0f2f7;
   --foreground:    #12132a;
   --surface-card:  #ffffff;
-  --primary:       #d878cc;
-  --primary-hover: #e48cd8;
+  --primary:       #e07a5f;
+  --primary-hover: #d9694e;
   --muted:         #62677e;
   --border:        #dde0ea;
   --border-light:  rgba(0,0,0,0.07);
@@ -727,12 +727,12 @@ td               { font-weight: 500; font-size: 0.93rem; }
 [data-theme="light"] .search-box input { color: var(--foreground); }
 [data-theme="light"] .nav-item:hover   { background: rgba(0,0,0,0.04); color: var(--foreground); }
 [data-theme="light"] .nav-item.active  {
-  background: rgba(216,120,204,0.1);
-  border-color: rgba(216,120,204,0.2);
+  background: rgba(224,122,95,0.1);
+  border-color: rgba(224,122,95,0.2);
 }
 [data-theme="light"] .theme-toggle:hover {
-  background: rgba(216,120,204,0.1);
-  border-color: rgba(216,120,204,0.3);
+  background: rgba(224,122,95,0.1);
+  border-color: rgba(224,122,95,0.3);
 }
 
 /* Cards */
@@ -744,17 +744,17 @@ td               { font-weight: 500; font-size: 0.93rem; }
   border-color: var(--border);
   box-shadow: 0 1px 6px rgba(0,0,0,0.06);
 }
-[data-theme="light"] .stat-card:hover  { border-color: rgba(216,120,204,0.3); }
-[data-theme="light"] .store-card:hover { border-color: rgba(216,120,204,0.3); }
+[data-theme="light"] .stat-card:hover  { border-color: rgba(224,122,95,0.3); }
+[data-theme="light"] .store-card:hover { border-color: rgba(224,122,95,0.3); }
 [data-theme="light"] .store-card.popular {
   border-color: var(--primary);
-  box-shadow: 0 0 28px rgba(216,120,204,0.15);
+  box-shadow: 0 0 28px rgba(224,122,95,0.15);
 }
 
 /* Table */
 [data-theme="light"] td               { border-bottom-color: rgba(0,0,0,0.055); }
 [data-theme="light"] tbody tr:hover   { background: rgba(0,0,0,0.025); }
-[data-theme="light"] .badge-cost      { background: rgba(216,120,204,0.1); color: var(--primary); }
+[data-theme="light"] .badge-cost      { background: rgba(224,122,95,0.1); color: var(--primary); }
 [data-theme="light"] .progress-track  { background: #e4e7f0; }
 
 /* Store */
@@ -765,14 +765,14 @@ td               { font-weight: 500; font-size: 0.93rem; }
 
 /* Welcome overlay pills/dividers */
 [data-theme="light"] .welcome-pill {
-  background: rgba(216,120,204,0.07);
-  border-color: rgba(216,120,204,0.2);
+  background: rgba(224,122,95,0.07);
+  border-color: rgba(224,122,95,0.2);
 }
 [data-theme="light"] .welcome-divider::before,
 [data-theme="light"] .welcome-divider::after { background: var(--border); }
-[data-theme="light"] .welcome-buy-btn { border-color: rgba(216,120,204,0.4) !important; }
+[data-theme="light"] .welcome-buy-btn { border-color: rgba(224,122,95,0.4) !important; }
 [data-theme="light"] .welcome-buy-btn:hover {
-  background: rgba(216,120,204,0.08) !important;
+  background: rgba(224,122,95,0.08) !important;
   border-color: var(--primary) !important;
 }
 

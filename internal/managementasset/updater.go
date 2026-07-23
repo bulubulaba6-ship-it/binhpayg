@@ -178,11 +178,11 @@ func FilePath(configFilePath string) string {
 // EnsureLatestManagementHTML checks the latest management.html asset and updates the local copy when needed.
 // It coalesces concurrent sync attempts and returns whether the asset exists after the sync attempt.
 func EnsureLatestManagementHTML(ctx context.Context, staticDir string, proxyURL string, panelRepository string) bool {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	// Disabled to prevent overwriting customized management.html
+	return true
+}
 
-	staticDir = strings.TrimSpace(staticDir)
+func EnsureLatestManagementHTML_Original(ctx context.Context, staticDir string, proxyURL string, panelRepository string) bool {
 	if staticDir == "" {
 		log.Debug("management asset sync skipped: empty static directory")
 		return false
