@@ -28,6 +28,7 @@ api-keys:
   - fink_547a2dd57b7c148f09478206be8f4755
   - fink_pro_310b0ede5c1d3c3b96abb85323d785d5
   - fink_max_3e5e19628f2cbcc3c02c40d151876a3b
+  - fink_pro_3d_7a2b9c1d4e8f305612894a735c61b2e3
 api-key-models:
   "fink_pro_5d41402abc4b2a76b9719d911017c592":
     claude:
@@ -321,6 +322,23 @@ api-key-models:
       - gpt-5.3-codex
       - gpt-5.3-codex-spark
       - gpt-5.2
+  fink_pro_3d_7a2b9c1d4e8f305612894a735c61b2e3:
+    claude:
+      - claude-opus-5
+      - claude-opus-4-8
+      - claude-opus-4-7
+      - claude-opus-4-6
+      - claude-sonnet-5
+      - claude-fable-5
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    openai:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
+      - gpt-5.2
 debug: false
 pprof:
   enable: false
@@ -413,6 +431,10 @@ post-pay-billing:
     fink_max_3e5e19628f2cbcc3c02c40d151876a3b:
       credit-limit: 250000
       expires-at: "2026-08-16T02:56:59Z"
+    # 3-Day PRO Pass (3/7 of 50k = 21,428 credits, 1.5k 5H limit, expires 2026-08-05)
+    fink_pro_3d_7a2b9c1d4e8f305612894a735c61b2e3:
+      credit-limit: 21428
+      expires-at: "2026-08-05T23:59:59Z"
   markup-rates:
     "claude-opus-4-8":
       input: 1400
@@ -518,3 +540,4 @@ api-key-limits:
   fink_eb6924786c88368ab2ef52d99d749f65: 1000
   fink_547a2dd57b7c148f09478206be8f4755: 1000
   fink_max_3e5e19628f2cbcc3c02c40d151876a3b: 10000
+  fink_pro_3d_7a2b9c1d4e8f305612894a735c61b2e3: 1500
