@@ -915,7 +915,7 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 	// Rewrite <title>
 	if idx := strings.Index(content, "<title>"); idx != -1 {
 		if end := strings.Index(content[idx:], "</title>"); end != -1 {
-			content = content[:idx] + "<title>AI API GIA RE</title>" + content[idx+end+len("</title>"):]
+			content = content[:idx] + "<title>AIAPIGIARE Management</title>" + content[idx+end+len("</title>"):]
 		}
 	}
 
@@ -923,6 +923,11 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 	// The management panel renders "CLI / PROXY / API" via a React component
 	// with CSS-module class "LoginPage-module__brandContent___*".
 	// We use a MutationObserver so the patch runs even after hydration.
+	// Also remove any existing favicon links from the raw HTML so our
+	// injected one takes priority and there is no flicker.
+	content = strings.ReplaceAll(content, "<link rel=\"shortcut icon\"", "<link data-removed-favicon=\"1\" rel=\"x-old-icon\"")
+	content = strings.ReplaceAll(content, "<link rel=\"icon\"", "<link data-removed-favicon=\"1\" rel=\"x-old-icon\"")
+
 	runtimePatch := `
 <link rel="icon" type="image/png" href="/dashboard/icon.png">
 <script>
