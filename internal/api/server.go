@@ -253,11 +253,14 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		wd = configFilePath
 	}
 
-	envAdminPassword, envAdminPasswordSet := os.LookupEnv("MANAGEMENT_PASSWORD")
+	// ADMIN_PASS overrides MANAGEMENT_PASSWORD. Set ADMIN_PASS in the environment
+	// to protect the /admin dashboard with a separate password from the API secret key.
+	envAdminPassword, envAdminPasswordSet := os.LookupEnv("ADMIN_PASS")
 	envAdminPassword = strings.TrimSpace(envAdminPassword)
 	if envAdminPassword == "" {
-		envAdminPassword = "Xbstation@123"
-		envAdminPasswordSet = true
+		// Fallback: honour legacy MANAGEMENT_PASSWORD for backwards compatibility.
+		envAdminPassword, envAdminPasswordSet = os.LookupEnv("MANAGEMENT_PASSWORD")
+		envAdminPassword = strings.TrimSpace(envAdminPassword)
 	}
 	envManagementSecret := envAdminPasswordSet && envAdminPassword != ""
 
