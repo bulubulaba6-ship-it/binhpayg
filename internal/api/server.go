@@ -901,69 +901,100 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		content += injection
 	}
 
-	// ── Branding patch ────────────────────────────────────────────────────────
-	// Replace every occurrence of the upstream product name with our brand.
+	// ── Static string replacements (hits server-rendered text) ───────────────
 	brandReplacements := []struct{ old, new string }{
 		{"CLI Proxy API Management Center", "AI API GIA RE"},
 		{"CLI PROXY API Management Center", "AI API GIA RE"},
 		{"cli proxy api management center", "AI API GIA RE"},
-		// Three-line stacked logo text variations found in the panel HTML
-		{"CLI\nPROXY\nAPI", "AI\nAPI\nGIA RE"},
-		{"CLI\r\nPROXY\r\nAPI", "AI\r\nAPI\r\nGIA RE"},
-		// Plain inline occurrences
 		{"CLI Proxy API", "AI API GIA RE"},
 		{"CLIProxyAPI", "AIAPIGIARE"},
 	}
 	for _, r := range brandReplacements {
 		content = strings.ReplaceAll(content, r.old, r.new)
 	}
-
-	// Replace <title> tag content
+	// Rewrite <title>
 	if idx := strings.Index(content, "<title>"); idx != -1 {
-		end := strings.Index(content[idx:], "</title>")
-		if end != -1 {
+		if end := strings.Index(content[idx:], "</title>"); end != -1 {
 			content = content[:idx] + "<title>AI API GIA RE</title>" + content[idx+end+len("</title>"):]
 		}
 	}
 
-	// Inject favicon override and a JS snippet that swaps the logo <img> src
-	// at runtime, covering cases where the logo is rendered dynamically by JS.
-	faviconAndLogoScript := `
+	// ── Runtime JS patch (hits React-rendered DOM) ───────────────────────────
+	// The management panel renders "CLI / PROXY / API" via a React component
+	// with CSS-module class "LoginPage-module__brandContent___*".
+	// We use a MutationObserver so the patch runs even after hydration.
+	runtimePatch := `
 <link rel="icon" type="image/png" href="/dashboard/icon.png">
 <script>
 (function(){
-  var ICON = '/dashboard/icon.png';
-  // Swap any existing favicon links
-  document.querySelectorAll('link[rel~="icon"]').forEach(function(l){ l.href = ICON; });
-  // Observe DOM for dynamically injected logo images and swap them
-  function swapLogos(){
+  var BRAND = ['AI','API','GIA RE'];
+  var OLD   = ['CLI','PROXY','API'];
+  var ICON  = '/dashboard/icon.png';
+
+  function patchBrandContent() {
+    // 1. Target the brand content container by partial class name
+    var all = document.querySelectorAll('[class*="brandContent"]');
+    all.forEach(function(el) {
+      var children = el.children;
+      if (children.length >= 3) {
+        for (var i = 0; i < Math.min(children.length, BRAND.length); i++) {
+          children[i].textContent = BRAND[i];
+        }
+      } else if (children.length === 0) {
+        // Plain text node — replace word by word
+        var t = el.textContent.trim();
+        if (t === 'CLI') el.textContent = 'AI';
+        else if (t === 'PROXY') el.textContent = 'API';
+        else if (t === 'API' && el.previousElementSibling && el.previousElementSibling.textContent === 'PROXY') el.textContent = 'GIA RE';
+      }
+      el.dataset.branded = '1';
+    });
+
+    // 2. Walk all text nodes and replace any remaining occurrences
+    var walker = document.createTreeWalker(
+      document.body || document.documentElement,
+      NodeFilter.SHOW_TEXT, null, false
+    );
+    var node;
+    while ((node = walker.nextNode())) {
+      var v = node.nodeValue;
+      if (!v) continue;
+      var updated = v
+        .replace(/CLI Proxy API Management Center/gi, 'AI API GIA RE')
+        .replace(/CLI Proxy API/gi, 'AI API GIA RE')
+        .replace(/CLIProxyAPI/g, 'AIAPIGIARE');
+      if (updated !== v) node.nodeValue = updated;
+    }
+
+    // 3. Swap logo images
     document.querySelectorAll('img').forEach(function(img){
-      if(!img.dataset.brandSwapped && (
+      if (!img.dataset.brandSwapped && (
         img.src.includes('github') ||
         img.src.includes('router-for-me') ||
-        img.src.includes('logo') ||
-        img.alt && img.alt.toLowerCase().includes('logo')
+        img.src.includes('cpamc') ||
+        (img.alt && img.alt.toLowerCase().includes('logo'))
       )){
         img.src = ICON;
         img.dataset.brandSwapped = '1';
       }
     });
+
+    // 4. Fix favicon
+    document.querySelectorAll('link[rel~="icon"]').forEach(function(l){ l.href = ICON; });
   }
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', swapLogos);
-  } else {
-    swapLogos();
-  }
-  var obs = new MutationObserver(swapLogos);
-  obs.observe(document.body || document.documentElement, {childList:true, subtree:true});
+
+  // Run immediately, after DOM ready, and observe future mutations
+  if (document.body) patchBrandContent();
+  document.addEventListener('DOMContentLoaded', patchBrandContent);
+  var obs = new MutationObserver(patchBrandContent);
+  obs.observe(document.documentElement, {childList: true, subtree: true});
 })();
 </script>`
+
 	if strings.Contains(content, "</head>") {
-		content = strings.Replace(content, "</head>", faviconAndLogoScript+"</head>", 1)
-	} else if strings.Contains(content, "<body") {
-		content = strings.Replace(content, "<body", faviconAndLogoScript+"<body", 1)
+		content = strings.Replace(content, "</head>", runtimePatch+"</head>", 1)
 	} else {
-		content = faviconAndLogoScript + content
+		content = runtimePatch + content
 	}
 	// ── End branding patch ────────────────────────────────────────────────────
 
