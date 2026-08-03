@@ -901,6 +901,72 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		content += injection
 	}
 
+	// ── Branding patch ────────────────────────────────────────────────────────
+	// Replace every occurrence of the upstream product name with our brand.
+	brandReplacements := []struct{ old, new string }{
+		{"CLI Proxy API Management Center", "AI API GIA RE"},
+		{"CLI PROXY API Management Center", "AI API GIA RE"},
+		{"cli proxy api management center", "AI API GIA RE"},
+		// Three-line stacked logo text variations found in the panel HTML
+		{"CLI\nPROXY\nAPI", "AI\nAPI\nGIA RE"},
+		{"CLI\r\nPROXY\r\nAPI", "AI\r\nAPI\r\nGIA RE"},
+		// Plain inline occurrences
+		{"CLI Proxy API", "AI API GIA RE"},
+		{"CLIProxyAPI", "AIAPIGIARE"},
+	}
+	for _, r := range brandReplacements {
+		content = strings.ReplaceAll(content, r.old, r.new)
+	}
+
+	// Replace <title> tag content
+	if idx := strings.Index(content, "<title>"); idx != -1 {
+		end := strings.Index(content[idx:], "</title>")
+		if end != -1 {
+			content = content[:idx] + "<title>AI API GIA RE</title>" + content[idx+end+len("</title>"):]
+		}
+	}
+
+	// Inject favicon override and a JS snippet that swaps the logo <img> src
+	// at runtime, covering cases where the logo is rendered dynamically by JS.
+	faviconAndLogoScript := `
+<link rel="icon" type="image/png" href="/dashboard/icon.png">
+<script>
+(function(){
+  var ICON = '/dashboard/icon.png';
+  // Swap any existing favicon links
+  document.querySelectorAll('link[rel~="icon"]').forEach(function(l){ l.href = ICON; });
+  // Observe DOM for dynamically injected logo images and swap them
+  function swapLogos(){
+    document.querySelectorAll('img').forEach(function(img){
+      if(!img.dataset.brandSwapped && (
+        img.src.includes('github') ||
+        img.src.includes('router-for-me') ||
+        img.src.includes('logo') ||
+        img.alt && img.alt.toLowerCase().includes('logo')
+      )){
+        img.src = ICON;
+        img.dataset.brandSwapped = '1';
+      }
+    });
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', swapLogos);
+  } else {
+    swapLogos();
+  }
+  var obs = new MutationObserver(swapLogos);
+  obs.observe(document.body || document.documentElement, {childList:true, subtree:true});
+})();
+</script>`
+	if strings.Contains(content, "</head>") {
+		content = strings.Replace(content, "</head>", faviconAndLogoScript+"</head>", 1)
+	} else if strings.Contains(content, "<body") {
+		content = strings.Replace(content, "<body", faviconAndLogoScript+"<body", 1)
+	} else {
+		content = faviconAndLogoScript + content
+	}
+	// ── End branding patch ────────────────────────────────────────────────────
+
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(content))
 }
 
