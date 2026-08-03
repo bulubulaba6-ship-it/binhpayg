@@ -28,26 +28,25 @@ const app = {
 
   // ── Virtual credit pricing ────────────────────────────────────────────────
   // Mirrors config.yaml markup-rates exactly (credits per 1M tokens).
-  // 1000 credits = $1.00 USD. Update here whenever config.yaml changes.
-  // Reasoning tokens are billed at output rate (industry standard).
-  // Mirrors config.yaml markup-rates — 10x upstream margin strategy.
-  // Cache = 10% of input rate (industry standard, Anthropic ratio).
-  // 1000 credits = $1.00 USD. Update here whenever config.yaml changes.
+  // 1000 credits = $1.00 USD.
+  // All models route to DeepSeek-V4-Flash backend (~2x upstream margin).
+  // Reasoning tokens billed at output rate (industry standard).
+  // Cache-hit tokens billed at 10% of input rate.
   pricing: {
-    // DeepSeek-V4 Flash backend: upstream $0.14/$0.28/1M → 10x
-    'claude-opus-4-8':    { input: 1400, output: 2800, cache: 140 },
-    'claude-opus-4-7':    { input: 1400, output: 2800, cache: 140 },
-    'claude-opus-4-6':    { input: 1400, output: 2800, cache: 140 },
-    'claude-sonnet-5':    { input: 1600, output: 3000, cache: 140 },
-    // Mimo-v2.5 backend
-    'claude-sonnet-4-6':  { input: 1000, output: 2000, cache: 100 },
-    'claude-haiku-4-5':   { input:  800, output: 1600, cache:  80 },
-    'claude-fable-5':     { input: 3000, output: 6000, cache: 300 },
+    // DeepSeek-V4-Flash: upstream $0.14 in / $0.28 out / 1M  → 2x markup
+    'claude-opus-4-8':    { input: 280, output: 560, cache: 28 },
+    'claude-opus-4-7':    { input: 280, output: 560, cache: 28 },
+    'claude-opus-4-6':    { input: 280, output: 560, cache: 28 },
+    'claude-sonnet-5':    { input: 210, output: 420, cache: 21 },
+    'claude-fable-5':     { input: 210, output: 420, cache: 21 },
+    'claude-sonnet-4-6':  { input: 210, output: 420, cache: 21 },
+    'claude-haiku-4-5':   { input: 175, output: 350, cache: 17.5 },
     // GPT aliases — same backends as Claude counterparts
-    'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
-    'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },
-    'gpt-5.4-mini':       { input:  800, output: 2000, cache:  80 },
-    'gpt-5.3-codex-spark':{ input:  700, output: 2100, cache:  70 },
+    'gpt-5.5':            { input: 280, output: 560, cache: 28 },
+    'gpt-5.4':            { input: 210, output: 420, cache: 21 },
+    'gpt-5.4-mini':       { input: 175, output: 350, cache: 17.5 },
+    'gpt-5.3-codex-spark':{ input: 175, output: 350, cache: 17.5 },
+    'gpt-5.3-codex':      { input: 175, output: 350, cache: 17.5 },
   },
 
   // Compute virtual credits for a single session.

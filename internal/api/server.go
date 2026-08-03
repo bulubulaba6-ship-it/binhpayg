@@ -902,12 +902,17 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 	}
 
 	// ── Static string replacements (hits server-rendered text) ───────────────
+	// Note: "CLIProxyAPI" (no spaces) is intentionally excluded here.
+	// It appears verbatim inside hashed JS/CSS asset filenames emitted by the
+	// management panel bundler (e.g. CLIProxyAPI.abc123.js). Replacing it
+	// server-side would corrupt those URLs and cause 404s for the React bundle.
+	// The MutationObserver below handles that token safely in the browser
+	// (text nodes only, never attribute values).
 	brandReplacements := []struct{ old, new string }{
 		{"CLI Proxy API Management Center", "AI API GIA RE"},
 		{"CLI PROXY API Management Center", "AI API GIA RE"},
 		{"cli proxy api management center", "AI API GIA RE"},
 		{"CLI Proxy API", "AI API GIA RE"},
-		{"CLIProxyAPI", "AIAPIGIARE"},
 	}
 	for _, r := range brandReplacements {
 		content = strings.ReplaceAll(content, r.old, r.new)
