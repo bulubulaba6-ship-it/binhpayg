@@ -50,8 +50,15 @@ type Handler struct {
 
 // NewHandler creates a new management handler instance.
 func NewHandler(cfg *config.Config, configFilePath string, manager *coreauth.Manager) *Handler {
-	envSecret, _ := os.LookupEnv("MANAGEMENT_PASSWORD")
+	// ADMIN_PASS takes priority; MANAGEMENT_PASSWORD is kept for backwards compatibility.
+	// This must mirror the same lookup order in server.go so that route registration
+	// and password validation both use the same secret.
+	envSecret, _ := os.LookupEnv("ADMIN_PASS")
 	envSecret = strings.TrimSpace(envSecret)
+	if envSecret == "" {
+		envSecret, _ = os.LookupEnv("MANAGEMENT_PASSWORD")
+		envSecret = strings.TrimSpace(envSecret)
+	}
 
 	h := &Handler{
 		cfg:                 cfg,
