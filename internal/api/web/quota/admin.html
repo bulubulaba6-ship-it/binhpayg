@@ -254,11 +254,8 @@
             <th>Consumed</th>
             <th>Purchased</th>
             <th>Remaining %</th>
-            <th>Daily Burn</th>
-            <th>Rate</th>
-            <th>5H Limit</th>
             <th>Expires</th>
-            <th>Buy Date</th>
+            <th>Create Date</th>
             <th>Reqs</th>
             <th>Actions</th>
           </tr>
@@ -427,12 +424,6 @@ const admin = (() => {
         <td>
           <div class="prog-wrap"><div class="prog-fill" style="width:${pctRemaining.toFixed(1)}%;background:${progColor}"></div></div>
           <span style="font-size:0.72rem;color:var(--muted)">${pctRemaining.toFixed(0)}%</span>
-        </td>
-        <td class="mono">${fmtCr(k.daily_burn_today)}<span style="color:var(--muted);font-size:0.7rem">/day</span></td>
-        <td><span class="mult ${multClass}">×${k.burn_multiplier.toFixed(1)}</span></td>
-        <td class="mono">
-          <div style="font-weight:600">${fmtCr(k.five_h_credits)}</div>
-          <div style="color:var(--muted);font-size:0.7rem">/ ${k.five_h_limit.toLocaleString()}</div>
         </td>
         <td style="color:${expColor};font-size:0.78rem">${exp}</td>
         <td style="color:var(--muted);font-size:0.78rem">${created}</td>
