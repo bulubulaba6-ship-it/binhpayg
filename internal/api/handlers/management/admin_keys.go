@@ -698,6 +698,9 @@ func (h *Handler) PostAdminKeyGenerate(c *gin.Context) {
 		return
 	}
 	h.cfg = latestCfg
+	// Immediately sync the new key into the in-memory quota config so it is
+	// accepted without waiting for the config watcher to reload.
+	middleware.SetClientQuotaConfig(latestCfg)
 	h.mu.Unlock()
 
 	keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte(newKey)))
