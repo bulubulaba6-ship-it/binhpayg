@@ -465,22 +465,18 @@ const admin = (() => {
     }).join('');
   }
 
-  // Key action handlers — require full key input (prompt)
+  // Key action handlers — confirm only, no key re-entry required
+  // The server resolves masked keys via SHA-256 / prefix lookup.
   function encodeKey(masked) { return masked; }
 
   async function activate(masked) {
-    const full = prompt('Enter FULL API key to ACTIVATE:\n(masked: ' + masked + ')\n\nTip: Type "ok" to use the masked key automatically.');
-    if (!full) return;
-    const finalKey = (full.trim().toLowerCase() === 'ok') ? masked : full.trim();
-    await keyAction('activate', finalKey, 'Key activated successfully.');
+    if (!confirm('Activate ' + masked + '?\nThis will re-enable API access for this key.')) return;
+    await keyAction('activate', masked, 'Key activated successfully.');
   }
 
   async function deactivate(masked) {
-    const full = prompt('Enter FULL API key to DEACTIVATE:\n(masked: ' + masked + ')\n\nTip: Type "ok" to use the masked key automatically.');
-    if (!full) return;
-    const finalKey = (full.trim().toLowerCase() === 'ok') ? masked : full.trim();
-    if (!confirm('Deactivate ' + masked + '? This immediately blocks the user.')) return;
-    await keyAction('deactivate', finalKey, 'Key deactivated.');
+    if (!confirm('Deactivate ' + masked + '?\nThis immediately blocks the user.')) return;
+    await keyAction('deactivate', masked, 'Key deactivated.');
   }
 
   async function keyAction(action, fullKey, successMsg) {

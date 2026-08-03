@@ -402,6 +402,9 @@ func (h *Handler) setKeyExpiry(c *gin.Context, newExpiry time.Time) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: " + err.Error()})
 			return
 		}
+		// Apply the updated expiry to the live in-memory config immediately so
+		// the kill-switch takes effect on the next request without a redeploy.
+		middleware.SetClientQuotaConfig(latestCfg)
 	} else {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load config: " + err.Error()})
 		return

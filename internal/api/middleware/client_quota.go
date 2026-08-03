@@ -129,8 +129,7 @@ type clientQuotaPlugin struct{}
 // This model captures burst abuse (100 requests in 5 minutes) that a daily threshold
 // completely misses, while remaining fair to steady, low-frequency heavy users.
 func fiveHWindowBurnMultiplier(entry *PostPayUsageEntry, rateLimit float64) float64 {
-	// Temporarily disabled for monitoring on forxb branch.
-	// Users will accumulate absolute decay credits, but will not be penalized with multipliers.
+	// Disabled on xb — all keys billed at base rate (x1.0), no burst penalty.
 	return 1.0
 }
 
