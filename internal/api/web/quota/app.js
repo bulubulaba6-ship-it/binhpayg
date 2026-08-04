@@ -32,23 +32,23 @@ const app = {
   // Reasoning tokens are billed at output rate (industry standard).
   // Cache = 10% of input rate (industry standard, Anthropic ratio).
   pricing: {
-    // DeepSeek-V4 Flash backend: upstream $0.14/$0.28/1M → 10x
-    'claude-opus-4-8':    { input: 1400, output: 2800, cache: 140 },
-    'claude-opus-4-7':    { input: 1400, output: 2800, cache: 140 },
-    'claude-opus-4-6':    { input: 1400, output: 2800, cache: 140 },
-    'claude-sonnet-5':    { input: 1600, output: 3000, cache: 140 },
+    // DeepSeek-V4 Flash backend: 1.5x rates
+    'claude-opus-4-8':    { input: 2100, output: 4200, cache: 210 },
+    'claude-opus-4-7':    { input: 2100, output: 4200, cache: 210 },
+    'claude-opus-4-6':    { input: 2100, output: 4200, cache: 210 },
+    'claude-sonnet-5':    { input: 2400, output: 4500, cache: 210 },
     // Mimo-v2.5 backend
-    'claude-sonnet-4-6':  { input: 1000, output: 2000, cache: 100 },
-    'claude-haiku-4-5':   { input:  800, output: 1600, cache:  80 },
-    'claude-fable-5':     { input: 3000, output: 6000, cache: 300 },
+    'claude-sonnet-4-6':  { input: 1500, output: 3000, cache: 150 },
+    'claude-haiku-4-5':   { input: 1200, output: 2400, cache: 120 },
+    'claude-fable-5':     { input: 4500, output: 9000, cache: 450 },
     // GPT aliases — same backends as Claude counterparts
-    'gpt-5.6-sol':        { input: 3000, output: 6000, cache: 300 },
-    'gpt-5.6-luna':       { input:  800, output: 1600, cache:  80 },
-    'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
-    'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },
-    'gpt-5.4-mini':       { input:  800, output: 2000, cache:  80 },
-    'gpt-5.3-codex-spark':{ input:  700, output: 2100, cache:  70 },
-    'gpt-5.3-codex':      { input:  700, output: 2100, cache:  70 },
+    'gpt-5.6-sol':        { input: 4500, output: 9000, cache: 450 },
+    'gpt-5.6-luna':       { input: 1200, output: 2400, cache: 120 },
+    'gpt-5.5':            { input: 2100, output: 4200, cache: 210 },
+    'gpt-5.4':            { input: 2100, output: 4200, cache: 210 },
+    'gpt-5.4-mini':       { input: 1200, output: 3000, cache: 120 },
+    'gpt-5.3-codex-spark':{ input: 1050, output: 3150, cache: 105 },
+    'gpt-5.3-codex':      { input: 1050, output: 3150, cache: 105 },
   },
 
   // Compute virtual credits for a single session.

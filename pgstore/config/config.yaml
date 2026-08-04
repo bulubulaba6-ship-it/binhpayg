@@ -437,57 +437,57 @@ post-pay-billing:
       expires-at: "2026-08-05T23:59:59Z"
   markup-rates:
     "claude-opus-4-8":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 2100
+      output: 4200
+      cache: 210
     "claude-opus-4-7":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 2100
+      output: 4200
+      cache: 210
     "claude-opus-4-6":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 2100
+      output: 4200
+      cache: 210
     "claude-sonnet-5":
-      input: 1600
-      output: 3000
-      cache: 140
+      input: 2400
+      output: 4500
+      cache: 210
     "claude-sonnet-4-6":
-      input: 1000
-      output: 2000
-      cache: 100
+      input: 1500
+      output: 3000
+      cache: 150
     "claude-haiku-4-5":
-      input: 800
-      output: 1600
-      cache: 80
+      input: 1200
+      output: 2400
+      cache: 120
     "claude-fable-5":
-      input: 3000
-      output: 6000
-      cache: 300
+      input: 4500
+      output: 9000
+      cache: 450
     "gpt-5.6-sol":
-      input: 3000
-      output: 6000
-      cache: 300
+      input: 4500
+      output: 9000
+      cache: 450
     "gpt-5.6-luna":
-      input: 800
-      output: 1600
-      cache: 80
+      input: 1200
+      output: 2400
+      cache: 120
     "gpt-5.5":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 2100
+      output: 4200
+      cache: 210
     "gpt-5.4":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 2100
+      output: 4200
+      cache: 210
     "gpt-5.4-mini":
-      input: 800
-      output: 2000
-      cache: 80
+      input: 1200
+      output: 3000
+      cache: 120
     "gpt-5.3-codex-spark":
-      input: 700
-      output: 2100
-      cache: 70
+      input: 1050
+      output: 3150
+      cache: 105
 openai-compatibility:
   - name: Anthropic
     priority: 1
