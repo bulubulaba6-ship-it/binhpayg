@@ -465,13 +465,13 @@ post-pay-billing:
       output: 6000
       cache: 300
     "gpt-5.6-sol":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 3000
+      output: 6000
+      cache: 300
     "gpt-5.6-luna":
-      input: 1400
-      output: 2800
-      cache: 140
+      input: 3000
+      output: 6000
+      cache: 300
     "gpt-5.5":
       input: 1400
       output: 2800
