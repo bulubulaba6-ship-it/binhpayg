@@ -799,7 +799,7 @@ td               { font-weight: 500; font-size: 0.93rem; }
 [data-theme="light"] .welcome-card      { background: #ffffff; border-color: var(--border); }
 [data-theme="light"] .welcome-left      { border-bottom-color: var(--border); }
 [data-theme="light"] .welcome-left--hero {
-  background: #ffffff;
+  background: linear-gradient(160deg, #f4e8fa, #ead4f4);
   border-right-color: var(--border);
 }
 [data-theme="light"] .welcome-stat-row  {
