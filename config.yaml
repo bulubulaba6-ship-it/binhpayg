@@ -464,6 +464,14 @@ post-pay-billing:
       input: 3000
       output: 6000
       cache: 300
+    "gpt-5.6-sol":
+      input: 1400
+      output: 2800
+      cache: 140
+    "gpt-5.6-luna":
+      input: 1400
+      output: 2800
+      cache: 140
     "gpt-5.5":
       input: 1400
       output: 2800
@@ -488,6 +496,8 @@ openai-compatibility:
       - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
     models:
       - name: deepseek-v4-flash
+        alias: claude-opus-5
+      - name: deepseek-v4-flash
         alias: claude-opus-4-8
       - name: deepseek-v4-flash
         alias: claude-opus-4-7
@@ -507,6 +517,10 @@ openai-compatibility:
     api-key-entries:
       - api-key: sk-150d8ec5751b4a62a898265982bdc8ec
     models:
+      - name: deepseek-v4-flash
+        alias: gpt-5.6-sol
+      - name: deepseek-v4-flash
+        alias: gpt-5.6-luna
       - name: deepseek-v4-flash
         alias: gpt-5.5
       - name: deepseek-v4-flash

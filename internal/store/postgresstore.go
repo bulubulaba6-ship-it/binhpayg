@@ -267,6 +267,11 @@ func (s *PostgresStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (stri
 	return path, nil
 }
 
+func isLedgerFile(id string) bool {
+	lower := strings.ToLower(strings.TrimSpace(id))
+	return lower == "ledger" || strings.HasSuffix(lower, "ledger") || strings.HasSuffix(lower, ".json") && strings.Contains(lower, "ledger")
+}
+
 // List enumerates all auth records stored in PostgreSQL.
 func (s *PostgresStore) List(ctx context.Context) ([]*cliproxyauth.Auth, error) {
 	query := fmt.Sprintf("SELECT id, content, created_at, updated_at FROM %s ORDER BY id", s.fullTableName(s.cfg.AuthTable))
@@ -287,6 +292,9 @@ func (s *PostgresStore) List(ctx context.Context) ([]*cliproxyauth.Auth, error) 
 		if err = rows.Scan(&id, &payload, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("postgres store: scan auth row: %w", err)
 		}
+		if isLedgerFile(id) {
+			continue
+		}
 		path, errPath := s.absoluteAuthPath(id)
 		if errPath != nil {
 			log.WithError(errPath).Warnf("postgres store: skipping auth %s outside spool", id)
@@ -299,7 +307,8 @@ func (s *PostgresStore) List(ctx context.Context) ([]*cliproxyauth.Auth, error) 
 		}
 		provider := strings.TrimSpace(valueAsString(metadata["type"]))
 		if provider == "" {
-			provider = "unknown"
+			// Skip files that lack a valid provider/type (e.g. non-auth JSON files)
+			continue
 		}
 		attr := map[string]string{"path": path}
 		if email := strings.TrimSpace(valueAsString(metadata["email"])); email != "" {
@@ -503,6 +512,9 @@ func (s *PostgresStore) syncAuthFile(ctx context.Context, relID, path string) er
 }
 
 func (s *PostgresStore) upsertAuthRecord(ctx context.Context, relID, path string) error {
+	if isLedgerFile(relID) {
+		return nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("postgres store: read auth file: %w", err)
