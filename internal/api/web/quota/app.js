@@ -43,7 +43,7 @@ const app = {
     'claude-fable-5':     { input: 3000, output: 6000, cache: 300 },
     // GPT aliases — same backends as Claude counterparts
     'gpt-5.6-sol':        { input: 3000, output: 6000, cache: 300 },
-    'gpt-5.6-luna':       { input: 2100, output: 4200, cache: 210 },
+    'gpt-5.6-luna':       { input:  800, output: 1600, cache:  80 },
     'gpt-5.5':            { input: 1400, output: 2800, cache: 140 },
     'gpt-5.4':            { input: 1400, output: 2800, cache: 140 },
     'gpt-5.4-mini':       { input:  800, output: 2000, cache:  80 },

@@ -469,9 +469,9 @@ post-pay-billing:
       output: 6000
       cache: 300
     "gpt-5.6-luna":
-      input: 2100
-      output: 4200
-      cache: 210
+      input: 800
+      output: 1600
+      cache: 80
     "gpt-5.5":
       input: 1400
       output: 2800
