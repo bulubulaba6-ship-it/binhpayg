@@ -3,6 +3,7 @@ package helps
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
 	"sync"
 	"time"
 
@@ -89,4 +90,23 @@ func CachedSessionID(apiKey string) string {
 	sessionIDCache[key] = entry
 	sessionIDCacheMu.Unlock()
 	return entry.value
+}
+
+// EnsureSessionHeader ensures that an outbound request to an upstream provider has a valid session header
+// (e.g. x-opencode-session for OpenCode Go, or session-id).
+func EnsureSessionHeader(req *http.Request, apiKey string) {
+	if req == nil {
+		return
+	}
+	sessID := req.Header.Get("x-opencode-session")
+	if sessID == "" {
+		sessID = req.Header.Get("session-id")
+	}
+	if sessID == "" {
+		sessID = req.Header.Get("x-session-id")
+	}
+	if sessID == "" {
+		sessID = CachedSessionID(apiKey)
+	}
+	req.Header.Set("x-opencode-session", sessID)
 }

@@ -53,3 +53,13 @@ func ValidateUpstreamResponse(ctx context.Context, statusCode int, headers http.
 
 	return nil
 }
+
+// SanitizeUpstreamErrorMessage strips internal provider error leaks (such as x-opencode-session or console go messages)
+// from error bodies returned to the end user.
+func SanitizeUpstreamErrorMessage(body []byte) string {
+	msg := string(body)
+	if strings.Contains(msg, "x-opencode-session") || strings.Contains(msg, "Console Go") || strings.Contains(msg, "MissingSessionID") {
+		return `{"error":{"message":"The requested model is temporarily unavailable from upstream. Please try again later.","type":"server_error","code":"upstream_error"}}`
+	}
+	return msg
+}
