@@ -68,6 +68,7 @@ api-key-models:
       - gpt-6
       - gpt-terra
       - gpt-5.7-terra
+      - gpt-5.6-terra
       - gpt-5.6-sol
       - gpt-5.6-luna
       - gpt-5.5
@@ -214,6 +215,8 @@ openai-compatibility:
   - name: Anthropic
     priority: 2
     base-url: https://opencode.ai/zen/go/v1
+    headers:
+      x-opencode-session: "ses_paygbinh_live"
     api-key-entries:
       - api-key: sk-rYdRhiPrGmA5dahxZie9SGRHYryTtYkFwl4yYlmdjEKjBcsgOnOQAuH0Xokuh2Tx
       - api-key: sk-NqvqXnB2cyDIfcnnHrmvTMYRDrdANZROIFh0ObM9t65DRXG59aq4AXxaqHAG272G
@@ -244,6 +247,8 @@ openai-compatibility:
   - name: OpenAI
     priority: 2
     base-url: https://opencode.ai/zen/go/v1
+    headers:
+      x-opencode-session: "ses_paygbinh_live"
     api-key-entries:
       - api-key: sk-rYdRhiPrGmA5dahxZie9SGRHYryTtYkFwl4yYlmdjEKjBcsgOnOQAuH0Xokuh2Tx
       - api-key: sk-NqvqXnB2cyDIfcnnHrmvTMYRDrdANZROIFh0ObM9t65DRXG59aq4AXxaqHAG272G
@@ -257,6 +262,8 @@ openai-compatibility:
         alias: gpt-terra
       - name: omen-alpha
         alias: gpt-5.7-terra
+      - name: omen-alpha
+        alias: gpt-5.6-terra
       - name: omen-alpha
         alias: gpt-5.6-sol
       - name: omen-alpha
