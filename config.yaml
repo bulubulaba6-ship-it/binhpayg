@@ -255,22 +255,23 @@ openai-compatibility:
       - api-key: sk-2hoDPuifZmAvQlztjijazlRV8cFWYQWoizjIoCu7tJeDW6c81SPSWjKLPTZ1IbpX
       - api-key: sk-X5wvmzQifzYYWfXlJBkvoOuXtCnXLIWGgbHYqvxdyWJYhVlaSZNHQylz7tI64VOX
     models:
-      # Flagship / Best Tier -> omen-alpha
+      # Flagship
       - name: omen-alpha
         alias: gpt-6
-      - name: omen-alpha
+      # Mapped to mimo-v2.5 per user instruction
+      - name: mimo-v2.5
         alias: gpt-terra
-      - name: omen-alpha
+      - name: mimo-v2.5
         alias: gpt-5.7-terra
-      - name: omen-alpha
+      - name: mimo-v2.5
         alias: gpt-5.6-terra
-      - name: omen-alpha
+      - name: mimo-v2.5
         alias: gpt-5.6-sol
-      - name: omen-alpha
+      - name: mimo-v2.5
         alias: gpt-5.5
-      - name: omen-alpha
+      - name: mimo-v2.5
         alias: gpt-5.4
-      - name: omen-alpha
+      - name: mimo-v2.5
         alias: gpt-5.3-codex
       # Standard / Fast Tier -> mimo-v2.5
       - name: mimo-v2.5
