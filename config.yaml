@@ -45,6 +45,7 @@ api-key-models:
       - gpt-6
       - gpt-terra
       - gpt-5.7-terra
+      - gpt-5.6-terra
       - gpt-5.6-sol
       - gpt-5.6-luna
       - gpt-5.5
@@ -115,7 +116,7 @@ enable-gemini-cli-endpoint: false
 nonstream-keepalive-interval: 0
 
 # ==============================================================================
-# POST-PAY BILLING 
+# POST-PAY BILLING
 # ==============================================================================
 post-pay-billing:
   enabled: true
@@ -223,14 +224,14 @@ openai-compatibility:
       - api-key: sk-2hoDPuifZmAvQlztjijazlRV8cFWYQWoizjIoCu7tJeDW6c81SPSWjKLPTZ1IbpX
       - api-key: sk-X5wvmzQifzYYWfXlJBkvoOuXtCnXLIWGgbHYqvxdyWJYhVlaSZNHQylz7tI64VOX
     models:
-      # Flagship / Best Tier -> omen-alpha
-      - name: omen-alpha
+      # Flagship / Best Tier -> deepseek-v4.1-flash
+      - name: deepseek-v4.1-flash
         alias: claude-fable-5.1
-      - name: omen-alpha
+      - name: deepseek-v4.1-flash
         alias: claude-fable-5
-      - name: omen-alpha
+      - name: deepseek-v4.1-flash
         alias: claude-opus-5
-      - name: omen-alpha
+      - name: deepseek-v4.1-flash
         alias: claude-opus-4-8
       # Standard / Fast Tier -> mimo-v2.5
       - name: mimo-v2.5
@@ -256,9 +257,9 @@ openai-compatibility:
       - api-key: sk-X5wvmzQifzYYWfXlJBkvoOuXtCnXLIWGgbHYqvxdyWJYhVlaSZNHQylz7tI64VOX
     models:
       # Flagship
-      - name: omen-alpha
+      - name: deepseek-v4.1-flash
         alias: gpt-6
-      # Mapped to mimo-v2.5 per user instruction
+      # Standard / Fast Tier -> mimo-v2.5
       - name: mimo-v2.5
         alias: gpt-terra
       - name: mimo-v2.5
@@ -273,7 +274,6 @@ openai-compatibility:
         alias: gpt-5.4
       - name: mimo-v2.5
         alias: gpt-5.3-codex
-      # Standard / Fast Tier -> mimo-v2.5
       - name: mimo-v2.5
         alias: gpt-5.6-luna
       - name: mimo-v2.5
